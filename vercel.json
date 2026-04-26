@@ -3,5 +3,15 @@
   "framework": "nextjs",
   "installCommand": "npm install",
   "buildCommand": "npm run build",
-  "devCommand": "npm run dev"
+  "devCommand": "npm run dev",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://zomate-fitness-system-back.onrender.com/api/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "https://zomate-fitness-system-back.onrender.com/health"
+    }
+  ]
 }
