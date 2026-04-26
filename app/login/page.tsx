@@ -52,25 +52,25 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md items-center justify-center p-6">
-      <form onSubmit={onSubmit} className="w-full space-y-4 rounded-lg border bg-white p-6 shadow">
-        <h1 className="text-2xl font-bold">後台登入</h1>
-        <p className="text-sm text-slate-600">預設帳號：masterzoe / 12345678（ADMIN），worker / 12347890（CLERK）</p>
+    <main className="flex min-h-screen items-center justify-center bg-white p-6">
+      <form onSubmit={onSubmit} className="w-full max-w-md space-y-4 rounded-lg border border-slate-200 bg-white p-6 shadow">
+        <h1 className="text-2xl font-bold text-black">後台登入</h1>
+        <p className="text-sm text-black">預設帳號：masterzoe / 12345678（ADMIN），worker / 12347890（CLERK）</p>
         <div className="space-y-2">
-          <label className="text-sm">
+          <label className="text-sm text-black">
             帳號
             <input
-              className="mt-1 w-full rounded border p-2"
+              className="mt-1 w-full rounded border border-slate-300 bg-white p-2 text-black"
               value={username}
               onChange={(ev) => setUsername(ev.target.value)}
               autoComplete="username"
               required
             />
           </label>
-          <label className="text-sm">
+          <label className="text-sm text-black">
             密碼
             <input
-              className="mt-1 w-full rounded border p-2"
+              className="mt-1 w-full rounded border border-slate-300 bg-white p-2 text-black"
               value={password}
               onChange={(ev) => setPassword(ev.target.value)}
               type="password"
