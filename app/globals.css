@@ -13,9 +13,13 @@ select {
 }
 
 button {
-  @apply rounded-md bg-[#7c3aed] px-4 py-2 text-sm text-white transition hover:bg-[#6d28d9];
+  @apply rounded-md bg-slate-200 px-4 py-2 text-sm text-slate-900 transition hover:bg-slate-300;
 }
 
 html.light body {
   @apply bg-slate-100 text-slate-900;
+}
+
+html.light button {
+  @apply bg-slate-900 text-white hover:bg-slate-700;
 }

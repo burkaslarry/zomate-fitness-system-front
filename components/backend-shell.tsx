@@ -11,20 +11,50 @@ import { api } from "../lib/api";
  * Steps:
  * 01. 驗證登入 session，未登入即導向 /login
  * 02. Top bar 顯示使用者與角色（ADMIN / CLERK）
- * 03. 桌機顯示側邊選單，行動版提供漢堡選單
+ * 03. 全尺寸使用單一左側選單（不使用漢堡選單）
  */
 
-const MENU = [
-  { href: "/admin", label: "後台面板" },
-  { href: "/coach", label: "教練課表" },
-  { href: "/student", label: "學生入口" },
+const MENU_GROUPS = [
+  {
+    title: "Dashboard",
+    items: [{ href: "/admin", label: "後台面板" }]
+  },
+  {
+    title: "Student Management",
+    items: [
+      { href: "/admin/students", label: "學生名單" },
+      { href: "/admin/onboarding-records", label: "入職紀錄 / 健康表單" }
+    ]
+  },
+  {
+    title: "Course & Attendance",
+    items: [
+      { href: "/coach", label: "教練課表" },
+      { href: "/admin/attendance/qr-console", label: "QR 簽到中心" },
+      { href: "/student/trial", label: "試堂 / 開課管理" }
+    ]
+  },
+  {
+    title: "Finance & Admin",
+    items: [
+      { href: "/admin/finance/sales", label: "銷售與分期" },
+      { href: "/admin/finance/expenses", label: "支出管理" },
+      { href: "/admin/finance/payroll", label: "薪酬 / 出勤報表" }
+    ]
+  },
+  {
+    title: "System Settings",
+    items: [
+      { href: "/admin/settings/whatsapp", label: "WhatsApp API 狀態" },
+      { href: "/admin/settings/disclaimer", label: "免責聲明內容設定" }
+    ]
+  }
 ];
 
 export default function BackendShell({ children, title }: { children: ReactNode; title: string }) {
   const [session, setSession] = useState<AuthSession | null>(null);
-  const [open, setOpen] = useState(false);
-  const [isDesktop, setIsDesktop] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [apiStatus, setApiStatus] = useState<"checking" | "online" | "offline">("checking");
   const router = useRouter();
   const pathname = usePathname();
 
@@ -38,30 +68,26 @@ export default function BackendShell({ children, title }: { children: ReactNode;
   }, [router]);
 
   useEffect(() => {
-    const media = window.matchMedia("(min-width: 768px)");
-    const syncMenu = (event?: MediaQueryListEvent) => {
-      const matches = event ? event.matches : media.matches;
-      setIsDesktop(matches);
-      setOpen(matches);
-    };
-
-    syncMenu();
-    media.addEventListener("change", syncMenu);
-    return () => media.removeEventListener("change", syncMenu);
-  }, []);
-
-  useEffect(() => {
     const saved = window.localStorage.getItem("zomate_theme");
     const initial = saved === "light" ? "light" : "dark";
     setTheme(initial);
     document.documentElement.classList.toggle("light", initial === "light");
   }, []);
 
-  function closeMobileMenu() {
-    if (!isDesktop) {
-      setOpen(false);
-    }
-  }
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .health()
+      .then(() => {
+        if (!cancelled) setApiStatus("online");
+      })
+      .catch(() => {
+        if (!cancelled) setApiStatus("offline");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (!session) {
     return null;
@@ -86,43 +112,51 @@ export default function BackendShell({ children, title }: { children: ReactNode;
   return (
     <div className={`flex min-h-screen ${theme === "dark" ? "bg-[#121212] text-white" : "bg-[#f3f4f6] text-[#111827]"}`}>
       <aside
-        className={`${open ? "fixed inset-0 z-40 bg-black/70 p-0" : "hidden"} md:relative md:block md:w-64 ${
-          theme === "dark" ? "md:bg-[#121212]" : "md:bg-white"
-        }`}
-        onClick={closeMobileMenu}
+        className={`relative w-64 shrink-0 border-r ${theme === "dark" ? "border-[#262626] bg-[#121212]" : "border-slate-200 bg-white"}`}
       >
-        <div
-          className={`h-full w-72 border-r p-5 md:w-64 ${
-            theme === "dark" ? "border-[#262626] bg-[#121212]" : "border-slate-200 bg-white"
-          }`}
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div className="h-full w-64 p-5">
           <div className="mb-8">
-            <p className="text-xs uppercase tracking-[0.2em] text-[#7c3aed]">Zomate</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Zomate</p>
             <h2 className="mt-2 text-lg font-semibold">Admin Console</h2>
+            <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
+              <span
+                className={`inline-block h-2 w-2 rounded-full ${
+                  apiStatus === "online"
+                    ? "bg-emerald-400"
+                    : apiStatus === "offline"
+                      ? "bg-rose-400"
+                      : "bg-amber-300"
+                }`}
+              />
+              WhatsApp/API {apiStatus === "online" ? "Connected" : apiStatus === "offline" ? "Disconnected" : "Checking"}
+            </div>
           </div>
-          <nav className="space-y-1">
-            {MENU.map((item) => {
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
-                    isActive
-                      ? theme === "dark"
-                        ? "border-l-2 border-[#7c3aed] bg-[#1f1f1f] text-white"
-                        : "border-l-2 border-[#7c3aed] bg-violet-50 text-violet-700"
-                      : theme === "dark"
-                        ? "text-[#a0a0a0] hover:bg-[#1a1a1a] hover:text-white"
-                        : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  }`}
-                  onClick={closeMobileMenu}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
+          <nav className="space-y-4">
+            {MENU_GROUPS.map((group) => (
+              <div key={group.title} className="space-y-1">
+                <p className="px-2 text-[11px] uppercase tracking-wider text-slate-500">{group.title}</p>
+                {group.items.map((item) => {
+                  const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
+                        isActive
+                          ? theme === "dark"
+                            ? "border-l-2 border-slate-300 bg-[#1f1f1f] text-white"
+                            : "border-l-2 border-slate-500 bg-slate-100 text-slate-900"
+                          : theme === "dark"
+                            ? "text-[#a0a0a0] hover:bg-[#1a1a1a] hover:text-white"
+                            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      }`}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
           </nav>
         </div>
       </aside>
@@ -134,9 +168,6 @@ export default function BackendShell({ children, title }: { children: ReactNode;
           }`}
         >
           <div className="flex items-center gap-3">
-            <button className="md:hidden" onClick={() => setOpen((v) => !v)} aria-label="打開選單">
-              ☰
-            </button>
             <div>
               <p className={`text-xs uppercase tracking-wider ${theme === "dark" ? "text-[#a0a0a0]" : "text-slate-500"}`}>Dashboard / {title}</p>
               <h1 className={`text-base font-semibold md:text-lg ${theme === "dark" ? "text-white" : "text-slate-900"}`}>{title}</h1>
@@ -147,8 +178,8 @@ export default function BackendShell({ children, title }: { children: ReactNode;
                 onClick={toggleTheme}
                 className={`rounded-md border bg-transparent px-2 py-1 text-xs ${
                   theme === "dark"
-                    ? "border-[#3a3a3a] text-[#d4d4d4] hover:border-[#7c3aed] hover:text-white"
-                    : "border-slate-300 text-slate-700 hover:border-[#7c3aed] hover:text-slate-900"
+                    ? "border-[#3a3a3a] text-[#d4d4d4] hover:border-slate-200 hover:text-white"
+                    : "border-slate-300 text-slate-700 hover:border-slate-500 hover:text-slate-900"
                 }`}
               >
                 {theme === "dark" ? "Light" : "Dark"}
@@ -160,8 +191,8 @@ export default function BackendShell({ children, title }: { children: ReactNode;
               onClick={doLogout}
               className={`ml-3 rounded-md border px-3 py-1.5 text-xs md:text-sm ${
                 theme === "dark"
-                  ? "border-[#3a3a3a] text-[#d4d4d4] hover:border-[#7c3aed] hover:text-white"
-                  : "border-slate-300 text-slate-700 hover:border-[#7c3aed] hover:text-slate-900"
+                  ? "border-[#3a3a3a] text-[#d4d4d4] hover:border-slate-200 hover:text-white"
+                  : "border-slate-300 text-slate-700 hover:border-slate-500 hover:text-slate-900"
               }`}
             >
               登出
