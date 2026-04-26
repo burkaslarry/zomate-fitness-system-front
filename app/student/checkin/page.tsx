@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import { api } from "../../../lib/api";
+import { useDemoState } from "../../../lib/demo-state";
+import { useWhatsAppLog } from "../../../hooks/use-whatsapp-log";
 
 type Ack = {
   event: string;
@@ -59,6 +62,9 @@ export default function StudentCheckinPage() {
   const [showPhoneFallback, setShowPhoneFallback] = useState(false);
   const [fbPhone, setFbPhone] = useState("");
   const [fbPin, setFbPin] = useState("");
+  const [pinPadError, setPinPadError] = useState(false);
+  const { markCheckin } = useDemoState();
+  const { logCheckinSuccess } = useWhatsAppLog();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -185,6 +191,7 @@ export default function StudentCheckinPage() {
     if (!selected) return;
     setStatus("扣堂中…");
     setLastBalance(null);
+    setPinPadError(false);
     try {
       const res = (await api.checkin({
         student_id: selected.id,
@@ -192,12 +199,15 @@ export default function StudentCheckinPage() {
       })) as { student?: { lesson_balance?: number } };
       const bal = res.student?.lesson_balance;
       if (typeof bal === "number") setLastBalance(bal);
+      markCheckin(selected.full_name, bal);
+      logCheckinSuccess(selected.full_name, selected.phone, bal);
       setStatus("簽到成功！學生 WhatsApp：上堂通知 + 剩餘堂數；教練 WhatsApp：學生已簽到（示範 log）。");
       setPin("");
       setSelected(null);
       setSearchQ("");
       setResults([]);
     } catch (err) {
+      setPinPadError(true);
       setStatus(String(err));
     }
   }
@@ -205,6 +215,7 @@ export default function StudentCheckinPage() {
   async function fallbackSubmit(e: FormEvent) {
     e.preventDefault();
     setStatus("扣堂中…");
+    setPinPadError(false);
     try {
       const res = (await api.checkin({
         phone: fbPhone.trim(),
@@ -212,12 +223,23 @@ export default function StudentCheckinPage() {
       })) as { student?: { lesson_balance?: number } };
       const bal = res.student?.lesson_balance;
       if (typeof bal === "number") setLastBalance(bal);
+      markCheckin(fbPhone.trim(), bal);
+      logCheckinSuccess("Phone User", fbPhone.trim(), bal);
       setStatus("簽到成功！");
       setFbPin("");
       setFbPhone("");
     } catch (err) {
+      setPinPadError(true);
       setStatus(String(err));
     }
+  }
+
+  function pressPinDigit(digit: string) {
+    setPin((prev) => (prev.length >= 5 ? prev : `${prev}${digit}`));
+  }
+
+  function backspacePin() {
+    setPin((prev) => prev.slice(0, -1));
   }
 
   return (
@@ -294,7 +316,15 @@ export default function StudentCheckinPage() {
             {searching && <p className="text-xs text-slate-500">搜尋中…</p>}
             <ul className="max-h-56 space-y-1 overflow-y-auto rounded border border-slate-200 p-1">
               {results.length === 0 && searchQ.trim().length >= 1 && !searching && (
-                <li className="p-2 text-sm text-slate-500">沒有符合結果</li>
+                <li className="space-y-2 p-2">
+                  <p className="text-sm text-slate-500">沒有符合結果</p>
+                  <Link
+                    href={`/student/onboard?quickName=${encodeURIComponent(searchQ.trim())}`}
+                    className="inline-flex items-center rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-xs font-medium text-slate-900 transition hover:bg-slate-200"
+                  >
+                    即時登記學生
+                  </Link>
+                </li>
               )}
               {results.map((r) => (
                 <li key={r.id}>
@@ -327,18 +357,49 @@ export default function StudentCheckinPage() {
                 已揀：<span className="font-medium">{selected.full_name}</span>
               </p>
             )}
-            <form onSubmit={redeem} className="space-y-2">
-              <input
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                placeholder="PIN（帳戶或課堂專用）"
-                value={pin}
-                onChange={(e) => setPin(e.target.value)}
-                disabled={!selected}
-              />
-              <button type="submit" disabled={!selected || pin.trim().length < 4}>
-                確認扣堂（Redeem）
-              </button>
+            <form onSubmit={redeem} className="space-y-3">
+              <input inputMode="numeric" autoComplete="one-time-code" placeholder="PIN（帳戶或課堂專用）" value={pin} readOnly disabled={!selected} />
+              <motion.div
+                className="grid grid-cols-3 gap-2"
+                animate={pinPadError ? { x: [0, -10, 10, -8, 8, -4, 4, 0] } : { x: 0 }}
+                transition={{ duration: 0.42 }}
+                onAnimationComplete={() => setPinPadError(false)}
+              >
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    className="h-14 w-14 rounded-lg border border-slate-300 bg-slate-100 text-lg font-semibold text-slate-900 hover:bg-slate-200 disabled:opacity-50"
+                    onClick={() => pressPinDigit(String(n))}
+                    disabled={!selected}
+                  >
+                    {n}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="h-14 w-14 rounded-lg border border-slate-300 bg-slate-100 text-sm font-semibold text-slate-900 hover:bg-slate-200 disabled:opacity-50"
+                  onClick={backspacePin}
+                  disabled={!selected || pin.length === 0}
+                >
+                  刪除
+                </button>
+                <button
+                  type="button"
+                  className="h-14 w-14 rounded-lg border border-slate-300 bg-slate-100 text-lg font-semibold text-slate-900 hover:bg-slate-200 disabled:opacity-50"
+                  onClick={() => pressPinDigit("0")}
+                  disabled={!selected}
+                >
+                  0
+                </button>
+                <button
+                  type="submit"
+                  className="h-14 w-14 rounded-lg border border-slate-300 bg-slate-900 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
+                  disabled={!selected || pin.trim().length < 5}
+                >
+                  確認
+                </button>
+              </motion.div>
             </form>
             {typeof lastBalance === "number" && (
               <p className="rounded-md bg-emerald-50 p-2 text-sm text-emerald-900">

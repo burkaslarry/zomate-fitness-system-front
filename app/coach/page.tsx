@@ -74,10 +74,10 @@ export default function CoachPage() {
     <BackendShell title="教練課表">
       <main className="mx-auto max-w-3xl space-y-6 p-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-xl font-bold">教練 · 課堂日程</h1>
+          <h1 className="text-xl font-bold text-white">教練 · 課堂日程</h1>
         </div>
-      <div className="flex flex-wrap items-end gap-4 rounded-lg bg-white p-4 shadow">
-        <label className="text-sm">
+      <div className="flex flex-wrap items-end gap-4 rounded-lg border border-[#333] bg-[#171717] p-4">
+        <label className="text-sm text-slate-200">
           教練
           <select
             className="mt-1 block min-w-[12rem]"
@@ -92,34 +92,31 @@ export default function CoachPage() {
             ))}
           </select>
         </label>
-        <label className="text-sm">
+        <label className="text-sm text-slate-200">
           日期（預設今日）
           <input type="date" className="mt-1 block" value={day} onChange={(e) => setDay(e.target.value)} />
         </label>
       </div>
-      {status && <p className="text-sm text-slate-700">{status}</p>}
+      {status && <p className="text-sm text-amber-300">{status}</p>}
       <div className="space-y-4">
-        {courses.length === 0 && <p className="text-sm text-slate-500">當日未有課堂，或請先喺後台建立課堂。</p>}
+        {courses.length === 0 && <p className="text-sm text-slate-300">當日未有課堂，或請先喺後台建立課堂。</p>}
         {courses.map((c) => (
-          <article key={c.id} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="font-semibold">{c.title}</h2>
-            <p className="text-sm text-slate-600">
+          <article key={c.id} className="rounded-lg border border-[#333] bg-[#171717] p-4 shadow-sm">
+            <h2 className="font-semibold text-white">{c.title}</h2>
+            <p className="text-sm text-slate-300">
               {c.branch_name} · {c.branch_address}
             </p>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-400">
               {new Date(c.scheduled_start).toLocaleString()} → {new Date(c.scheduled_end).toLocaleString()}
             </p>
-            <ul className="mt-2 space-y-1 text-sm">
+            <ul className="mt-2 space-y-1 text-sm text-slate-200">
               {c.enrollments.map((e) => (
                 <li key={e.student_id}>
                   {e.student_name}（{e.student_phone}）· 課堂 PIN <span className="font-mono">{e.checkin_pin}</span>
                 </li>
               ))}
             </ul>
-            <form
-              className="mt-3 grid gap-2 border-t border-slate-100 pt-3 md:grid-cols-2"
-              onSubmit={(ev) => reschedule(ev, c.id)}
-            >
+            <form className="mt-3 grid gap-2 border-t border-[#333] pt-3 md:grid-cols-2" onSubmit={(ev) => reschedule(ev, c.id)}>
               <input
                 type="datetime-local"
                 name="scheduled_start"

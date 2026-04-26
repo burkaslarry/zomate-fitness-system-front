@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --brand-purple: #a855f7;
+}
+
 body {
   @apply bg-[#121212] text-white antialiased;
 }
@@ -9,7 +13,7 @@ body {
 input,
 textarea,
 select {
-  @apply w-full rounded-md border border-[#333] bg-[#171717] px-3 py-2 text-sm text-white placeholder:text-[#7a7a7a] focus:border-[#7c3aed] focus:outline-none;
+  @apply w-full rounded-md border border-[#333] bg-[#171717] px-3 py-2 text-sm text-white placeholder:text-[#9ca3af] focus:border-[#a855f7] focus:outline-none;
 }
 
 button {
@@ -22,4 +26,12 @@ html.light body {
 
 html.light button {
   @apply bg-slate-900 text-white hover:bg-slate-700;
+}
+
+.bg-brand-purple {
+  background-color: var(--brand-purple);
+}
+
+.text-secondary-accessible {
+  @apply text-slate-200;
 }

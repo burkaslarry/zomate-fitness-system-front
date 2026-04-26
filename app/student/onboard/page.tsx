@@ -1,12 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { api } from "../../../lib/api";
+import { useDemoState } from "../../../lib/demo-state";
+import { useWhatsAppLog } from "../../../hooks/use-whatsapp-log";
 
 export default function StudentOnboardPage() {
   const [status, setStatus] = useState("");
   const [assignedPin, setAssignedPin] = useState<string | null>(null);
+  const [quickName, setQuickName] = useState("");
+  const { addStudent } = useDemoState();
+  const { logOnboardingSuccess } = useWhatsAppLog();
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const name = new URLSearchParams(window.location.search).get("quickName");
+    if (name) setQuickName(name);
+  }, []);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -19,14 +30,24 @@ export default function StudentOnboardPage() {
       return;
     }
     try {
+      const name = String(form.get("full_name"));
+      const phone = String(form.get("phone"));
       const res = (await api.onboarding({
-        full_name: form.get("full_name"),
-        phone: form.get("phone"),
+        full_name: name,
+        phone,
         email: form.get("email") || null,
         health_notes: form.get("health_notes") || null,
         disclaimer_accepted: true
       })) as { pin_code?: string };
-      setAssignedPin(res.pin_code ?? null);
+      const pin = res.pin_code ?? "12345";
+      setAssignedPin(pin);
+      addStudent({
+        name,
+        phone,
+        remainingCredits: 10,
+        pin
+      });
+      logOnboardingSuccess(name, phone, pin);
       setStatus("登記成功！後台會即時見到你嘅紀錄。請保存簽到 PIN（已透過示範 WhatsApp log 記錄）。");
       e.currentTarget.reset();
     } catch (err) {
@@ -46,7 +67,7 @@ export default function StudentOnboardPage() {
         免責條款：參加本中心訓練前，請確認已理解運動風險；如有長期病患請先諮詢醫生。提交即表示同意中心之免責及私隱安排（示範文案）。
       </p>
       <form onSubmit={onSubmit} className="space-y-3 rounded-lg bg-white p-4 shadow">
-        <input name="full_name" placeholder="姓名" required />
+        <input name="full_name" placeholder="姓名" defaultValue={quickName} required />
         <input name="phone" placeholder="電話（+852…）" required />
         <input name="email" type="email" placeholder="電郵（可選）" />
         <textarea name="health_notes" placeholder="健康申報／注意事項" rows={4} />
