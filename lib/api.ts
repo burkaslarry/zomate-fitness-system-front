@@ -269,7 +269,12 @@ export const api = {
   reportsExpenses: () => request("/api/v1/reports/expenses"),
   postExpenseEntry: (payload: Record<string, unknown>) =>
     request("/api/v1/reports/expenses", { method: "POST", body: JSON.stringify(payload) }),
-  reportsCoachAttendance: () => request("/api/v1/reports/coach-attendance"),
+  reportsCoachAttendance: (query?: { month?: string }) => {
+    const sp = new URLSearchParams();
+    if (query?.month) sp.set("month", query.month);
+    const qs = sp.toString();
+    return request(`/api/v1/reports/coach-attendance${qs ? `?${qs}` : ""}`);
+  },
   sessionLedgerGet: () => request("/api/v1/session-ledger"),
   sessionLedgerPost: (payload: Record<string, unknown>) =>
     request("/api/v1/session-ledger", { method: "POST", body: JSON.stringify(payload) })

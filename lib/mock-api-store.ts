@@ -127,10 +127,41 @@ export type CoachAttendanceRow = {
   grossPayHkd: number;
 };
 
+export type CoachAttendanceLessonRow = {
+  studentName: string;
+  courseName: string;
+  sessionTimeIso: string;
+  coachName: string;
+  courseStartDate: string;
+  courseEndDate: string;
+};
+
+const coachAttendanceLessonsSeed: CoachAttendanceLessonRow[] = [
+  {
+    studentName: "Larry Lo",
+    courseName: "PT 套餐 A",
+    sessionTimeIso: "2026-04-08T02:30:00.000000",
+    coachName: "Coach A",
+    courseStartDate: "2026-04-02",
+    courseEndDate: "2026-05-15"
+  },
+  {
+    studentName: "Mandy Chan",
+    courseName: "PT 套餐 B",
+    sessionTimeIso: "2026-04-22T06:15:00.000000",
+    coachName: "Coach B",
+    courseStartDate: "2026-04-10",
+    courseEndDate: "2026-06-01"
+  }
+];
+
 let coachAttendance: CoachAttendanceRow[] = [
   { coachName: "Coach A", month: "2026-04", classesTaught: 42, hoursOnFloor: 56, grossPayHkd: 25200 },
   { coachName: "Coach B", month: "2026-04", classesTaught: 38, hoursOnFloor: 48, grossPayHkd: 21600 }
 ];
+
+/** Lesson-level mock rows (same semantics as Postgres coach-attendance GET). */
+let coachAttendanceLessons = [...coachAttendanceLessonsSeed];
 
 let ledger: SessionLedgerEntryValidated[] = [
   {
@@ -154,6 +185,9 @@ export const mockApiStore = {
   },
   get coachAttendance() {
     return coachAttendance;
+  },
+  get coachAttendanceLessons() {
+    return coachAttendanceLessons;
   },
   get ledger() {
     return ledger;

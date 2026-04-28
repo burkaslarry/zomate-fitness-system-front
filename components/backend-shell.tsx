@@ -32,9 +32,10 @@ const MENU_GROUPS = [
     ]
   },
     {
-    title: "Course & Attendance",
-    items: [
-      { href: "/coach/calendar", label: "教練日程 · 簽到" },
+      title: "Course & Attendance",
+      items: [
+        { href: "/admin/course-set", label: "Course 套餐開課" },
+        { href: "/coach/calendar", label: "教練日程 · 簽到" },
       { href: "/coach", label: "教練課表" },
       { href: "/admin/attendance/qr-console", label: "QR 簽到中心" },
       { href: "/admin/attendance/session-ledger", label: "Session Ledger" },

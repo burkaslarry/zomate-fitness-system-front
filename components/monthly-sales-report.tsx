@@ -147,7 +147,7 @@ export default function MonthlySalesReport() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [globalFilter, setGlobalFilter] = useState("");
-  const [sorting, setSorting] = useState<SortingState>([{ id: "date", desc: true }]);
+  const [sorting, setSorting] = useState<SortingState>([{ id: "clientName", desc: false }]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
   const columnMenuRef = useRef<HTMLDivElement | null>(null);
