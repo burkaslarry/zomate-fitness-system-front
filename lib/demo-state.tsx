@@ -8,6 +8,14 @@ export type DemoStudent = {
   phone: string;
   remainingCredits: number;
   pin: string;
+  membershipType?: "new" | "renewal";
+  englishName?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  coachName?: string;
+  plan?: "10" | "30";
+  paymentMethod?: string;
+  notes?: string;
 };
 
 export type DemoExpense = {
@@ -34,6 +42,8 @@ type DemoStateContextType = {
   totalExpenses: number;
   addExpense: (expense: Omit<DemoExpense, "id">) => void;
   addStudent: (student: Omit<DemoStudent, "id">) => DemoStudent;
+  updateStudent: (id: number, patch: Partial<DemoStudent>) => void;
+  deleteStudent: (id: number) => void;
   appendWhatsAppLog: (log: Omit<DemoWhatsAppLog, "id" | "timestamp">) => void;
   markCheckin: (studentName: string, remainingCredits?: number) => void;
 };
@@ -103,6 +113,14 @@ export function DemoStateProvider({ children }: { children: ReactNode }) {
     return next;
   }
 
+  function updateStudent(id: number, patch: Partial<DemoStudent>) {
+    setStudents((prev) => prev.map((student) => (student.id === id ? { ...student, ...patch } : student)));
+  }
+
+  function deleteStudent(id: number) {
+    setStudents((prev) => prev.filter((student) => student.id !== id));
+  }
+
   function appendWhatsAppLog(log: Omit<DemoWhatsAppLog, "id" | "timestamp">) {
     setWhatsappLogs((prev) => [
       {
@@ -133,6 +151,8 @@ export function DemoStateProvider({ children }: { children: ReactNode }) {
         totalExpenses,
         addExpense,
         addStudent,
+        updateStudent,
+        deleteStudent,
         appendWhatsAppLog,
         markCheckin
       }}

@@ -1,27 +1,69 @@
-function resolveApiBaseUrl() {
-  if (process.env.NEXT_PUBLIC_API_BASE_URL) {
-    return process.env.NEXT_PUBLIC_API_BASE_URL;
+/** @feature [CF07][F04.1][F03] API transport — FastAPI → PostgreSQL (zomate_fs_*) */
+
+/*
+ * Client-side fetch helper:
+ * - JSON: request() + retries + Bearer from localStorage (zomate_auth_session).
+ * - CSV: uploadCsv / downloadCsv / requestBlob hit FastAPI (Bearer).
+ *
+ * Local dev defaults to FastAPI at http://127.0.0.1:8000 so data comes from DATABASE_URL
+ * on the backend (e.g. Render/eventxp PostgreSQL), not Next Route Handler mocks.
+ * Opt into same-origin mocks only with NEXT_PUBLIC_USE_NEXT_MOCK_API=1.
+ *
+ * CF07 implementation notes:
+ * 01. Read token from localStorage and attach Authorization (Bearer).
+ * 02. request() retries transient 5xx responses with backoff.
+ * 03. Blob helpers for authenticated CSV downloads (no bare anchor href).
+ */
+
+function normalizeApiBase(url: string): string {
+  return url.trim().replace(/\/+$/, "");
+}
+
+function resolveApiBaseUrl(): string {
+  const explicit = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+  if (explicit) {
+    return normalizeApiBase(explicit);
   }
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname;
-    if (host === "localhost" || host === "127.0.0.1") {
-      return "http://localhost:8000";
-    }
-    // On hosted environments, default to same-origin and rely on vercel.json rewrites.
+  if (process.env.NEXT_PUBLIC_USE_NEXT_MOCK_API === "1") {
     return "";
+  }
+  if (process.env.NODE_ENV === "development") {
+    return "http://127.0.0.1:8000";
   }
   return "";
 }
 
 const API_BASE_URL = resolveApiBaseUrl();
 
-/*
- * CF07: API transport layer.
- * Steps:
- * 01. 透過 localStorage 讀取 auth token 並組裝 Authorization header
- * 02. request() 提供 JSON API 重試機制
- * 03. 附加 requestBlob() 與新增刪除/匯出 API 支援
- */
+/** Resolved API origin (empty = same-origin Next mock routes when opted in). */
+export function getResolvedApiBaseUrl(): string {
+  return API_BASE_URL;
+}
+
+export function isUsingNextMockApi(): boolean {
+  return API_BASE_URL === "";
+}
+
+/** FastAPI `/ws/checkins` — realtime student check-ins (broadcast from POST /api/checkin). */
+export function getCheckinsWebSocketUrl(): string {
+  let base = API_BASE_URL;
+  if (!base) {
+    base =
+      process.env.NODE_ENV === "development"
+        ? "http://127.0.0.1:8000"
+        : typeof window !== "undefined"
+          ? `${window.location.protocol}//${window.location.host}`
+          : "http://127.0.0.1:8000";
+  }
+  const path = "/ws/checkins";
+  if (base.startsWith("https://")) {
+    return `wss://${base.slice(8).replace(/\/$/, "")}${path}`;
+  }
+  if (base.startsWith("http://")) {
+    return `ws://${base.slice(7).replace(/\/$/, "")}${path}`;
+  }
+  return `${base.replace(/\/$/, "")}${path}`;
+}
 
 const RETRY_DELAYS_MS = [1000, 2000, 4000];
 
@@ -105,6 +147,21 @@ async function requestBlob(path: string) {
   return res.blob();
 }
 
+/** Authenticated CSV download — routes live in `zomate-fitness-system-back` (FastAPI), data in `zomate_fs_*` tables. */
+export async function downloadCsv(path: string, filename: string) {
+  const blob = await requestBlob(path);
+  const url = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/** @deprecated Prefer `downloadCsv()` — plain links cannot send Bearer token. */
 export const csvUrl = {
   studentsExport: () => `${API_BASE_URL}/api/admin/students/export.csv`,
   branchesExport: () => `${API_BASE_URL}/api/admin/branches/export.csv`,
@@ -116,9 +173,14 @@ export const api = {
     request("/api/auth/login", { method: "POST", body: JSON.stringify(payload) }),
   me: () => request("/api/auth/me"),
   logout: () => request("/api/auth/logout", { method: "POST" }),
-  health: () => request("/health"),
+  health: () => request("/api/health"),
+  /** Readiness — PostgreSQL（同 GET /health/db）。 */
+  healthDb: () => request("/api/health/db"),
   onboarding: (payload: Record<string, unknown>) =>
     request("/api/onboarding", { method: "POST", body: JSON.stringify(payload) }),
+  /** Full Zod-validated registration (F01). */
+  studentsRegisterV1: (payload: Record<string, unknown>) =>
+    request("/api/v1/students/register", { method: "POST", body: JSON.stringify(payload) }),
   listStudents: () => request("/api/students"),
   trialPurchase: (payload: unknown) =>
     request("/api/trial-purchase", { method: "POST", body: JSON.stringify(payload) }),
@@ -127,13 +189,6 @@ export const api = {
     request("/api/checkin", { method: "POST", body: JSON.stringify(payload) }),
   studentSearch: (q: string) =>
     request(`/api/public/student-search?q=${encodeURIComponent(q)}`),
-  bindFace: (studentId: number, faceIdExternal: string) =>
-    request(
-      `/api/students/${studentId}/bind-face?face_id_external=${encodeURIComponent(faceIdExternal)}`,
-      { method: "POST" }
-    ),
-  faceCheckin: (payload: unknown) =>
-    request("/api/faceid-checkin", { method: "POST", body: JSON.stringify(payload) }),
   summary: () => request("/api/admin/summary"),
   whatsappLogs: () => request("/api/admin/whatsapp-logs"),
   auditLogs: (limit?: number) =>
@@ -168,12 +223,20 @@ export const api = {
   deleteStudent: (studentId: number, hard = false) =>
     request(`/api/admin/students/${studentId}?hard=${hard ? "true" : "false"}`, { method: "DELETE" }),
 
-  coachCourses: (coachId: number, day?: string) =>
-    request(
-      day
-        ? `/api/coach/courses?coach_id=${coachId}&day=${encodeURIComponent(day)}`
-        : `/api/coach/courses?coach_id=${coachId}`
-    ),
+  coachCourses: (
+    coachId: number,
+    query?: string | { day?: string; fromDate?: string; toDate?: string }
+  ) => {
+    const sp = new URLSearchParams({ coach_id: String(coachId) });
+    if (typeof query === "string") {
+      sp.set("day", query);
+    } else if (query && typeof query === "object") {
+      if (query.day) sp.set("day", query.day);
+      if (query.fromDate) sp.set("from_date", query.fromDate);
+      if (query.toDate) sp.set("to_date", query.toDate);
+    }
+    return request(`/api/coach/courses?${sp.toString()}`);
+  },
   rescheduleCourse: (courseId: number, coachId: number, payload: Record<string, string>) =>
     request(`/api/coach/courses/${courseId}?coach_id=${coachId}`, {
       method: "PATCH",
@@ -190,5 +253,24 @@ export const api = {
       kind,
       ...(origin ? { origin } : {}),
       ...(payload ? { payload } : {})
-    }).toString()}`)
+    }).toString()}`),
+
+  /**
+   * Monthly / course sales report for admin dashboards.
+   * Forwards `sort` and `columns` as query parameters to Spring Boot.
+   */
+  reportsSales: (query?: { sort?: string; columns?: string }) => {
+    const sp = new URLSearchParams();
+    if (query?.sort) sp.set("sort", query.sort);
+    if (query?.columns) sp.set("columns", query.columns);
+    const qs = sp.toString();
+    return request(`/api/v1/reports/sales${qs ? `?${qs}` : ""}`);
+  },
+  reportsExpenses: () => request("/api/v1/reports/expenses"),
+  postExpenseEntry: (payload: Record<string, unknown>) =>
+    request("/api/v1/reports/expenses", { method: "POST", body: JSON.stringify(payload) }),
+  reportsCoachAttendance: () => request("/api/v1/reports/coach-attendance"),
+  sessionLedgerGet: () => request("/api/v1/session-ledger"),
+  sessionLedgerPost: (payload: Record<string, unknown>) =>
+    request("/api/v1/session-ledger", { method: "POST", body: JSON.stringify(payload) })
 };

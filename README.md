@@ -1,5 +1,7 @@
 # Zomate Fitness Frontend Demo
 
+繁體中文使用手冊：[`docs/USER_GUIDE.zh-Hant.md`](docs/USER_GUIDE.zh-Hant.md)。
+
 Next.js + Tailwind local demo UI for:
 - Student onboarding
 - Trial purchase + lesson balance updates

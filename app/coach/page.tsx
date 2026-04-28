@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import BackendShell from "../../components/backend-shell";
 import { api } from "../../lib/api";
@@ -39,7 +40,7 @@ export default function CoachPage() {
   useEffect(() => {
     if (coachId === "") return;
     api
-      .coachCourses(Number(coachId), day)
+      .coachCourses(Number(coachId), { day })
       .then((c) => setCourses(c as CourseRow[]))
       .catch((e) => setStatus(String(e)));
   }, [coachId, day]);
@@ -57,7 +58,7 @@ export default function CoachPage() {
         scheduled_end: new Date(end).toISOString()
       });
       setStatus("已更新課堂時間。");
-      const c = (await api.coachCourses(Number(coachId), day)) as CourseRow[];
+      const c = (await api.coachCourses(Number(coachId), { day })) as CourseRow[];
       setCourses(c);
     } catch (err) {
       setStatus(String(err));
@@ -75,6 +76,12 @@ export default function CoachPage() {
       <main className="mx-auto max-w-3xl space-y-6 p-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h1 className="text-xl font-bold text-white">教練 · 課堂日程</h1>
+          <Link
+            href="/coach/calendar"
+            className="text-sm text-[#818cf8] transition hover:text-[#a5b4fc] hover:underline"
+          >
+            開啟月曆 + 簽到直播 →
+          </Link>
         </div>
       <div className="flex flex-wrap items-end gap-4 rounded-lg border border-[#333] bg-[#171717] p-4">
         <label className="text-sm text-slate-200">

@@ -3,8 +3,10 @@
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { api } from "../../../lib/api";
+import { usePeriodicHealthPing } from "../../../hooks/use-periodic-health-ping";
 
 export default function StudentTrialPage() {
+  usePeriodicHealthPing();
   const [status, setStatus] = useState("");
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {

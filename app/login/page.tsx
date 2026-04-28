@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { usePeriodicHealthPing } from "../../hooks/use-periodic-health-ping";
 import { api } from "../../lib/api";
 import { clearAuthSession, getAuthSession, setAuthSession } from "../../lib/auth";
 
@@ -14,6 +15,7 @@ import { clearAuthSession, getAuthSession, setAuthSession } from "../../lib/auth
  */
 
 export default function LoginPage() {
+  usePeriodicHealthPing();
   const router = useRouter();
   useEffect(() => {
     const existing = getAuthSession();

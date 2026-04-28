@@ -1,9 +1,14 @@
 "use client";
 
+/*
+ * QR console — onboarding / check-in / payload PDFs via FastAPI ``qrcode-pdf``;
+ * attendance CSV template via ``downloadCsv`` (authenticated blob download).
+ */
+
 import BackendShell from "../../../../components/backend-shell";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { api } from "../../../../lib/api";
+import { api, downloadCsv } from "../../../../lib/api";
 
 export default function AdminQrConsolePage() {
   const [status, setStatus] = useState("");
@@ -47,15 +52,16 @@ export default function AdminQrConsolePage() {
     }
   }
 
-  function exportTemplateCsv() {
-    const lines = ["student_name,phone,pin,checkin_time", "Larry Lo,+85291234567,12345,2026-04-26T10:00:00Z"];
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "attendance-template.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+  async function downloadAttendanceTemplateCsv() {
+    try {
+      setStatus("下載範本中…");
+      await downloadCsv("/api/admin/attendance/template.csv", "attendance-template.csv");
+      setStatus(
+        "已從後端下載 attendance-template.csv（PostgreSQL／後端路由於 FastAPI）。若失敗請確認 NEXT_PUBLIC_API_BASE_URL 與登入。"
+      );
+    } catch (e) {
+      setStatus(String(e));
+    }
   }
 
   return (
@@ -96,11 +102,11 @@ export default function AdminQrConsolePage() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={exportTemplateCsv}>
-            匯出 attendance.csv
+          <button type="button" onClick={() => void downloadAttendanceTemplateCsv()}>
+            下載 attendance 範本（後端）
           </button>
           <label className="cursor-pointer rounded-md border border-[#333] px-3 py-2 text-sm text-slate-200">
-            匯入 CSV
+            匯入 CSV（Demo 預覽）
             <input
               type="file"
               accept=".csv,text/csv"
@@ -110,7 +116,7 @@ export default function AdminQrConsolePage() {
                 if (!file) return;
                 const text = await file.text();
                 const count = Math.max(0, text.split("\n").length - 1);
-                setStatus(`已讀取 ${count} 筆出勤資料（Demo 預覽）`);
+                setStatus(`已讀取 ${count} 筆出勤資料（前端 Demo；批次匯入後端尚未開放）。`);
                 ev.target.value = "";
               }}
             />

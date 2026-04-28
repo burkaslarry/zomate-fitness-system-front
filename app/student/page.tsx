@@ -1,6 +1,10 @@
+"use client";
+
 import Link from "next/link";
+import { usePeriodicHealthPing } from "../../hooks/use-periodic-health-ping";
 
 export default function StudentHome() {
+  usePeriodicHealthPing();
   return (
     <main className="mx-auto max-w-xl space-y-6 p-6">
       <div className="flex items-center justify-between gap-4">
@@ -30,12 +34,6 @@ export default function StudentHome() {
           className="rounded-lg border border-slate-200 bg-white px-4 py-3 font-medium shadow-sm"
         >
           試堂／加堂（示範）
-        </Link>
-        <Link
-          href="/student/face"
-          className="rounded-lg border border-slate-200 bg-white px-4 py-3 font-medium shadow-sm"
-        >
-          FaceID 簽到（示範）
         </Link>
       </nav>
     </main>

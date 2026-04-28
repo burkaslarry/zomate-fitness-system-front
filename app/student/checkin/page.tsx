@@ -1,10 +1,18 @@
 "use client";
 
+/*
+ * Student check-in — QR gate → name search → PIN pad (mock ``POST /api/checkin``).
+ *
+ * Advanced block: phone + PIN fallback calls the same API with `{ phone, pin_code }`
+ * (no ``student_id``). WhatsApp hooks update demo counters only.
+ */
+
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { api } from "../../../lib/api";
+import { api, getCheckinsWebSocketUrl } from "../../../lib/api";
 import { useDemoState } from "../../../lib/demo-state";
+import { usePeriodicHealthPing } from "../../../hooks/use-periodic-health-ping";
 import { useWhatsAppLog } from "../../../hooks/use-whatsapp-log";
 
 type Ack = {
@@ -41,9 +49,7 @@ type BarcodeDetectorCtor = new (opts: { formats: string[] }) => {
 };
 
 export default function StudentCheckinPage() {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-  const wsUrl = apiBase.replace("http://", "ws://").replace("https://", "wss://") + "/ws/checkins";
-
+  usePeriodicHealthPing();
   const [gateOk, setGateOk] = useState(false);
   const [scanMsg, setScanMsg] = useState("");
   const [pasteValue, setPasteValue] = useState("");
@@ -76,6 +82,7 @@ export default function StudentCheckinPage() {
   }, []);
 
   useEffect(() => {
+    const wsUrl = getCheckinsWebSocketUrl();
     const ws = new WebSocket(wsUrl);
     ws.onmessage = (event) => {
       try {
@@ -88,7 +95,7 @@ export default function StudentCheckinPage() {
       }
     };
     return () => ws.close();
-  }, [wsUrl]);
+  }, []);
 
   const runSearch = useCallback(async (q: string) => {
     const t = q.trim();
@@ -417,14 +424,37 @@ export default function StudentCheckinPage() {
             進階：唔用揀人，直接電話 + PIN
           </button>
           {showPhoneFallback && (
-            <form onSubmit={fallbackSubmit} className="space-y-2 rounded-lg border border-dashed p-4">
-              <input placeholder="電話" value={fbPhone} onChange={(e) => setFbPhone(e.target.value)} />
-              <input
-                placeholder="PIN"
-                value={fbPin}
-                onChange={(e) => setFbPin(e.target.value)}
-              />
-              <button type="submit">簽到</button>
+            <form onSubmit={fallbackSubmit} className="space-y-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
+              <p className="text-sm font-medium text-slate-800">進階：唔用揀人，直接電話 + PIN</p>
+              <label className="block text-sm text-slate-700">
+                <span className="mb-1 block font-medium">電話</span>
+                <input
+                  type="tel"
+                  autoComplete="tel"
+                  placeholder="+85291234567"
+                  value={fbPhone}
+                  onChange={(e) => setFbPhone(e.target.value)}
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900"
+                />
+              </label>
+              <label className="block text-sm text-slate-700">
+                <span className="mb-1 block font-medium">PIN</span>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="12345"
+                  value={fbPin}
+                  onChange={(e) => setFbPin(e.target.value)}
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900"
+                />
+              </label>
+              <button
+                type="submit"
+                className="w-full rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+              >
+                簽到
+              </button>
             </form>
           )}
         </>

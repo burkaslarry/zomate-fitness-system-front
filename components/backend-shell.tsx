@@ -4,7 +4,8 @@ import Link from "next/link";
 import { ReactNode, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { clearAuthSession, getAuthSession, type AuthSession } from "../lib/auth";
-import { api } from "../lib/api";
+import { api, getResolvedApiBaseUrl, isUsingNextMockApi } from "../lib/api";
+import { PERIODIC_HEALTH_INTERVAL_MS } from "../hooks/use-periodic-health-ping";
 
 /*
  * CF04: Shared backend layout shell.
@@ -12,6 +13,10 @@ import { api } from "../lib/api";
  * 01. 驗證登入 session，未登入即導向 /login
  * 02. Top bar 顯示使用者與角色（ADMIN / CLERK）
  * 03. 全尺寸使用單一左側選單（不使用漢堡選單）
+ * 04. 每 10 分鐘呼叫 ``GET /api/health`` +（非 mock）``GET /api/health/db``，更新側欄連線狀態。
+ *
+ * Dark theme tokens (Picolabbs ref.): canvas #121212, border ~12% white,
+ * accent #6366f1, success rgb(34,197,94), radii lg≈8px / md≈6px.
  */
 
 const MENU_GROUPS = [
@@ -26,12 +31,15 @@ const MENU_GROUPS = [
       { href: "/admin/onboarding-records", label: "入職紀錄 / 健康表單" }
     ]
   },
-  {
+    {
     title: "Course & Attendance",
     items: [
+      { href: "/coach/calendar", label: "教練日程 · 簽到" },
       { href: "/coach", label: "教練課表" },
       { href: "/admin/attendance/qr-console", label: "QR 簽到中心" },
-      { href: "/student/trial", label: "試堂 / 開課管理" }
+      { href: "/admin/attendance/session-ledger", label: "Session Ledger" },
+      { href: "/student/trial", label: "試堂 / 開課管理" },
+      { href: "/student", label: "學生入口" }
     ]
   },
   {
@@ -55,6 +63,7 @@ export default function BackendShell({ children, title }: { children: ReactNode;
   const [session, setSession] = useState<AuthSession | null>(null);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [apiStatus, setApiStatus] = useState<"checking" | "online" | "offline">("checking");
+  const [dbStatus, setDbStatus] = useState<"idle" | "checking" | "ok" | "error" | "na">("idle");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
@@ -77,16 +86,36 @@ export default function BackendShell({ children, title }: { children: ReactNode;
 
   useEffect(() => {
     let cancelled = false;
-    api
-      .health()
-      .then(() => {
-        if (!cancelled) setApiStatus("online");
-      })
-      .catch(() => {
-        if (!cancelled) setApiStatus("offline");
-      });
+    const probe = () => {
+      void (async () => {
+        try {
+          await api.health();
+          if (cancelled) return;
+          setApiStatus("online");
+          if (isUsingNextMockApi()) {
+            if (!cancelled) setDbStatus("na");
+            return;
+          }
+          if (!cancelled) setDbStatus("checking");
+          try {
+            await api.healthDb();
+            if (!cancelled) setDbStatus("ok");
+          } catch {
+            if (!cancelled) setDbStatus("error");
+          }
+        } catch {
+          if (!cancelled) {
+            setApiStatus("offline");
+            setDbStatus("idle");
+          }
+        }
+      })();
+    };
+    probe();
+    const id = window.setInterval(probe, PERIODIC_HEALTH_INTERVAL_MS);
     return () => {
       cancelled = true;
+      window.clearInterval(id);
     };
   }, []);
 
@@ -111,51 +140,93 @@ export default function BackendShell({ children, title }: { children: ReactNode;
   }
 
   return (
-    <div className={`flex min-h-screen ${theme === "dark" ? "bg-[#121212] text-white" : "bg-[#f3f4f6] text-[#111827]"}`}>
+    <div className={`flex min-h-screen ${theme === "dark" ? "bg-[#121212] text-white" : "bg-[#f1f5f9] text-[#111827]"}`}>
       <aside
         className={`${
           mobileMenuOpen ? "fixed inset-y-0 left-0 z-50" : "hidden"
-        } w-64 shrink-0 border-r md:relative md:z-auto md:block ${
-          theme === "dark" ? "border-[#262626] bg-[#121212]" : "border-slate-200 bg-white"
+        } w-[260px] shrink-0 border-r md:relative md:z-auto md:block ${
+          theme === "dark"
+            ? "border-white/[0.12] bg-[#121212]"
+            : "border-slate-300/60 bg-white"
         }`}
       >
-        <div className="h-full w-64 p-5">
-          <div className="mb-8">
-            <h2 className="mt-2 text-lg font-semibold leading-tight">
+        <div className="flex h-full w-[260px] flex-col px-4 pb-5 pt-5">
+          <div className="mb-6">
+            <h2 className="mt-1 text-[15px] font-semibold leading-[1.28] tracking-[-0.01em]">
               <span className="block">Zomate Fitness System</span>
               <span className="block">Admin Console</span>
             </h2>
-            <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
-              <span
-                className={`inline-block h-2 w-2 rounded-full ${
-                  apiStatus === "online"
-                    ? "bg-emerald-400"
+            <div
+              className="mt-2.5 space-y-1 text-[11px] leading-4 text-zinc-400/95"
+              title={
+                isUsingNextMockApi()
+                  ? "NEXT_PUBLIC_USE_NEXT_MOCK_API=1 — 使用 Next 內建 mock。正式資料請設 NEXT_PUBLIC_API_BASE_URL 並於後端設定 DATABASE_URL（eventxp / zomate_fs_*）。"
+                  : `${getResolvedApiBaseUrl()} — FastAPI → PostgreSQL（zomate_fs_*，由 zomate-fitness-system-back 的 DATABASE_URL 連線）`
+              }
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+                    apiStatus === "online"
+                      ? "bg-[rgb(34,197,94)]"
+                      : apiStatus === "offline"
+                        ? "bg-rose-400"
+                        : "bg-amber-300"
+                  }`}
+                />
+                <span>
+                  {apiStatus === "online"
+                    ? isUsingNextMockApi()
+                      ? "API：Next mock"
+                      : "API：FastAPI"
                     : apiStatus === "offline"
-                      ? "bg-rose-400"
-                      : "bg-amber-300"
-                }`}
-              />
-              WhatsApp/API {apiStatus === "online" ? "Connected" : apiStatus === "offline" ? "Disconnected" : "Checking"}
+                      ? "API：離線"
+                      : "API：檢查中…"}
+                </span>
+              </div>
+              {apiStatus === "online" && !isUsingNextMockApi() && (dbStatus === "checking" || dbStatus === "ok" || dbStatus === "error") && (
+                <div className="flex items-center gap-2 pl-4">
+                  <span
+                    className={`inline-block h-2 w-2 shrink-0 rounded-full ${
+                      dbStatus === "ok"
+                        ? "bg-[rgb(34,197,94)]"
+                        : dbStatus === "error"
+                          ? "bg-rose-400"
+                          : "bg-amber-300"
+                    }`}
+                  />
+                  <span className="text-[10px] leading-snug text-zinc-500">
+                    {dbStatus === "checking" ? "PostgreSQL…" : null}
+                    {dbStatus === "ok" ? "DB：eventxp · zomate_fs_* 已連線" : null}
+                    {dbStatus === "error" ? "DB：無法連線（檢查後端 DATABASE_URL）" : null}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
-          <nav className="space-y-4">
+          <nav className="flex-1 space-y-4.5">
             {MENU_GROUPS.map((group) => (
-              <div key={group.title} className="space-y-1">
-                <p className="px-2 text-[11px] uppercase tracking-wider text-slate-500">{group.title}</p>
+              <div key={group.title} className="space-y-0.5">
+                <p className="px-2.5 pb-1 text-[10px] font-semibold uppercase leading-4 tracking-[0.14em] text-zinc-500/90">
+                  {group.title}
+                </p>
                 {group.items.map((item) => {
-                  const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  const isActive =
+                    item.href === "/coach"
+                      ? pathname === "/coach"
+                      : pathname === item.href || pathname.startsWith(`${item.href}/`);
                   return (
                     <Link
                       key={item.href}
                       href={item.href}
-                      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
+                      className={`flex items-center gap-3 rounded-lg border-l-[3px] border-transparent px-2.5 py-2 text-[13px] leading-5 transition ${
                         isActive
                           ? theme === "dark"
-                            ? "border-l-2 border-slate-300 bg-[#1f1f1f] text-white"
-                            : "border-l-2 border-slate-500 bg-slate-100 text-slate-900"
+                            ? "border-[#6366f1] bg-white/[0.07] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]"
+                            : "border-slate-600/90 bg-slate-100/90 text-slate-900"
                           : theme === "dark"
-                            ? "text-[#a0a0a0] hover:bg-[#1a1a1a] hover:text-white"
-                            : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                            ? "text-zinc-300 hover:bg-white/[0.05] hover:text-white"
+                            : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900"
                       }`}
                       onClick={() => setMobileMenuOpen(false)}
                     >
@@ -166,6 +237,17 @@ export default function BackendShell({ children, title }: { children: ReactNode;
               </div>
             ))}
           </nav>
+          <button
+            type="button"
+            onClick={doLogout}
+            className={`mt-3 rounded-lg border px-3 py-2.5 text-left text-[13px] leading-5 transition ${
+              theme === "dark"
+                ? "border-white/[0.12] bg-transparent text-zinc-200 hover:border-[#6366f1]/55 hover:bg-white/[0.03] hover:text-white"
+                : "border-slate-300/70 text-slate-700 hover:border-slate-400 hover:text-slate-900"
+            }`}
+          >
+            登出
+          </button>
         </div>
       </aside>
       {mobileMenuOpen && (
@@ -177,61 +259,68 @@ export default function BackendShell({ children, title }: { children: ReactNode;
         />
       )}
 
-      <div className={`flex min-h-screen min-w-0 flex-1 flex-col ${theme === "dark" ? "bg-[#1a1a1a]" : "bg-[#f8fafc]"}`}>
+      <div className={`flex min-h-screen min-w-0 flex-1 flex-col ${theme === "dark" ? "bg-[#121212]" : "bg-[#f8fafc]"}`}>
         <header
-          className={`sticky top-0 z-30 border-b px-4 py-3 backdrop-blur md:px-6 ${
-            theme === "dark" ? "border-[#2b2b2b] bg-[#1a1a1a]/95" : "border-slate-200 bg-white/95"
+          className={`sticky top-0 z-30 border-b px-4 py-2.5 backdrop-blur-md md:px-6 md:py-3 ${
+            theme === "dark"
+              ? "border-white/[0.12] bg-[#121212]/92"
+              : "border-slate-200/80 bg-white/[0.92]"
           }`}
         >
           <div className="flex items-center gap-3">
-            
             <div>
-              <p className={`text-xs uppercase tracking-wider ${theme === "dark" ? "text-[#a0a0a0]" : "text-slate-500"}`}>Dashboard / {title}</p>
-              <h1 className={`text-base font-semibold md:text-lg ${theme === "dark" ? "text-white" : "text-slate-900"}`}>{title}</h1>
+              <p className={`text-[11px] font-medium uppercase leading-4 tracking-[0.06em] ${theme === "dark" ? "text-zinc-400/95" : "text-slate-500"}`}>
+                Dashboard / {title}
+              </p>
+              <h1
+                className={`mt-0.5 text-[17px] font-semibold leading-tight tracking-[-0.02em] md:text-lg ${theme === "dark" ? "text-white" : "text-slate-900"}`}
+              >
+                {title}
+              </h1>
             </div>
-            <div className={`ml-auto flex items-center gap-2 text-right text-xs md:text-sm ${theme === "dark" ? "text-[#a0a0a0]" : "text-slate-600"}`}>
+            <div className="ml-auto hidden items-center gap-2.5 md:flex">
+              <input
+                placeholder="搜尋..."
+                className={`h-9 w-52 rounded-lg border px-3 text-[13px] leading-normal shadow-sm ${
+                  theme === "dark"
+                    ? "border-white/[0.12] bg-[#1e1e1e] text-zinc-100 placeholder:text-zinc-500"
+                    : "border-slate-300/80 bg-white text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
+                }`}
+              />
               <button
                 type="button"
                 onClick={toggleTheme}
-                className={`rounded-md border bg-transparent px-2 py-1 text-xs ${
+                className={`h-9 rounded-lg border bg-transparent px-2.5 text-[12px] leading-none ${
                   theme === "dark"
-                    ? "border-[#3a3a3a] text-white hover:border-slate-200 hover:text-white"
-                    : "border-slate-300 text-slate-700 hover:border-slate-500 hover:text-slate-900"
+                    ? "border-white/[0.12] text-white hover:border-white/[0.22]"
+                    : "border-slate-300/90 text-slate-700 hover:border-slate-400 hover:text-slate-900"
                 }`}
+                aria-label="切換模式"
               >
-                {theme === "dark" ? "Light" : "Dark"}
+                {theme === "dark" ? "☀" : "☾"}
               </button>
-              <div>Login: {session.username} · {session.role}</div>
+              <div className={`text-[12px] leading-5 md:text-[13px] ${theme === "dark" ? "text-zinc-300" : "text-slate-600"}`}>
+                {session.username} ({session.role})
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={doLogout}
-              className={`ml-3 rounded-md border px-3 py-1.5 text-xs md:text-sm ${
-                theme === "dark"
-                  ? "border-[#3a3a3a] text-[#d4d4d4] hover:border-slate-200 hover:text-white"
-                  : "border-slate-300 text-slate-700 hover:border-slate-500 hover:text-slate-900"
-              }`}
-            >
-              登出
-            </button>
           </div>
         </header>
         <main className="min-w-0 flex-1 overflow-y-auto p-4 pb-24 md:p-6 md:pb-6">{children}</main>
         <nav
           className={`fixed bottom-0 left-0 right-0 z-30 border-t px-3 py-2 md:hidden ${
-            theme === "dark" ? "border-[#2b2b2b] bg-[#111111]/95" : "border-slate-200 bg-white/95"
+            theme === "dark" ? "border-white/[0.12] bg-[#121212]/95" : "border-slate-200/80 bg-white/[0.95]"
           }`}
         >
           <div className="grid grid-cols-3 gap-2">
             <Link
               href="/student/checkin"
-              className={`rounded-md px-3 py-2 text-center text-xs ${
+              className={`rounded-lg px-3 py-2 text-center text-xs ${
                 pathname.startsWith("/student/checkin")
                   ? theme === "dark"
-                    ? "bg-[#a855f7] text-white"
+                    ? "bg-[#6366f1] text-white"
                     : "bg-slate-200 text-slate-900"
                   : theme === "dark"
-                    ? "text-slate-200 hover:bg-[#1b1b1b]"
+                    ? "text-zinc-300 hover:bg-white/[0.05]"
                     : "text-slate-600 hover:bg-slate-100"
               }`}
             >
@@ -239,13 +328,13 @@ export default function BackendShell({ children, title }: { children: ReactNode;
             </Link>
             <Link
               href="/admin/students"
-              className={`rounded-md px-3 py-2 text-center text-xs ${
+              className={`rounded-lg px-3 py-2 text-center text-xs ${
                 pathname.startsWith("/admin/students")
                   ? theme === "dark"
-                    ? "bg-[#a855f7] text-white"
+                    ? "bg-[#6366f1] text-white"
                     : "bg-slate-200 text-slate-900"
                   : theme === "dark"
-                    ? "text-slate-200 hover:bg-[#1b1b1b]"
+                    ? "text-zinc-300 hover:bg-white/[0.05]"
                     : "text-slate-600 hover:bg-slate-100"
               }`}
             >
@@ -253,13 +342,13 @@ export default function BackendShell({ children, title }: { children: ReactNode;
             </Link>
             <Link
               href="/admin"
-              className={`rounded-md px-3 py-2 text-center text-xs ${
+              className={`rounded-lg px-3 py-2 text-center text-xs ${
                 pathname === "/admin"
                   ? theme === "dark"
-                    ? "bg-[#a855f7] text-white"
+                    ? "bg-[#6366f1] text-white"
                     : "bg-slate-200 text-slate-900"
                   : theme === "dark"
-                    ? "text-slate-200 hover:bg-[#1b1b1b]"
+                    ? "text-zinc-300 hover:bg-white/[0.05]"
                     : "text-slate-600 hover:bg-slate-100"
               }`}
             >
