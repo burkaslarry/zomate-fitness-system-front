@@ -21,6 +21,14 @@ function normalizeApiBase(url: string): string {
   return url.trim().replace(/\/+$/, "");
 }
 
+/**
+ * Fallback when deploying to Vercel with same-origin `/api/* → Render` rewrites (`vercel.json`).
+ * Browser HTTP uses relative `/api`; WebSockets cannot use that rewrite path on the Edge CDN,
+ * so WS must hit FastAPI host directly (`wss://…/ws/checkins`).
+ * Override anytime with NEXT_PUBLIC_BACKEND_ORIGIN.
+ */
+export const DEFAULT_PRODUCTION_BACKEND_ORIGIN = "https://zomate-fitness-system-back.onrender.com";
+
 function resolveApiBaseUrl(): string {
   const explicit = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   if (explicit) {
@@ -46,17 +54,26 @@ export function isUsingNextMockApi(): boolean {
   return API_BASE_URL === "";
 }
 
+/**
+ * Origin host for realtime WebSockets (always reaches FastAPI, not the Vercel hostname).
+ */
+function resolveWebSocketBackendOrigin(): string {
+  const envOrigin = process.env.NEXT_PUBLIC_BACKEND_ORIGIN?.trim();
+  if (envOrigin) {
+    return normalizeApiBase(envOrigin);
+  }
+  if (API_BASE_URL) {
+    return API_BASE_URL;
+  }
+  if (process.env.NODE_ENV === "development") {
+    return "http://127.0.0.1:8000";
+  }
+  return normalizeApiBase(DEFAULT_PRODUCTION_BACKEND_ORIGIN);
+}
+
 /** FastAPI `/ws/checkins` — realtime student check-ins (broadcast from POST /api/checkin). */
 export function getCheckinsWebSocketUrl(): string {
-  let base = API_BASE_URL;
-  if (!base) {
-    base =
-      process.env.NODE_ENV === "development"
-        ? "http://127.0.0.1:8000"
-        : typeof window !== "undefined"
-          ? `${window.location.protocol}//${window.location.host}`
-          : "http://127.0.0.1:8000";
-  }
+  const base = resolveWebSocketBackendOrigin();
   const path = "/ws/checkins";
   if (base.startsWith("https://")) {
     return `wss://${base.slice(8).replace(/\/$/, "")}${path}`;
