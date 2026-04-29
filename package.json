@@ -1,6 +1,6 @@
 {
   "name": "zomate-fitness-system-front",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
@@ -12,7 +12,6 @@
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "@tanstack/react-table": "^8.21.3",
-    "exceljs": "^4.4.0",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.11.0",
     "next": "^16.2.4",

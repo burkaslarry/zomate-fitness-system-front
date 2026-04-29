@@ -108,9 +108,6 @@ export default function AdminFinanceExpensesPage() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 className="text-xl font-semibold text-white">支出管理 · Expenses</h2>
-            <p className="mt-1 text-sm text-zinc-500">
-              Mock API：<code className="rounded bg-[#262626] px-1 py-0.5 text-xs">GET/POST /api/v1/reports/expenses</code>
-            </p>
           </div>
           <button
             type="button"

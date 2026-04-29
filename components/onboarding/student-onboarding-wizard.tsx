@@ -3,7 +3,7 @@
 /** @feature [F01.1][F01.2][F01.3][F01.4] */
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
@@ -12,7 +12,7 @@ import {
   parqRequiresClearance,
   computeMembershipExpiryIso
 } from "../../lib/schemas/student";
-import { api } from "../../lib/api";
+import { alertApiError, api } from "../../lib/api";
 import { useDemoState } from "../../lib/demo-state";
 import { useWhatsAppLog } from "../../hooks/use-whatsapp-log";
 
@@ -58,6 +58,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   const [status, setStatus] = useState("");
   const [assignedPin, setAssignedPin] = useState<string | null>(null);
   const [expiryPreview, setExpiryPreview] = useState<string>("");
+  const formRef = useRef<HTMLFormElement | null>(null);
   const { addStudent } = useDemoState();
   const { logOnboardingSuccess } = useWhatsAppLog();
 
@@ -142,7 +143,8 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
       form.reset({ ...defaults, full_name: "", hkid: "", phone: "" } as StudentRegistrationPayload);
       setStep(1);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : String(err));
+      setStatus("");
+      alertApiError(err);
     }
   }
 
@@ -162,11 +164,16 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
       </ol>
 
       <form
+        ref={formRef}
         className="space-y-5 rounded-xl border border-white/[0.12] bg-[#141414] p-5 shadow-sm"
         onSubmit={form.handleSubmit(onFinalSubmit)}
       >
         {step === 1 && (
           <div className="space-y-3">
+            <p className="text-sm leading-relaxed text-white">
+              入職：掃描後台「登記 QR」填表。續會：填 Membership Renewal Form 加堂。簽到：掃「簽到 QR」→
+              搜尋自己姓名 → 輸入 PIN 扣堂。
+            </p>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -256,28 +263,46 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
 
         {step === 3 && (
           <div className="space-y-4">
-            <div className="rounded-lg border border-white/[0.1] bg-[#121212] p-4 text-xs leading-relaxed text-zinc-400">
-              <p className="font-semibold text-zinc-200">7 天冷靜期（示意）</p>
+            <div data-cooling-copy className="rounded-lg border border-white/[0.1] bg-[#121212] p-4 text-xs leading-relaxed text-zinc-400">
+              <p className="font-semibold text-zinc-200">7 天冷靜期</p>
               <p className="mt-2">
-                根據示範條款：會員可在簽署後 7 個曆日內書面通知中心終止合約（扣除合理行政費用之條款以實際合約為準）。
+                會員可在簽署後 7 個曆日內書面通知中心終止合約（扣除合理行政費用之條款以實際合約為準）
               </p>
             </div>
-            <label className="flex items-start gap-2 text-sm text-zinc-200">
-              <input type="checkbox" className="mt-0.5 accent-[#6366f1]" {...form.register("cooling_off_acknowledged")} />
-              本人確認已閱讀並理解冷靜期條款。
+            <label
+              data-cooling-ack
+              className="flex w-full max-w-full touch-manipulation items-start gap-3 text-sm text-zinc-200"
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5 h-6 w-6 min-h-[1.5rem] min-w-[1.5rem] shrink-0 cursor-pointer accent-[#6366f1]"
+                {...form.register("cooling_off_acknowledged")}
+              />
+              <span className="min-w-0 flex-1 text-left leading-snug [word-break:normal]">
+                本人確認已閱讀並理解冷靜期條款。
+              </span>
             </label>
             {form.formState.errors.cooling_off_acknowledged && (
               <p className="text-xs text-rose-400">{String(form.formState.errors.cooling_off_acknowledged.message)}</p>
             )}
             <div className="rounded-lg border border-white/[0.1] bg-[#121212] p-4 text-xs leading-relaxed text-zinc-400">
-              <p className="font-semibold text-zinc-200">免責聲明（示範）</p>
+              <p className="font-semibold text-zinc-200">免責聲明</p>
               <p className="mt-2">
-                參加本中心訓練前，請確認已理解運動風險；如有長期病患請先諮詢醫生。提交即表示同意中心之免責及私隱安排。
+                參加本中心訓練前，請確認已理解運動風險；如有長期病患請先諮詢醫生
               </p>
             </div>
-            <label className="flex items-start gap-2 text-sm text-zinc-200">
-              <input type="checkbox" className="mt-0.5 accent-[#6366f1]" {...form.register("disclaimer_accepted")} />
-              本人已閱讀並同意健康聲明及免責條款。
+            <label
+              data-disclaimer-ack
+              className="flex w-full max-w-full touch-manipulation items-start gap-3 text-sm text-zinc-200"
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5 h-6 w-6 min-h-[1.5rem] min-w-[1.5rem] shrink-0 cursor-pointer accent-[#6366f1]"
+                {...form.register("disclaimer_accepted")}
+              />
+              <span className="min-w-0 flex-1 text-left leading-snug [word-break:normal]">
+                本人已閱讀並同意健康聲明及免責條款。
+              </span>
             </label>
             {form.formState.errors.disclaimer_accepted && (
               <p className="text-xs text-rose-400">{String(form.formState.errors.disclaimer_accepted.message)}</p>
@@ -299,7 +324,11 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
 
         <div className="flex flex-wrap gap-2 border-t border-white/[0.08] pt-4">
           {step > 1 && (
-            <button type="button" className="bg-zinc-700 text-white hover:bg-zinc-600" onClick={() => setStep((s) => s - 1)}>
+            <button
+              type="button"
+              className="rounded-md border border-white/20 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100"
+              onClick={() => setStep((s) => s - 1)}
+            >
               上一步
             </button>
           )}

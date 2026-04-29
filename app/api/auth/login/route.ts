@@ -1,4 +1,4 @@
-/** @feature [AUTH] Mock auth when Spring Boot is not running. */
+/** @feature [AUTH] Mock auth for same-origin Next API when FastAPI is not used (`NEXT_PUBLIC_USE_NEXT_MOCK_API=1`). */
 
 import { NextResponse } from "next/server";
 

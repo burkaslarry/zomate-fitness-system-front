@@ -1,5 +1,7 @@
 /** @feature [CF07][F04.1][F03] API transport — FastAPI → PostgreSQL (zomate_fs_*) */
 
+import { clearAuthSession } from "./auth";
+
 /*
  * Client-side fetch helper:
  * - JSON: request() + retries + Bearer from localStorage (zomate_auth_session).
@@ -71,6 +73,60 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Parse FastAPI `{"detail":"..."}` or validation array into a short user-facing message. */
+function errorFromApiBody(bodyText: string, fallback: string): Error {
+  const raw = bodyText.trim();
+  if (!raw) return new Error(fallback);
+  try {
+    const parsed = JSON.parse(raw) as { detail?: unknown };
+    const d = parsed.detail;
+    if (typeof d === "string") return new Error(d);
+    if (Array.isArray(d)) {
+      const parts = d.map((item) => {
+        if (item && typeof item === "object" && item !== null && "msg" in item) {
+          return String((item as { msg: unknown }).msg);
+        }
+        return typeof item === "string" ? item : JSON.stringify(item);
+      });
+      const joined = parts.filter(Boolean).join("\n");
+      if (joined) return new Error(joined);
+    }
+  } catch {
+    /* plain text/HTML error body */
+  }
+  return new Error(raw);
+}
+
+/** Normalized message from API throws (already parsed by `errorFromApiBody` where applicable). */
+export function formatApiError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+/** Native popup — use for backend errors so users never only see raw JSON. */
+export function alertApiError(err: unknown): void {
+  if (typeof window === "undefined") return;
+  window.alert(formatApiError(err));
+}
+
+/** Session rows live in Postgres; stale localStorage token → 401. Clear + send user to login. */
+function redirectOnStaleAuth(path: string, status: number, bodyText: string) {
+  if (status !== 401 || typeof window === "undefined") return;
+  if (path === "/api/auth/login") return;
+  try {
+    const detail = (JSON.parse(bodyText) as { detail?: unknown }).detail;
+    const d = typeof detail === "string" ? detail : "";
+    if (d === "Invalid auth token." || d === "Session expired.") {
+      clearAuthSession();
+      if (!window.location.pathname.startsWith("/login")) {
+        window.location.assign("/login");
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
 function authHeaders() {
   if (typeof window === "undefined") return {};
   const raw = window.localStorage.getItem("zomate_auth_session");
@@ -94,14 +150,62 @@ async function request(path: string, options?: RequestInit) {
 
   for (let attempt = 0; attempt < RETRY_DELAYS_MS.length; attempt += 1) {
     try {
-      const res = await fetch(`${API_BASE_URL}${path}`, {
+      const fullUrl = `${API_BASE_URL}${path}`;
+      const res = await fetch(fullUrl, {
         ...options,
         headers
       });
 
+      // #region agent log
+      if (path.includes("/api/renewal")) {
+        fetch("http://127.0.0.1:7480/ingest/881a8b8b-14fd-4480-bb21-056e0c22cd5b", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "195967" },
+          body: JSON.stringify({
+            sessionId: "195967",
+            runId: "pre-fix",
+            hypothesisId: "H1",
+            location: "lib/api.ts:request",
+            message: "renewal_request_response_meta",
+            data: {
+              apiBaseUrlLength: API_BASE_URL.length,
+              apiBaseEmpty: API_BASE_URL === "",
+              nodeEnv: process.env.NODE_ENV,
+              path,
+              status: res.status,
+              ok: res.ok,
+              attempt
+            },
+            timestamp: Date.now()
+          })
+        }).catch(() => {});
+      }
+      // #endregion
+
       if (!res.ok) {
         const text = await res.text();
-        const err = new Error(text || "Request failed");
+        redirectOnStaleAuth(path, res.status, text);
+        // #region agent log
+        if (path.includes("/api/renewal")) {
+          fetch("http://127.0.0.1:7480/ingest/881a8b8b-14fd-4480-bb21-056e0c22cd5b", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "195967" },
+            body: JSON.stringify({
+              sessionId: "195967",
+              runId: "pre-fix",
+              hypothesisId: "H2",
+              location: "lib/api.ts:request",
+              message: "renewal_error_body",
+              data: {
+                status: res.status,
+                bodyPreview: text.slice(0, 200)
+              },
+              timestamp: Date.now()
+            })
+          }).catch(() => {});
+        }
+        // #endregion
+        const err = errorFromApiBody(text, "Request failed");
         if (res.status < 500) {
           throw err;
         }
@@ -130,7 +234,8 @@ export async function uploadCsv(path: string, file: File) {
   const res = await fetch(`${API_BASE_URL}${path}`, { method: "POST", headers, body: form });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || "Upload failed");
+    redirectOnStaleAuth(path, res.status, text);
+    throw errorFromApiBody(text, "Upload failed");
   }
   return res.json() as Promise<{ imported?: number; skipped?: number }>;
 }
@@ -142,7 +247,8 @@ async function requestBlob(path: string) {
   const res = await fetch(`${API_BASE_URL}${path}`, { headers });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || "Request failed");
+    redirectOnStaleAuth(path, res.status, text);
+    throw errorFromApiBody(text, "Request failed");
   }
   return res.blob();
 }
@@ -181,6 +287,8 @@ export const api = {
   /** Full Zod-validated registration (F01). */
   studentsRegisterV1: (payload: Record<string, unknown>) =>
     request("/api/v1/students/register", { method: "POST", body: JSON.stringify(payload) }),
+  renewal: (payload: Record<string, unknown>) =>
+    request("/api/renewal", { method: "POST", body: JSON.stringify(payload) }),
   listStudents: () => request("/api/students"),
   trialPurchase: (payload: unknown) =>
     request("/api/trial-purchase", { method: "POST", body: JSON.stringify(payload) }),
@@ -203,14 +311,31 @@ export const api = {
     ),
 
   branches: () => request("/api/admin/branches"),
-  createBranch: (payload: { name: string; address: string; code: string }) =>
+  createBranch: (payload: {
+    name: string;
+    address: string;
+    code?: string;
+    business_start_time: string;
+    business_end_time: string;
+    remarks?: string | null;
+  }) =>
     request("/api/admin/branches", { method: "POST", body: JSON.stringify(payload) }),
+  updateBranch: (branchId: number, payload: Record<string, unknown>) =>
+    request(`/api/admin/branches/${branchId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteBranch: (branchId: number, hard = false) =>
     request(`/api/admin/branches/${branchId}?hard=${hard ? "true" : "false"}`, { method: "DELETE" }),
 
   coaches: () => request("/api/admin/coaches"),
   createCoach: (payload: { full_name: string; phone: string; branch_id: number | null }) =>
     request("/api/admin/coaches", { method: "POST", body: JSON.stringify(payload) }),
+  updateCoach: (
+    coachId: number,
+    payload: { full_name?: string; phone?: string; branch_id?: number | null }
+  ) =>
+    request(`/api/admin/coaches/${coachId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    }),
   deleteCoach: (coachId: number, hard = false) =>
     request(`/api/admin/coaches/${coachId}?hard=${hard ? "true" : "false"}`, { method: "DELETE" }),
 
@@ -257,7 +382,7 @@ export const api = {
 
   /**
    * Monthly / course sales report for admin dashboards.
-   * Forwards `sort` and `columns` as query parameters to Spring Boot.
+   * Forwards `sort` and `columns` as query parameters to the API (`GET /api/v1/reports/sales`).
    */
   reportsSales: (query?: { sort?: string; columns?: string }) => {
     const sp = new URLSearchParams();

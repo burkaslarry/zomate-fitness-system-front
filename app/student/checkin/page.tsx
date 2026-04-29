@@ -10,7 +10,7 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { api, getCheckinsWebSocketUrl } from "../../../lib/api";
+import { alertApiError, api, getCheckinsWebSocketUrl } from "../../../lib/api";
 import { useDemoState } from "../../../lib/demo-state";
 import { usePeriodicHealthPing } from "../../../hooks/use-periodic-health-ping";
 import { useWhatsAppLog } from "../../../hooks/use-whatsapp-log";
@@ -44,6 +44,12 @@ function isValidCheckinQrPayload(raw: string): boolean {
   }
 }
 
+function isOnboardingQrPayload(raw: string): boolean {
+  const t = raw.trim();
+  if (!t) return false;
+  return t.includes("/student/onboard");
+}
+
 type BarcodeDetectorCtor = new (opts: { formats: string[] }) => {
   detect: (image: ImageBitmapSource) => Promise<Array<{ rawValue: string }>>;
 };
@@ -52,7 +58,6 @@ export default function StudentCheckinPage() {
   usePeriodicHealthPing();
   const [gateOk, setGateOk] = useState(false);
   const [scanMsg, setScanMsg] = useState("");
-  const [pasteValue, setPasteValue] = useState("");
   const [cameraOn, setCameraOn] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -71,15 +76,7 @@ export default function StudentCheckinPage() {
   const [pinPadError, setPinPadError] = useState(false);
   const { markCheckin } = useDemoState();
   const { logCheckinSuccess } = useWhatsAppLog();
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const p = new URLSearchParams(window.location.search);
-    if (p.get("from") === "qr" || p.get("gate") === "1") {
-      setGateOk(true);
-      setScanMsg("已從 QR 連結進入，請搜尋姓名並輸入 PIN 扣堂。");
-    }
-  }, []);
+  const autoCameraRequested = useRef(false);
 
   useEffect(() => {
     const wsUrl = getCheckinsWebSocketUrl();
@@ -128,14 +125,14 @@ export default function StudentCheckinPage() {
 
   useEffect(() => () => stopCamera(), [stopCamera]);
 
-  async function startCamera() {
-    setScanMsg("");
+  const startCamera = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: "environment" } }
       });
       streamRef.current = stream;
       setCameraOn(true);
+      setScanMsg("");
       requestAnimationFrame(() => {
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -143,7 +140,42 @@ export default function StudentCheckinPage() {
         }
       });
     } catch {
-      setScanMsg("無法開啟相機，請用「貼上 QR 內容」或改用有相機嘅瀏覽器。");
+      setScanMsg("無法開啟相機，請改用有相機權限嘅瀏覽器再試。");
+    }
+  }, []);
+
+  /** 進頁自動開後鏡頭；已由 QR／gate 直入簽到步驟嘅連結唔再搶鏡頭。（部分瀏覽器或阻擋非手勢嘅 getUserMedia，此時仍可撳「開啟相機掃描」） */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const p = new URLSearchParams(window.location.search);
+    const fromQrGate = p.get("from") === "qr" || p.get("gate") === "1";
+    if (fromQrGate) {
+      setGateOk(true);
+      setScanMsg("已從 QR 連結進入，請搜尋姓名並輸入 PIN 扣堂。");
+      return;
+    }
+    if (autoCameraRequested.current) return;
+    autoCameraRequested.current = true;
+    setScanMsg("正在開啟相機…");
+    void startCamera();
+
+    return () => {
+      autoCameraRequested.current = false;
+    };
+  }, [startCamera]);
+
+  function handleQrPayload(raw: string) {
+    if (isOnboardingQrPayload(raw)) {
+      stopCamera();
+      window.location.href = raw.startsWith("http") ? raw : "/student/onboard";
+      return;
+    }
+    if (isValidCheckinQrPayload(raw)) {
+      setGateOk(true);
+      setScanMsg("QR 有效，請於下方搜尋自己姓名。");
+      stopCamera();
+    } else {
+      setScanMsg("QR 內容唔係簽到碼，請向職員確認。");
     }
   }
 
@@ -155,7 +187,7 @@ export default function StudentCheckinPage() {
     }
     const BD = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
     if (!BD) {
-      setScanMsg("此瀏覽器不支援 BarcodeDetector，請用 Chrome / Edge 或改用手動貼上。");
+      setScanMsg("此瀏覽器不支援 BarcodeDetector，請用 Chrome / Edge 再試。");
       return;
     }
     const canvas = document.createElement("canvas");
@@ -172,24 +204,9 @@ export default function StudentCheckinPage() {
         return;
       }
       const raw = codes[0].rawValue;
-      if (isValidCheckinQrPayload(raw)) {
-        setGateOk(true);
-        setScanMsg("✅ QR 有效，請於下方搜尋自己姓名。");
-        stopCamera();
-      } else {
-        setScanMsg("QR 內容唔係簽到碼，請向職員確認。");
-      }
+      handleQrPayload(raw);
     } catch {
       setScanMsg("掃描失敗，請再試。");
-    }
-  }
-
-  function verifyPasted() {
-    if (isValidCheckinQrPayload(pasteValue)) {
-      setGateOk(true);
-      setScanMsg("✅ 已驗證，請搜尋姓名。");
-    } else {
-      setScanMsg("內容唔係有效簽到 QR／連結。");
     }
   }
 
@@ -215,7 +232,8 @@ export default function StudentCheckinPage() {
       setResults([]);
     } catch (err) {
       setPinPadError(true);
-      setStatus(String(err));
+      setStatus("");
+      alertApiError(err);
     }
   }
 
@@ -237,7 +255,8 @@ export default function StudentCheckinPage() {
       setFbPhone("");
     } catch (err) {
       setPinPadError(true);
-      setStatus(String(err));
+      setStatus("");
+      alertApiError(err);
     }
   }
 
@@ -250,64 +269,64 @@ export default function StudentCheckinPage() {
   }
 
   return (
-    <main className="mx-auto max-w-lg space-y-6 p-6 pb-16">
+    <main className="mx-auto max-w-lg space-y-6 p-6 pb-16 text-white">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-bold">智能 QR 簽到</h1>
-        <Link href="/student" className="text-sm text-slate-600 underline">
+        <h1 className="text-xl font-bold text-white">Zomate 智能 QR 簽到</h1>
+        <Link
+          href="/student"
+          className="text-sm text-sky-400 underline underline-offset-2 hover:text-sky-300"
+        >
           返回
         </Link>
       </div>
 
-      <p className="text-sm text-slate-600">
-        流程：掃門口 QR → 搜尋姓名 → 揀人 → 輸入 PIN 扣一堂。課堂專用 PIN 只會通知<strong>該堂主教練</strong>
-        ；帳戶 PIN 會按今日課表揀一堂再通知<strong>一位</strong>教練；無課堂則示範{" "}
-        <code className="text-xs">coach-demo</code>。
+      <p className="text-sm text-zinc-400">
+        流程：掃門口 QR → 搜尋姓名 → 揀人 → 輸入 PIN 扣一堂。掃到學生 onboarding QR 會直接跳去填表頁。
       </p>
 
       {!gateOk && (
-        <section className="space-y-3 rounded-lg bg-white p-4 shadow">
-          <h2 className="font-semibold">步驟 1 · 掃描店內簽到 QR</h2>
-          <p className="text-xs text-slate-500">
-            支援：本頁網址、JSON <code className="break-all">{`{"type":"zomate_checkin"}`}</code>、或前綴{" "}
-            <code>ZOMATE-CHECKIN</code>
-          </p>
+        <section className="space-y-3 rounded-lg bg-white p-4 shadow [color-scheme:light] text-slate-900">
+          <h2 className="font-semibold text-slate-900">步驟 1 · 掃描店內簽到 QR</h2>
           {!cameraOn ? (
-            <button type="button" onClick={startCamera}>
+            <button
+              type="button"
+              className="inline-flex rounded-md border border-slate-300 bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-slate-800"
+              onClick={() => {
+                setScanMsg("");
+                void startCamera();
+              }}
+            >
               開啟相機掃描
             </button>
           ) : (
             <div className="space-y-2">
               <video ref={videoRef} className="w-full rounded-md bg-black" playsInline muted />
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={captureScan}>
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
+                  onClick={captureScan}
+                >
                   掃描此畫面
                 </button>
-                <button type="button" className="bg-slate-600" onClick={stopCamera}>
+                <button
+                  type="button"
+                  className="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600"
+                  onClick={stopCamera}
+                >
                   關閉相機
                 </button>
               </div>
             </div>
           )}
-          <div className="space-y-2 border-t border-slate-100 pt-3">
-            <p className="text-xs text-slate-600">或貼上 QR 解碼內容／連結：</p>
-            <textarea
-              className="min-h-[4rem] font-mono text-xs"
-              value={pasteValue}
-              onChange={(e) => setPasteValue(e.target.value)}
-              placeholder="貼上掃描結果…"
-            />
-            <button type="button" onClick={verifyPasted}>
-              驗證內容
-            </button>
-          </div>
-          {scanMsg && <p className="text-sm text-slate-800">{scanMsg}</p>}
+          {scanMsg && <p className="text-sm text-slate-700">{scanMsg}</p>}
         </section>
       )}
 
       {gateOk && (
         <>
-          <section className="space-y-3 rounded-lg bg-white p-4 shadow">
-            <h2 className="font-semibold">步驟 2 · 搜尋姓名</h2>
+          <section className="space-y-3 rounded-lg bg-white p-4 shadow [color-scheme:light] text-slate-900">
+            <h2 className="font-semibold text-slate-900">步驟 2 · 搜尋姓名</h2>
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg opacity-60">
                 🔍
@@ -355,12 +374,12 @@ export default function StudentCheckinPage() {
             </ul>
           </section>
 
-          <section className="space-y-3 rounded-lg bg-white p-4 shadow">
-            <h2 className="font-semibold">步驟 3 · 輸入 PIN 扣堂</h2>
+          <section className="space-y-3 rounded-lg bg-white p-4 shadow [color-scheme:light] text-slate-900">
+            <h2 className="font-semibold text-slate-900">步驟 3 · 輸入 PIN 扣堂</h2>
             {!selected ? (
               <p className="text-sm text-slate-500">請先喺上面揀返自己。</p>
             ) : (
-              <p className="text-sm">
+              <p className="text-sm text-slate-800">
                 已揀：<span className="font-medium">{selected.full_name}</span>
               </p>
             )}
@@ -418,7 +437,7 @@ export default function StudentCheckinPage() {
 
           <button
             type="button"
-            className="w-full bg-transparent text-sm text-slate-600 underline"
+            className="w-full bg-transparent text-sm text-zinc-400 underline underline-offset-2 hover:text-zinc-200"
             onClick={() => setShowPhoneFallback((v) => !v)}
           >
             進階：唔用揀人，直接電話 + PIN
@@ -461,8 +480,8 @@ export default function StudentCheckinPage() {
       )}
 
       {acks.length > 0 && (
-        <div className="rounded-lg bg-white p-4 shadow">
-          <h2 className="mb-2 text-sm font-semibold">即時回饋</h2>
+        <div className="rounded-lg bg-white p-4 shadow [color-scheme:light] text-slate-900">
+          <h2 className="mb-2 text-sm font-semibold text-slate-900">即時回饋</h2>
           <ul className="space-y-2 text-sm text-slate-700">
             {acks.map((a, i) => (
               <li key={`${a.created_at}-${i}`} className="border-b border-slate-100 pb-2">

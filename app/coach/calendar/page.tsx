@@ -209,10 +209,10 @@ export default function CoachCalendarPage() {
             </Link>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="text-sm text-slate-200">
-              教練
+            <label className="flex flex-wrap items-center gap-2 text-sm text-slate-200">
+              <span className="shrink-0">教練</span>
               <select
-                className="ml-2 min-w-[10rem] rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-2 py-1.5 text-sm"
+                className="!w-auto min-w-[10rem] max-w-[min(100%,16rem)] rounded-lg border border-white/15 bg-neutral-900 px-2 py-1.5 text-sm text-zinc-100 shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/40 [&>option]:bg-neutral-900 [&>option]:text-zinc-100"
                 value={coachId === "" ? "" : String(coachId)}
                 onChange={(ev) => setCoachId(ev.target.value ? Number(ev.target.value) : "")}
               >
@@ -226,7 +226,7 @@ export default function CoachCalendarPage() {
             </label>
             <button
               type="button"
-              className="rounded-lg border border-white/[0.12] px-3 py-1.5 text-sm text-slate-200 hover:bg-white/[0.05]"
+              className="rounded-lg border border-white/15 bg-neutral-700 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-neutral-600 disabled:opacity-50"
               onClick={() => void loadMonth()}
               disabled={loading}
             >
@@ -242,25 +242,25 @@ export default function CoachCalendarPage() {
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.1] bg-[#171717] px-4 py-3">
               <button
                 type="button"
-                className="rounded-lg px-2 py-1 text-slate-300 hover:bg-white/[0.06]"
+                className="min-w-[2.25rem] rounded-lg border border-white/15 bg-neutral-800 px-2 py-1.5 text-lg font-medium leading-none text-zinc-100 shadow-sm hover:bg-neutral-700"
                 onClick={() => shiftMonth(-1)}
                 aria-label="上個月"
               >
                 ‹
               </button>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center justify-center gap-2">
                 <span className="text-base font-semibold text-white">{title}</span>
                 <button
                   type="button"
                   onClick={goToday}
-                  className="rounded-md border border-[#6366f1]/40 bg-[#6366f1]/15 px-2 py-0.5 text-xs text-indigo-200 hover:bg-[#6366f1]/25"
+                  className="rounded-md border border-indigo-400/50 bg-indigo-600/30 px-2.5 py-1 text-xs font-medium text-white shadow-sm hover:bg-indigo-600/45"
                 >
                   今天
                 </button>
               </div>
               <button
                 type="button"
-                className="rounded-lg px-2 py-1 text-slate-300 hover:bg-white/[0.06]"
+                className="min-w-[2.25rem] rounded-lg border border-white/15 bg-neutral-800 px-2 py-1.5 text-lg font-medium leading-none text-zinc-100 shadow-sm hover:bg-neutral-700"
                 onClick={() => shiftMonth(1)}
                 aria-label="下個月"
               >

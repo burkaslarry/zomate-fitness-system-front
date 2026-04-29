@@ -8,6 +8,7 @@ export type DemoStudent = {
   phone: string;
   remainingCredits: number;
   pin: string;
+  trainingRatio?: "1:1" | "1:2";
   membershipType?: "new" | "renewal";
   englishName?: string;
   emergencyContactName?: string;
@@ -49,16 +50,16 @@ type DemoStateContextType = {
 };
 
 const seedStudents: DemoStudent[] = [
-  { id: 1, name: "Larry Lo", phone: "+85291234567", remainingCredits: 10, pin: "12345" },
-  { id: 2, name: "Mandy Chan", phone: "+85292345678", remainingCredits: 8, pin: "12345" },
-  { id: 3, name: "Jason Wong", phone: "+85293456789", remainingCredits: 12, pin: "12345" },
-  { id: 4, name: "Ivy Lam", phone: "+85294567890", remainingCredits: 6, pin: "12345" },
-  { id: 5, name: "Kenny Yip", phone: "+85295678901", remainingCredits: 9, pin: "12345" },
-  { id: 6, name: "Carmen Ho", phone: "+85296789012", remainingCredits: 7, pin: "12345" },
-  { id: 7, name: "Peter Ng", phone: "+85297890123", remainingCredits: 11, pin: "12345" },
-  { id: 8, name: "Angel Lee", phone: "+85298901234", remainingCredits: 5, pin: "12345" },
-  { id: 9, name: "Brian Tse", phone: "+85290011223", remainingCredits: 13, pin: "12345" },
-  { id: 10, name: "Zoey Mak", phone: "+85291122334", remainingCredits: 10, pin: "12345" }
+  { id: 1, name: "Larry Lo", phone: "+85291234567", remainingCredits: 10, pin: "12345", trainingRatio: "1:1" },
+  { id: 2, name: "Mandy Chan", phone: "+85292345678", remainingCredits: 8, pin: "12345", trainingRatio: "1:2" },
+  { id: 3, name: "Jason Wong", phone: "+85293456789", remainingCredits: 12, pin: "12345", trainingRatio: "1:1" },
+  { id: 4, name: "Ivy Lam", phone: "+85294567890", remainingCredits: 6, pin: "12345", trainingRatio: "1:2" },
+  { id: 5, name: "Kenny Yip", phone: "+85295678901", remainingCredits: 9, pin: "12345", trainingRatio: "1:1" },
+  { id: 6, name: "Carmen Ho", phone: "+85296789012", remainingCredits: 7, pin: "12345", trainingRatio: "1:2" },
+  { id: 7, name: "Peter Ng", phone: "+85297890123", remainingCredits: 11, pin: "12345", trainingRatio: "1:1" },
+  { id: 8, name: "Angel Lee", phone: "+85298901234", remainingCredits: 5, pin: "12345", trainingRatio: "1:2" },
+  { id: 9, name: "Brian Tse", phone: "+85290011223", remainingCredits: 13, pin: "12345", trainingRatio: "1:1" },
+  { id: 10, name: "Zoey Mak", phone: "+85291122334", remainingCredits: 10, pin: "12345", trainingRatio: "1:2" }
 ];
 
 const seedExpenses: DemoExpense[] = [

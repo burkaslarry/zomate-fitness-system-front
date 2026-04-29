@@ -6,7 +6,14 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import BackendShell from "../../../components/backend-shell";
 import { api } from "../../../lib/api";
 
-type Branch = { id: number; name: string };
+type Branch = {
+  id: number;
+  name: string;
+  address: string;
+  business_start_time: string;
+  business_end_time: string;
+  remarks: string | null;
+};
 type Coach = { id: number; full_name: string; branch_id: number | null };
 type StudentRow = {
   id: number;
@@ -34,6 +41,8 @@ export default function CourseSetPage() {
   const [creditsOnEnroll, setCreditsOnEnroll] = useState(10);
   const [status, setStatus] = useState("");
   const [lastOut, setLastOut] = useState<string>("");
+  const selectedBranch = branches.find((branch) => branch.id === branchId);
+  const selectableCoaches = branchId === "" ? coaches : coaches.filter((coach) => coach.branch_id == null || coach.branch_id === branchId);
 
   useEffect(() => {
     Promise.all([
@@ -123,20 +132,30 @@ export default function CourseSetPage() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm">
-              <span className="text-zinc-400">分店</span>
+              <span className="text-zinc-400">分店（必填）</span>
               <select
                 required
                 className="mt-1 w-full rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-zinc-100"
                 value={branchId === "" ? "" : String(branchId)}
-                onChange={(e) => setBranchId(e.target.value === "" ? "" : Number(e.target.value))}
+                onChange={(e) => {
+                  const next = e.target.value === "" ? "" : Number(e.target.value);
+                  setBranchId(next);
+                  setCoachId("");
+                }}
               >
                 <option value="">—</option>
                 {branches.map((b) => (
                   <option key={b.id} value={b.id}>
-                    {b.name}
+                    {b.name} · {b.address}
                   </option>
                 ))}
               </select>
+              {selectedBranch && (
+                <span className="mt-2 block text-xs leading-5 text-zinc-500">
+                  {selectedBranch.address} · {selectedBranch.business_start_time}–{selectedBranch.business_end_time}
+                  {selectedBranch.remarks ? ` · ${selectedBranch.remarks}` : ""}
+                </span>
+              )}
             </label>
             <label className="block text-sm">
               <span className="text-zinc-400">教練</span>
@@ -147,7 +166,7 @@ export default function CourseSetPage() {
                 onChange={(e) => setCoachId(e.target.value === "" ? "" : Number(e.target.value))}
               >
                 <option value="">—</option>
-                {coaches.map((c) => (
+                {selectableCoaches.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.full_name}
                   </option>

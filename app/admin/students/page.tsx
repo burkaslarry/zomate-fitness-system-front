@@ -1,8 +1,8 @@
 "use client";
 
 /*
- * Admin — student grid (TanStack Table + demo-state). CSV buttons delegate to backend or
- * same-origin mock — table rows stay client demo until wired to live APIs.
+ * Admin — student grid (TanStack Table + demo-state). CSV buttons delegate to backend
+ * (PostgreSQL). Table: column visibility, sorting, global search.
  */
 
 import { useMemo, useState } from "react";
@@ -11,17 +11,40 @@ import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
-  getFilteredRowModel,
-  useReactTable
+  getSortedRowModel,
+  useReactTable,
+  type SortingState,
+  type VisibilityState
 } from "@tanstack/react-table";
 import { useDemoState, type DemoStudent } from "../../../lib/demo-state";
 import { downloadCsv, uploadCsv } from "../../../lib/api";
 
+const COLUMN_LABELS: Record<string, string> = {
+  name: "姓名",
+  phone: "電話",
+  remainingCredits: "餘額",
+  trainingRatio: "課程",
+  membershipType: "類型",
+  actions: "操作"
+};
+
 export default function AdminStudentsPage() {
-  const { students, addStudent, updateStudent, deleteStudent } = useDemoState();
+  const { students, updateStudent, deleteStudent } = useDemoState();
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+
+  const filteredStudents = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return students;
+    return students.filter((s) => {
+      const blob =
+        `${s.name} ${s.phone} ${s.remainingCredits} ${s.trainingRatio ?? ""} ${s.membershipType ?? ""}`.toLowerCase();
+      return blob.includes(q);
+    });
+  }, [students, search]);
 
   const totalStudents = students.length;
   const activeStudents = students.filter((s) => s.remainingCredits > 0).length;
@@ -39,8 +62,17 @@ export default function AdminStudentsPage() {
 
   async function importStudentsCsvBackend(file: File) {
     try {
-      const r = await uploadCsv("/api/admin/students/import", file);
-      setStatus(`後端匯入完成：${r.imported ?? 0} 筆（略過 ${r.skipped ?? 0}）。請重新整理或從後台拉資料以同步畫面。`);
+      const r = (await uploadCsv("/api/admin/students/import", file)) as {
+        imported?: number;
+        updated?: number;
+        skipped?: number;
+      };
+      const imp = r.imported ?? 0;
+      const upd = r.updated ?? 0;
+      const sk = r.skipped ?? 0;
+      setStatus(
+        `後端匯入完成：新增 ${imp} 筆 · 更新 ${upd} 筆（同姓名會覆寫）· 略過 ${sk} 筆。請重新整理或從後台拉資料以同步畫面。`
+      );
     } catch (e) {
       setStatus(String(e));
     }
@@ -50,13 +82,17 @@ export default function AdminStudentsPage() {
   const columns = useMemo(
     () => [
       columnHelper.accessor("name", {
+        id: "name",
         header: "姓名",
+        enableSorting: true,
+        sortingFn: "alphanumeric",
         cell: (info) => {
           const row = info.row.original;
           if (editingId === row.id) {
             return (
               <input
                 defaultValue={row.name}
+                className="w-full rounded-md border border-slate-500 bg-white px-2 py-1 text-slate-950"
                 onBlur={(e) => updateStudent(row.id, { name: e.target.value })}
               />
             );
@@ -64,26 +100,56 @@ export default function AdminStudentsPage() {
           return <span className="font-medium">{info.getValue()}</span>;
         }
       }),
-      columnHelper.accessor("phone", { header: "電話" }),
-      columnHelper.accessor("remainingCredits", { header: "餘額" }),
+      columnHelper.accessor("phone", {
+        id: "phone",
+        header: "電話",
+        enableSorting: true,
+        sortingFn: "alphanumeric"
+      }),
+      columnHelper.accessor("remainingCredits", {
+        id: "remainingCredits",
+        header: "餘額",
+        enableSorting: true,
+        sortingFn: "basic"
+      }),
+      columnHelper.accessor("trainingRatio", {
+        id: "trainingRatio",
+        header: "課程",
+        enableSorting: true,
+        sortingFn: "alphanumeric",
+        cell: (info) => (
+          <span className="rounded-full border border-violet-400/50 bg-violet-500/15 px-2 py-0.5 text-xs font-semibold text-violet-100">
+            {info.getValue() ?? "—"}
+          </span>
+        )
+      }),
       columnHelper.accessor("membershipType", {
+        id: "membershipType",
         header: "類型",
+        enableSorting: true,
+        sortingFn: "alphanumeric",
         cell: (info) => (info.getValue() === "renewal" ? "Renewal" : "New")
       }),
       columnHelper.display({
         id: "actions",
         header: "操作",
+        enableHiding: false,
+        enableSorting: false,
         cell: (info) => {
           const row = info.row.original;
           const editing = editingId === row.id;
           return (
             <div className="flex gap-2">
-              <button type="button" onClick={() => setEditingId(editing ? null : row.id)}>
+              <button
+                type="button"
+                className="rounded-md border border-slate-500 bg-slate-700 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-slate-600"
+                onClick={() => setEditingId(editing ? null : row.id)}
+              >
                 {editing ? "完成" : "編輯"}
               </button>
               <button
                 type="button"
-                className="bg-red-600 text-white hover:bg-red-500"
+                className="rounded-md border border-red-400 bg-red-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-red-500"
                 onClick={() => deleteStudent(row.id)}
               >
                 刪除
@@ -97,14 +163,16 @@ export default function AdminStudentsPage() {
   );
 
   const table = useReactTable({
-    data: students,
+    data: filteredStudents,
     columns,
     state: {
-      globalFilter: search
+      sorting,
+      columnVisibility
     },
-    onGlobalFilterChange: setSearch,
+    onSortingChange: setSorting,
+    onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel()
+    getSortedRowModel: getSortedRowModel()
   });
 
   return (
@@ -129,11 +197,15 @@ export default function AdminStudentsPage() {
             <p className="text-2xl font-semibold text-emerald-300">+{Math.max(0, totalStudents - 10)}</p>
           </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => void exportStudentsCsvBackend()}>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="rounded-lg border border-emerald-400 bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-500"
+            onClick={() => void exportStudentsCsvBackend()}
+          >
             匯出 students.csv（後端）
           </button>
-          <label className="cursor-pointer rounded-md border border-[#333] px-3 py-2 text-sm text-slate-200">
+          <label className="cursor-pointer rounded-lg border border-violet-400 bg-violet-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-violet-500">
             匯入 CSV（後端）
             <input
               type="file"
@@ -151,9 +223,31 @@ export default function AdminStudentsPage() {
             placeholder="搜尋姓名 / 電話"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="min-w-[220px]"
+            className="min-w-[220px] rounded-lg border border-slate-500 bg-white px-3 py-2 text-sm text-slate-950 placeholder:text-slate-500 shadow-sm"
           />
         </div>
+
+        <div className="rounded-lg border border-[#374151] bg-[#0b1220] p-3">
+          <p className="mb-2 text-xs font-medium text-slate-400">顯示欄位（加／減 column）</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-200">
+            {table.getAllLeafColumns().map((column) => {
+              if (!column.getCanHide()) return null;
+              const id = column.id;
+              return (
+                <label key={id} className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-500 accent-emerald-500"
+                    checked={column.getIsVisible()}
+                    onChange={column.getToggleVisibilityHandler()}
+                  />
+                  <span>{COLUMN_LABELS[id] ?? id}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+
         {status && <p className="text-sm text-emerald-300">{status}</p>}
         <div className="overflow-x-auto rounded-lg border border-[#374151] bg-[#0b1220]">
           <table className="min-w-full text-left text-sm">
@@ -161,8 +255,27 @@ export default function AdminStudentsPage() {
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id}>
                   {headerGroup.headers.map((header) => (
-                    <th key={header.id} className="px-3 py-2">
-                      {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                    <th key={header.id} className="whitespace-nowrap px-3 py-2">
+                      {header.isPlaceholder ? null : (
+                        <button
+                          type="button"
+                          className={`inline-flex items-center gap-1 rounded-md border border-slate-600 bg-slate-800 px-2 py-1.5 text-sm font-semibold !text-white shadow-sm hover:bg-slate-700 ${
+                            header.column.getCanSort()
+                              ? "cursor-pointer select-none"
+                              : "cursor-default"
+                          }`}
+                          onClick={
+                            header.column.getCanSort() ? header.column.getToggleSortingHandler() : undefined
+                          }
+                          disabled={!header.column.getCanSort()}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          {{
+                            asc: " ▲",
+                            desc: " ▼"
+                          }[(header.column.getIsSorted() as string) ?? ""] ?? null}
+                        </button>
+                      )}
                     </th>
                   ))}
                 </tr>

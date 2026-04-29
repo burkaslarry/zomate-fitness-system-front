@@ -16,8 +16,12 @@ select {
   @apply w-full rounded-md border border-[#333] bg-[#171717] px-3 py-2 text-sm text-white placeholder:text-[#9ca3af] focus:border-[#a855f7] focus:outline-none;
 }
 
+/*
+ * Default = dark-shell UI (#121212). Light gray buttons (#e2e8f0 + text) clash when
+ * pages add faint text/colors-only overrides — use neutral + white labels/icons.
+ */
 button {
-  @apply rounded-md bg-slate-200 px-4 py-2 text-sm text-slate-900 transition hover:bg-slate-300;
+  @apply rounded-md border border-white/15 bg-neutral-700 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-neutral-600 disabled:cursor-not-allowed disabled:opacity-50;
 }
 
 html.light body {
@@ -25,7 +29,7 @@ html.light body {
 }
 
 html.light button {
-  @apply bg-slate-900 text-white hover:bg-slate-700;
+  @apply border-slate-700 bg-slate-900 font-medium text-white hover:bg-slate-800 disabled:opacity-50;
 }
 
 .bg-brand-purple {

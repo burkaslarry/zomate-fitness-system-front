@@ -18,6 +18,12 @@ export default function LoginPage() {
   usePeriodicHealthPing();
   const router = useRouter();
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("logout") === "1" || sp.get("clear") === "1") {
+      clearAuthSession();
+      window.history.replaceState({}, "", "/login");
+    }
     const existing = getAuthSession();
     if (existing) {
       router.push("/admin");

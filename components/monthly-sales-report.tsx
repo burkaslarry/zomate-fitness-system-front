@@ -196,7 +196,7 @@ export default function MonthlySalesReport() {
         header: ({ column }) => (
           <button
             type="button"
-            className="flex w-full items-center gap-1 text-left font-medium text-white hover:text-slate-100"
+            className="flex w-full items-center gap-1 rounded-md border border-slate-600/80 bg-slate-800 px-2 py-1.5 text-left text-sm font-medium !text-white shadow-none hover:bg-slate-700 hover:!text-white"
             onClick={() => column.toggleSorting()}
           >
             <HeaderButton label={COLUMN_LABELS.date} sorted={column.getIsSorted()} />
@@ -213,7 +213,7 @@ export default function MonthlySalesReport() {
         header: ({ column }) => (
           <button
             type="button"
-            className="flex w-full items-center gap-1 text-left font-medium text-white hover:text-slate-100"
+            className="flex w-full items-center gap-1 rounded-md border border-slate-600/80 bg-slate-800 px-2 py-1.5 text-left text-sm font-medium !text-white shadow-none hover:bg-slate-700 hover:!text-white"
             onClick={() => column.toggleSorting()}
           >
             <HeaderButton label={COLUMN_LABELS.clientName} sorted={column.getIsSorted()} />
@@ -228,7 +228,7 @@ export default function MonthlySalesReport() {
         header: ({ column }) => (
           <button
             type="button"
-            className="flex w-full items-center gap-1 text-left font-medium text-white hover:text-slate-100"
+            className="flex w-full items-center gap-1 rounded-md border border-slate-600/80 bg-slate-800 px-2 py-1.5 text-left text-sm font-medium !text-white shadow-none hover:bg-slate-700 hover:!text-white"
             onClick={() => column.toggleSorting()}
           >
             <HeaderButton label={COLUMN_LABELS.courseType} sorted={column.getIsSorted()} />
@@ -243,7 +243,7 @@ export default function MonthlySalesReport() {
         header: ({ column }) => (
           <button
             type="button"
-            className="flex w-full items-center gap-1 text-left font-medium text-white hover:text-slate-100"
+            className="flex w-full items-center gap-1 rounded-md border border-slate-600/80 bg-slate-800 px-2 py-1.5 text-left text-sm font-medium !text-white shadow-none hover:bg-slate-700 hover:!text-white"
             onClick={() => column.toggleSorting()}
           >
             <HeaderButton label={COLUMN_LABELS.amount} sorted={column.getIsSorted()} />
@@ -260,7 +260,7 @@ export default function MonthlySalesReport() {
         header: ({ column }) => (
           <button
             type="button"
-            className="flex w-full items-center gap-1 text-left font-medium text-white hover:text-slate-100"
+            className="flex w-full items-center gap-1 rounded-md border border-slate-600/80 bg-slate-800 px-2 py-1.5 text-left text-sm font-medium !text-white shadow-none hover:bg-slate-700 hover:!text-white"
             onClick={() => column.toggleSorting()}
           >
             <HeaderButton label={COLUMN_LABELS.coachName} sorted={column.getIsSorted()} />
@@ -275,7 +275,7 @@ export default function MonthlySalesReport() {
         header: ({ column }) => (
           <button
             type="button"
-            className="flex w-full items-center gap-1 text-left font-medium text-white hover:text-slate-100"
+            className="flex w-full items-center gap-1 rounded-md border border-slate-600/80 bg-slate-800 px-2 py-1.5 text-left text-sm font-medium !text-white shadow-none hover:bg-slate-700 hover:!text-white"
             onClick={() => column.toggleSorting()}
           >
             <HeaderButton label={COLUMN_LABELS.paymentStatus} sorted={column.getIsSorted()} />
@@ -299,7 +299,7 @@ export default function MonthlySalesReport() {
         header: ({ column }) => (
           <button
             type="button"
-            className="flex w-full items-center gap-1 text-left font-medium text-white hover:text-slate-100"
+            className="flex w-full items-center gap-1 rounded-md border border-slate-600/80 bg-slate-800 px-2 py-1.5 text-left text-sm font-medium !text-white shadow-none hover:bg-slate-700 hover:!text-white"
             onClick={() => column.toggleSorting()}
           >
             <HeaderButton label={COLUMN_LABELS.installmentStatus} sorted={column.getIsSorted()} />

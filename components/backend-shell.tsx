@@ -34,6 +34,7 @@ const MENU_GROUPS = [
     {
       title: "Course & Attendance",
       items: [
+        { href: "/admin/branches", label: "分店管理" },
         { href: "/admin/course-set", label: "Course 套餐開課" },
         { href: "/coach/calendar", label: "教練日程 · 簽到" },
       { href: "/coach", label: "教練課表" },
@@ -61,7 +62,8 @@ const MENU_GROUPS = [
 ];
 
 export default function BackendShell({ children, title }: { children: ReactNode; title: string }) {
-  const [session, setSession] = useState<AuthSession | null>(null);
+  /** `false` = still validating token with `/api/auth/me`; `null` = not logged in; otherwise session. */
+  const [session, setSession] = useState<AuthSession | false | null>(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [apiStatus, setApiStatus] = useState<"checking" | "online" | "offline">("checking");
   const [dbStatus, setDbStatus] = useState<"idle" | "checking" | "ok" | "error" | "na">("idle");
@@ -70,12 +72,28 @@ export default function BackendShell({ children, title }: { children: ReactNode;
   const pathname = usePathname();
 
   useEffect(() => {
+    let cancelled = false;
     const s = getAuthSession();
     if (!s) {
       router.replace("/login");
+      setSession(null);
       return;
     }
-    setSession(s);
+    void api
+      .me()
+      .then(() => {
+        if (!cancelled) setSession(s);
+      })
+      .catch(() => {
+        clearAuthSession();
+        if (!cancelled) {
+          setSession(null);
+          router.replace("/login");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   useEffect(() => {
@@ -120,6 +138,47 @@ export default function BackendShell({ children, title }: { children: ReactNode;
     };
   }, []);
 
+  useEffect(() => {
+    if (!session) return;
+    const aside = document.querySelector("[data-admin-sidebar]");
+    const bottomNav = document.querySelector("[data-admin-bottom-nav]");
+    const userBadge = document.querySelector("[data-admin-user-badge]");
+    const asideStyle = aside ? window.getComputedStyle(aside) : null;
+    const bottomNavStyle = bottomNav ? window.getComputedStyle(bottomNav) : null;
+    const userBadgeStyle = userBadge ? window.getComputedStyle(userBadge) : null;
+    // #region agent log
+    fetch("http://127.0.0.1:7480/ingest/881a8b8b-14fd-4480-bb21-056e0c22cd5b", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "195967" },
+      body: JSON.stringify({
+        sessionId: "195967",
+        runId: "pre-fix",
+        hypothesisId: "H1,H2",
+        location: "components/backend-shell.tsx:BackendShell/layoutProbe",
+        message: "Admin shell responsive visibility",
+        data: {
+          pathname,
+          viewport: { width: window.innerWidth, height: window.innerHeight },
+          sessionUserVisible: userBadgeStyle ? userBadgeStyle.display !== "none" && userBadgeStyle.visibility !== "hidden" : false,
+          sidebarDisplay: asideStyle?.display ?? null,
+          sidebarPosition: asideStyle?.position ?? null,
+          bottomNavDisplay: bottomNavStyle?.display ?? null,
+          bottomNavPosition: bottomNavStyle?.position ?? null
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {});
+    // #endregion
+  }, [pathname, session]);
+
+  if (session === false) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#121212] text-sm text-zinc-400">
+        驗證登入…
+      </div>
+    );
+  }
+
   if (!session) {
     return null;
   }
@@ -143,9 +202,8 @@ export default function BackendShell({ children, title }: { children: ReactNode;
   return (
     <div className={`flex min-h-screen ${theme === "dark" ? "bg-[#121212] text-white" : "bg-[#f1f5f9] text-[#111827]"}`}>
       <aside
-        className={`${
-          mobileMenuOpen ? "fixed inset-y-0 left-0 z-50" : "hidden"
-        } w-[260px] shrink-0 border-r md:relative md:z-auto md:block ${
+        data-admin-sidebar
+        className={`sticky top-0 h-screen w-[260px] shrink-0 border-r ${
           theme === "dark"
             ? "border-white/[0.12] bg-[#121212]"
             : "border-slate-300/60 bg-white"
@@ -196,9 +254,17 @@ export default function BackendShell({ children, title }: { children: ReactNode;
                           : "bg-amber-300"
                     }`}
                   />
-                  <span className="text-[10px] leading-snug text-zinc-500">
+                  <span
+                    className={`text-[10px] leading-snug ${
+                      dbStatus === "ok"
+                        ? "text-[rgb(22,163,74)]"
+                        : dbStatus === "error"
+                          ? "text-rose-600"
+                          : "text-zinc-500"
+                    }`}
+                  >
                     {dbStatus === "checking" ? "PostgreSQL…" : null}
-                    {dbStatus === "ok" ? "DB：eventxp · zomate_fs_* 已連線" : null}
+                    {dbStatus === "ok" ? "後台已連線" : null}
                     {dbStatus === "error" ? "DB：無法連線（檢查後端 DATABASE_URL）" : null}
                   </span>
                 </div>
@@ -279,7 +345,7 @@ export default function BackendShell({ children, title }: { children: ReactNode;
                 {title}
               </h1>
             </div>
-            <div className="ml-auto hidden items-center gap-2.5 md:flex">
+            <div className="ml-auto flex items-center gap-2.5">
               <input
                 placeholder="搜尋..."
                 className={`h-9 w-52 rounded-lg border px-3 text-[13px] leading-normal shadow-sm ${
@@ -300,63 +366,14 @@ export default function BackendShell({ children, title }: { children: ReactNode;
               >
                 {theme === "dark" ? "☀" : "☾"}
               </button>
-              <div className={`text-[12px] leading-5 md:text-[13px] ${theme === "dark" ? "text-zinc-300" : "text-slate-600"}`}>
+              <div data-admin-user-badge className={`text-[12px] leading-5 md:text-[13px] ${theme === "dark" ? "text-zinc-300" : "text-slate-600"}`}>
                 {session.username} ({session.role})
               </div>
             </div>
           </div>
         </header>
-        <main className="min-w-0 flex-1 overflow-y-auto p-4 pb-24 md:p-6 md:pb-6">{children}</main>
-        <nav
-          className={`fixed bottom-0 left-0 right-0 z-30 border-t px-3 py-2 md:hidden ${
-            theme === "dark" ? "border-white/[0.12] bg-[#121212]/95" : "border-slate-200/80 bg-white/[0.95]"
-          }`}
-        >
-          <div className="grid grid-cols-3 gap-2">
-            <Link
-              href="/student/checkin"
-              className={`rounded-lg px-3 py-2 text-center text-xs ${
-                pathname.startsWith("/student/checkin")
-                  ? theme === "dark"
-                    ? "bg-[#6366f1] text-white"
-                    : "bg-slate-200 text-slate-900"
-                  : theme === "dark"
-                    ? "text-zinc-300 hover:bg-white/[0.05]"
-                    : "text-slate-600 hover:bg-slate-100"
-              }`}
-            >
-              簽到
-            </Link>
-            <Link
-              href="/admin/students"
-              className={`rounded-lg px-3 py-2 text-center text-xs ${
-                pathname.startsWith("/admin/students")
-                  ? theme === "dark"
-                    ? "bg-[#6366f1] text-white"
-                    : "bg-slate-200 text-slate-900"
-                  : theme === "dark"
-                    ? "text-zinc-300 hover:bg-white/[0.05]"
-                    : "text-slate-600 hover:bg-slate-100"
-              }`}
-            >
-              搜尋
-            </Link>
-            <Link
-              href="/admin"
-              className={`rounded-lg px-3 py-2 text-center text-xs ${
-                pathname === "/admin"
-                  ? theme === "dark"
-                    ? "bg-[#6366f1] text-white"
-                    : "bg-slate-200 text-slate-900"
-                  : theme === "dark"
-                    ? "text-zinc-300 hover:bg-white/[0.05]"
-                    : "text-slate-600 hover:bg-slate-100"
-              }`}
-            >
-              Dashboard
-            </Link>
-          </div>
-        </nav>
+        <main className="min-w-0 flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+        <nav data-admin-bottom-nav className="hidden" aria-hidden="true" />
       </div>
     </div>
   );
