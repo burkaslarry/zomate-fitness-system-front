@@ -71,7 +71,7 @@ export const studentRegistrationPayloadSchema = z
     cooling_off_acknowledged: z.boolean(),
     disclaimer_accepted: z.boolean(),
     digital_signature: z.string().min(2),
-    package_sessions: z.union([z.literal(10), z.literal(30)]),
+    package_sessions: z.union([z.literal(10), z.literal(30)]).optional(),
     renewal_notes: z.string().optional()
   })
   .refine((d) => d.cooling_off_acknowledged, {

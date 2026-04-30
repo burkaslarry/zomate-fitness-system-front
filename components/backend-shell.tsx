@@ -28,6 +28,7 @@ const MENU_GROUPS = [
     title: "Student Management",
     items: [
       { href: "/admin/students", label: "學生名單" },
+      { href: "/admin/coaches", label: "教練" },
       { href: "/admin/onboarding-records", label: "入職紀錄 / 健康表單" }
     ]
   },
@@ -48,6 +49,7 @@ const MENU_GROUPS = [
     title: "Finance & Admin",
     items: [
       { href: "/admin/finance/sales", label: "銷售與分期" },
+      { href: "/admin/finance", label: "財務總覽" },
       { href: "/admin/finance/expenses", label: "支出管理" },
       { href: "/admin/finance/payroll", label: "薪酬 / 出勤報表" }
     ]
@@ -56,6 +58,7 @@ const MENU_GROUPS = [
     title: "System Settings",
     items: [
       { href: "/admin/settings/whatsapp", label: "WhatsApp API 狀態" },
+      { href: "/admin/whatsapp", label: "WhatsApp Placeholder" },
       { href: "/admin/settings/disclaimer", label: "免責聲明內容設定" }
     ]
   }
@@ -345,15 +348,16 @@ export default function BackendShell({ children, title }: { children: ReactNode;
                 {title}
               </h1>
             </div>
-            <div className="ml-auto flex items-center gap-2.5">
-              <input
-                placeholder="搜尋..."
-                className={`h-9 w-52 rounded-lg border px-3 text-[13px] leading-normal shadow-sm ${
-                  theme === "dark"
-                    ? "border-white/[0.12] bg-[#1e1e1e] text-zinc-100 placeholder:text-zinc-500"
-                    : "border-slate-300/80 bg-white text-slate-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]"
-                }`}
-              />
+            <div className="ml-auto flex min-w-0 items-center gap-2.5">
+              <Link href="/register" className="rounded-lg bg-emerald-600 px-3 py-2 text-[12px] font-semibold text-white">
+                + 新會員
+              </Link>
+              <Link href="/renewal" className="rounded-lg bg-violet-600 px-3 py-2 text-[12px] font-semibold text-white">
+                + 續會
+              </Link>
+              <Link href="/trial-class" className="rounded-lg bg-sky-600 px-3 py-2 text-[12px] font-semibold text-white">
+                + 試堂/加堂
+              </Link>
               <button
                 type="button"
                 onClick={toggleTheme}
@@ -366,8 +370,25 @@ export default function BackendShell({ children, title }: { children: ReactNode;
               >
                 {theme === "dark" ? "☀" : "☾"}
               </button>
-              <div data-admin-user-badge className={`text-[12px] leading-5 md:text-[13px] ${theme === "dark" ? "text-zinc-300" : "text-slate-600"}`}>
-                {session.username} ({session.role})
+              <div
+                data-admin-user-badge
+                className={`ml-auto flex h-9 items-center gap-2 rounded-full border px-3 text-[12px] leading-5 md:text-[13px] ${
+                  theme === "dark"
+                    ? "border-white/[0.12] bg-white/[0.04] text-zinc-200"
+                    : "border-slate-300/80 bg-white text-slate-700"
+                }`}
+              >
+                <span
+                  className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold ${
+                    theme === "dark" ? "bg-[#6366f1] text-white" : "bg-slate-900 text-white"
+                  }`}
+                  aria-hidden="true"
+                >
+                  {session.username.slice(0, 1).toUpperCase()}
+                </span>
+                <span className="whitespace-nowrap">
+                  {session.username} ({session.role})
+                </span>
               </div>
             </div>
           </div>

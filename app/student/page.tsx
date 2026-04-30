@@ -56,13 +56,13 @@ export default function StudentHome() {
       </p>
       <nav className="flex flex-col gap-3">
         <Link
-          href="/student/onboard"
+          href="/register"
           className="rounded-lg border border-slate-200 bg-white px-4 py-3 font-medium text-slate-950 shadow-sm hover:bg-slate-100"
         >
           新學生登記 · 健康聲明
         </Link>
         <Link
-          href="/student/renewal"
+          href="/renewal"
           className="rounded-lg border border-slate-200 bg-white px-4 py-3 font-medium text-slate-950 shadow-sm hover:bg-slate-100"
         >
           Membership Renewal Form · 續會加堂
@@ -74,7 +74,7 @@ export default function StudentHome() {
           智能 QR 簽到（掃碼 → 揀名 → PIN）
         </Link>
         <Link
-          href="/student/trial"
+          href="/trial-class"
           className="rounded-lg border border-slate-200 bg-white px-4 py-3 font-medium text-slate-950 shadow-sm hover:bg-slate-100"
         >
           試堂／加堂（示範）

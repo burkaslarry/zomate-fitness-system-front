@@ -3,18 +3,16 @@
 /** @feature [F01.1][F01.2][F01.3][F01.4] */
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   studentRegistrationPayloadSchema,
   type StudentRegistrationPayload,
-  parqRequiresClearance,
-  computeMembershipExpiryIso
+  parqRequiresClearance
 } from "../../lib/schemas/student";
 import { alertApiError, api } from "../../lib/api";
-import { useDemoState } from "../../lib/demo-state";
-import { useWhatsAppLog } from "../../hooks/use-whatsapp-log";
 
 const PARQ_LABELS: { key: keyof StudentRegistrationPayload["parq"]; label: string }[] = [
   { key: "q1_heart_condition", label: "醫生曾說你有心臟問題，只宜於醫生建議下運動？" },
@@ -52,7 +50,6 @@ const defaults: Partial<StudentRegistrationPayload> = {
   cooling_off_acknowledged: false,
   disclaimer_accepted: false,
   digital_signature: "",
-  package_sessions: 10,
   renewal_notes: ""
 };
 
@@ -60,10 +57,8 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   const [step, setStep] = useState(1);
   const [status, setStatus] = useState("");
   const [assignedPin, setAssignedPin] = useState<string | null>(null);
-  const [expiryPreview, setExpiryPreview] = useState<string>("");
   const formRef = useRef<HTMLFormElement | null>(null);
-  const { addStudent } = useDemoState();
-  const { logOnboardingSuccess } = useWhatsAppLog();
+  const router = useRouter();
 
   const form = useForm<StudentRegistrationPayload>({
     resolver: zodResolver(studentRegistrationPayloadSchema),
@@ -71,13 +66,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     mode: "onBlur"
   });
 
-  const pkg = form.watch("package_sessions");
   const parqWatch = form.watch("parq");
-
-  useEffect(() => {
-    const iso = computeMembershipExpiryIso(pkg === 30 ? 30 : 10, new Date());
-    setExpiryPreview(new Date(iso).toLocaleDateString());
-  }, [pkg]);
 
   useEffect(() => {
     if (quickName) form.setValue("full_name", quickName);
@@ -119,32 +108,29 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     setStatus("提交中…");
     setAssignedPin(null);
     try {
-      const res = (await api.studentsRegisterV1(values as unknown as Record<string, unknown>)) as {
+      const res = (await api.createMember({
+        full_name: values.full_name,
+        hkid: values.hkid,
+        phone: values.phone,
+        email: values.email,
+        emergency_contact_name: values.emergency_contact_name,
+        emergency_contact_phone: values.emergency_contact_phone,
+        parq: values.parq,
+        medical_clearance_file_name: values.medical_clearance_file_name,
+        cooling_off_acknowledged: values.cooling_off_acknowledged,
+        disclaimer_accepted: values.disclaimer_accepted,
+        digital_signature: values.digital_signature
+      })) as {
         pin_code: string;
-        membership_expiry_iso: string;
+        member?: { hkid?: string; full_name?: string };
       };
       const pin = res.pin_code ?? "?";
       setAssignedPin(pin);
-      addStudent({
-        name: values.full_name,
-        phone: values.phone,
-        remainingCredits: values.package_sessions,
-        pin,
-        membershipType: "new",
-        englishName: "",
-        emergencyContactName: values.emergency_contact_name,
-        emergencyContactPhone: values.emergency_contact_phone,
-        coachName: "",
-        plan: values.package_sessions === 30 ? "30" : "10",
-        paymentMethod: "",
-        notes: values.renewal_notes ?? ""
-      });
-      logOnboardingSuccess(values.full_name, values.phone, pin);
-      setStatus(
-        `登記成功！會籍到期（自動計算）：${new Date(res.membership_expiry_iso).toLocaleDateString()} · ${values.package_sessions} 堂方案對應 ${values.package_sessions === 10 ? "3" : "6"} 個月。`
+      window.sessionStorage.setItem(
+        "zomate_register_context",
+        JSON.stringify({ hkid: values.hkid, full_name: values.full_name, pin })
       );
-      form.reset({ ...defaults, full_name: "", hkid: "", phone: "" } as StudentRegistrationPayload);
-      setStep(1);
+      setStatus("登記成功。請按下方按鈕繼續拍攝會員相片。");
     } catch (err) {
       setStatus("");
       alertApiError(err);
@@ -249,14 +235,14 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
             </div>
             <label
               data-cooling-ack
-              className="flex w-full max-w-full touch-manipulation items-start gap-3 text-sm text-white"
+              className="grid w-full touch-manipulation grid-cols-[1.5rem_1fr] items-start gap-3 rounded-lg border border-white/[0.08] bg-[#121212] p-3 text-sm text-white"
             >
               <input
                 type="checkbox"
                 className="mt-0.5 h-6 w-6 min-h-[1.5rem] min-w-[1.5rem] shrink-0 cursor-pointer accent-[#6366f1]"
                 {...form.register("cooling_off_acknowledged")}
               />
-              <span className="min-w-0 flex-1 text-left leading-snug [word-break:normal]">
+              <span className="block min-w-0 text-left leading-6 [word-break:keep-all]">
                 本人確認已閱讀並理解冷靜期條款。
               </span>
             </label>
@@ -271,30 +257,20 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
             </div>
             <label
               data-disclaimer-ack
-              className="flex w-full max-w-full touch-manipulation items-start gap-3 text-sm text-white"
+              className="grid w-full touch-manipulation grid-cols-[1.5rem_1fr] items-start gap-3 rounded-lg border border-white/[0.08] bg-[#121212] p-3 text-sm text-white"
             >
               <input
                 type="checkbox"
                 className="mt-0.5 h-6 w-6 min-h-[1.5rem] min-w-[1.5rem] shrink-0 cursor-pointer accent-[#6366f1]"
                 {...form.register("disclaimer_accepted")}
               />
-              <span className="min-w-0 flex-1 text-left leading-snug [word-break:normal]">
+              <span className="block min-w-0 text-left leading-6 [word-break:keep-all]">
                 本人已閱讀並同意健康聲明及免責條款。
               </span>
             </label>
             {form.formState.errors.disclaimer_accepted && (
               <p className="text-xs text-rose-400">{String(form.formState.errors.disclaimer_accepted.message)}</p>
             )}
-            <div>
-              <label className="text-xs text-white/80">方案</label>
-              <select
-                className={`${fieldClass} mt-1 [&>option]:bg-[#1a1a1a]`}
-                {...form.register("package_sessions", { valueAsNumber: true })}
-              >
-                <option value={10}>10 堂（有效期 3 個月 · 預覽到期 {expiryPreview}）</option>
-                <option value={30}>30 堂（有效期 6 個月 · 預覽到期 {expiryPreview}）</option>
-              </select>
-            </div>
             <input className={fieldClass} placeholder="電子簽署：輸入全名 *" {...form.register("digital_signature")} />
             {form.formState.errors.digital_signature && (
               <p className="text-xs text-rose-400">{form.formState.errors.digital_signature.message}</p>
@@ -338,9 +314,18 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
       </form>
 
       {assignedPin && (
-        <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">
-          簽到 PIN：<span className="font-mono text-lg">{assignedPin}</span>
-        </p>
+        <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+          <p>
+            簽到 PIN：<span className="font-mono text-lg">{assignedPin}</span>
+          </p>
+          <button
+            type="button"
+            className="w-full rounded-md bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500"
+            onClick={() => router.push("/register/photo")}
+          >
+            下一步：影會員相
+          </button>
+        </div>
       )}
       {status && <p className="text-sm text-white/90">{status}</p>}
     </main>

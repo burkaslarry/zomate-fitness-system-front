@@ -13,18 +13,19 @@ export type RegisterResult = {
 
 export function registerStudentFromJson(body: unknown): RegisterResult {
   const data = studentRegistrationPayloadSchema.parse(body);
+  const packageSessions = data.package_sessions ?? 10;
   const start = new Date();
-  const membership_expiry_iso = computeMembershipExpiryIso(data.package_sessions, start);
+  const membership_expiry_iso = computeMembershipExpiryIso(packageSessions, start);
   const row = mockApiStore.registerStudent({
     full_name: data.full_name,
     phone: data.phone,
     hkid: data.hkid.toUpperCase(),
-    lesson_balance: data.package_sessions,
+    lesson_balance: packageSessions,
     membership_expiry_iso,
-    package_sessions: data.package_sessions,
+    package_sessions: packageSessions,
     email: data.email || undefined
   });
-  const whatsapp_preview = `Congrats! You have ${data.package_sessions} sessions. PIN: ${row.pin_code}. Expires: ${membership_expiry_iso}`;
+  const whatsapp_preview = `Congrats! You have ${packageSessions} sessions. PIN: ${row.pin_code}. Expires: ${membership_expiry_iso}`;
   // eslint-disable-next-line no-console
   console.log(`[mock WhatsApp] → ${data.phone}: ${whatsapp_preview}`);
   return {

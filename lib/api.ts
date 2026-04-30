@@ -95,7 +95,8 @@ function errorFromApiBody(bodyText: string, fallback: string): Error {
   const raw = bodyText.trim();
   if (!raw) return new Error(fallback);
   try {
-    const parsed = JSON.parse(raw) as { detail?: unknown };
+    const parsed = JSON.parse(raw) as { detail?: unknown; message?: unknown; error?: unknown };
+    if (typeof parsed.message === "string") return new Error(parsed.message);
     const d = parsed.detail;
     if (typeof d === "string") return new Error(d);
     if (Array.isArray(d)) {
@@ -304,6 +305,64 @@ export const api = {
   /** Full Zod-validated registration (F01). */
   studentsRegisterV1: (payload: Record<string, unknown>) =>
     request("/api/v1/students/register", { method: "POST", body: JSON.stringify(payload) }),
+  createMember: (payload: Record<string, unknown>) =>
+    request("/api/members", { method: "POST", body: JSON.stringify(payload) }),
+  member: (hkid: string) => request(`/api/members/${encodeURIComponent(hkid)}`),
+  memberFull: (hkid: string) => request(`/api/members/${encodeURIComponent(hkid)}/full`),
+  memberSearch: (q: string) => request(`/api/members/search?q=${encodeURIComponent(q)}`),
+  uploadMemberPhoto: (hkid: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request(`/api/members/${encodeURIComponent(hkid)}/photo`, { method: "POST", body: form });
+  },
+  uploadMemberReceipt: (
+    hkid: string,
+    payload: { file: File; amount?: string; payment_method?: string; note?: string; source?: "REGISTER" | "RENEWAL" }
+  ) => {
+    const form = new FormData();
+    form.append("file", payload.file);
+    if (payload.amount) form.append("amount", payload.amount);
+    if (payload.payment_method) form.append("payment_method", payload.payment_method);
+    if (payload.note) form.append("note", payload.note);
+    form.append("source", payload.source ?? "REGISTER");
+    return request(`/api/members/${encodeURIComponent(hkid)}/receipts`, { method: "POST", body: form });
+  },
+  resendPin: (hkid: string) =>
+    request(`/api/members/${encodeURIComponent(hkid)}/resend-pin`, { method: "POST" }),
+  packages: () => request("/api/packages"),
+  publicCoaches: () => request("/api/coaches?active=true"),
+  publicBranches: () => request("/api/branches?active=true"),
+  createRenewal: (payload: {
+    member_hkid: string;
+    package_id: number;
+    coach_id?: number;
+    branch_id?: number;
+    amount: string;
+    payment_method: string;
+    note?: string;
+    receipt?: File | null;
+  }) => {
+    const form = new FormData();
+    form.append("member_hkid", payload.member_hkid);
+    form.append("package_id", String(payload.package_id));
+    if (payload.coach_id) form.append("coach_id", String(payload.coach_id));
+    if (payload.branch_id) form.append("branch_id", String(payload.branch_id));
+    form.append("amount", payload.amount);
+    form.append("payment_method", payload.payment_method);
+    if (payload.note) form.append("note", payload.note);
+    if (payload.receipt) form.append("receipt", payload.receipt);
+    return request("/api/renewals", { method: "POST", body: form });
+  },
+  createTrialClass: (payload: Record<string, unknown>) =>
+    request("/api/trial-classes", { method: "POST", body: JSON.stringify(payload) }),
+  financeSummary: (query: { from?: string; to?: string }) => {
+    const sp = new URLSearchParams();
+    if (query.from) sp.set("from", query.from);
+    if (query.to) sp.set("to", query.to);
+    return request(`/api/finance/summary?${sp.toString()}`);
+  },
+  createExpense: (payload: Record<string, unknown>) =>
+    request("/api/expenses", { method: "POST", body: JSON.stringify(payload) }),
   renewal: (payload: Record<string, unknown>) =>
     request("/api/renewal", { method: "POST", body: JSON.stringify(payload) }),
   listStudents: () => request("/api/students"),
@@ -347,7 +406,7 @@ export const api = {
     request("/api/admin/coaches", { method: "POST", body: JSON.stringify(payload) }),
   updateCoach: (
     coachId: number,
-    payload: { full_name?: string; phone?: string; branch_id?: number | null }
+    payload: { full_name?: string; phone?: string; branch_id?: number | null; specialty?: string | null; active?: boolean }
   ) =>
     request(`/api/admin/coaches/${coachId}`, {
       method: "PATCH",

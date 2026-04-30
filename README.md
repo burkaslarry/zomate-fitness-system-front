@@ -11,7 +11,7 @@ Next.js + Tailwind local demo UI for:
 
 ## Local run
 
-1. Copy `.env.local.example` to `.env.local`.
+1. Copy `.env.example` to `.env.local`.
 2. Install dependencies and start:
 
 ```bash
@@ -21,7 +21,13 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-Backend API base URL defaults to `http://localhost:8000`.
+Backend API base URL defaults to `http://127.0.0.1:8000` in development.
+
+New management routes include:
+- `/register` → member form, photo, receipt, PIN success
+- `/renewal` → HKID lookup + package renewal + receipt
+- `/trial-class` → trial/add-on class record
+- `/admin/students`, `/admin/coaches`, `/admin/branches`, `/admin/finance`, `/admin/whatsapp`
 
 ## Deploy to Vercel
 
