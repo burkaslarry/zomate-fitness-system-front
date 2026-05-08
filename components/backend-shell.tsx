@@ -1,5 +1,10 @@
 "use client";
 
+/*
+ * Features F015:AdminChromeFrontend -- bilingual shell nav, auth teardown, periodic health ping hook.
+ * Code: MENU_SECTIONS, pathname highlighting, PERIODIC_HEALTH_INTERVAL_MS handshake with ``lib/api``.
+ */
+
 import Link from "next/link";
 import { ReactNode, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
