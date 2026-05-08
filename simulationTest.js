@@ -71,6 +71,12 @@ async function main() {
   if (!r.ok) throw new Error(`GET /api/admin/coaches → ${r.status}`);
   console.log("[OK] GET /api/admin/coaches");
 
+  r = await fetch(`${BASE}/api/admin/course-categories`, { headers: auth });
+  if (!r.ok) throw new Error(`GET /api/admin/course-categories → ${r.status}`);
+  const cats = await r.json();
+  if (!Array.isArray(cats)) throw new Error("course-categories response not array");
+  console.log("[OK] GET /api/admin/course-categories — count:", cats.length);
+
   r = await fetch(`${BASE}/api/v1/reports/sales`, { headers: auth });
   if (!r.ok) console.warn("[WARN] GET /api/v1/reports/sales →", r.status);
   else console.log("[OK] GET /api/v1/reports/sales");

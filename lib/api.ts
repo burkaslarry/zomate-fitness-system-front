@@ -424,6 +424,33 @@ export const api = {
   deleteStudent: (studentId: number, hard = false) =>
     request(`/api/admin/students/${studentId}?hard=${hard ? "true" : "false"}`, { method: "DELETE" }),
 
+  courseCategories: (includeDeleted = false) =>
+    request(
+      includeDeleted ? "/api/admin/course-categories?include_deleted=true" : "/api/admin/course-categories"
+    ),
+  createCourseCategory: (payload: { name: string }) =>
+    request("/api/admin/course-categories", { method: "POST", body: JSON.stringify(payload) }),
+  hideCourseCategory: (categoryId: number) =>
+    request(`/api/admin/course-categories/${categoryId}/hide`, { method: "POST" }),
+  showCourseCategory: (categoryId: number) =>
+    request(`/api/admin/course-categories/${categoryId}/show`, { method: "POST" }),
+  upsertStudentCategoryEnrollment: (
+    studentId: number,
+    payload: { course_category_id: number; total_lessons: number; total_installments?: number }
+  ) =>
+    request(`/api/admin/students/${studentId}/category-enrollment`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+  grantCoachTrial: (
+    studentId: number,
+    payload?: { coach_id?: number | null; branch_id?: number | null; class_date?: string | null }
+  ) =>
+    request(`/api/admin/students/${studentId}/coach-trial-grant`, {
+      method: "POST",
+      body: JSON.stringify(payload ?? {})
+    }),
+
   coachCourses: (
     coachId: number,
     query?: string | { day?: string; fromDate?: string; toDate?: string }

@@ -8,6 +8,7 @@ export type MemberProfile = {
   emergency_contact_phone: string | null;
   pin_code: string;
   lesson_balance: number;
+  coach_trial_quota_remaining?: number;
   photo_path: string | null;
   photo_url: string | null;
   is_active: boolean;
@@ -37,6 +38,22 @@ export type BranchDto = {
   address: string;
   code: string;
   active: boolean;
+};
+
+export type CourseCheckinPinRow = {
+  course_id: number;
+  course_title: string;
+  branch_name: string;
+  checkin_pin: string;
+};
+
+export type CategoryEnrollmentRow = {
+  id: number;
+  course_category_id: number;
+  category_name: string;
+  status: string;
+  total_lessons: number;
+  started_at: string;
 };
 
 export type MemberFull = {
@@ -72,6 +89,8 @@ export type MemberFull = {
     detail: string | null;
     created_at: string;
   }>;
+  course_checkin_pins?: CourseCheckinPinRow[];
+  category_enrollments?: CategoryEnrollmentRow[];
 };
 
 export type FinanceSummary = {

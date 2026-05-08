@@ -6,7 +6,15 @@ const config: Config = {
     "./lib/**/*.{js,ts,jsx,tsx,mdx}"
   ],
   theme: {
-    extend: {}
+    extend: {
+      colors: {
+        /** Single warm theme — do not add dark-mode branches; use tokens only. */
+        canvas: "#FDFAF9",
+        surface: "#F7F2F1",
+        primary: "#E8A598",
+        ink: "#2D2422"
+      }
+    }
   },
   plugins: []
 };
