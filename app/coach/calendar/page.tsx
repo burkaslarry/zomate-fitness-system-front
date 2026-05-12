@@ -86,6 +86,8 @@ function redeemedPairKey(courseId: number, studentId: number): string {
 }
 
 export default function CoachCalendarPage() {
+  /** 須待 client mount 先讀 session；首屏勿用 ``false`` 誤打 ``api.coaches()``（COACH 會 403）。 */
+  const [portalResolved, setPortalResolved] = useState(false);
   const [coachPortal, setCoachPortal] = useState(false);
   /** COACH mobile：底欄 Gmail 式兩 pane（日程 | 簽到實時） */
   const [mobileCoachTab, setMobileCoachTab] = useState<"calendar" | "live">("calendar");
@@ -96,6 +98,7 @@ export default function CoachCalendarPage() {
 
   useEffect(() => {
     setCoachPortal(getAuthSession()?.role === "COACH");
+    setPortalResolved(true);
   }, []);
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
@@ -112,6 +115,7 @@ export default function CoachCalendarPage() {
   const [portalCoachNote, setPortalCoachNote] = useState("");
 
   useEffect(() => {
+    if (!portalResolved) return;
     const loader = coachPortal ? api.publicCoaches : api.coaches;
     void loader()
       .then((list) => {
@@ -122,9 +126,10 @@ export default function CoachCalendarPage() {
         }
       })
       .catch((e) => setStatus(String(e)));
-  }, [coachPortal]);
+  }, [portalResolved, coachPortal]);
 
   useEffect(() => {
+    if (!portalResolved) return;
     if (!coachPortal || coaches.length === 0) {
       setPortalCoachNote("");
       return;
@@ -149,7 +154,7 @@ export default function CoachCalendarPage() {
       return;
     }
     setPortalCoachNote("未能自動對應教練，請聯絡 admin 將登入帳號與「教練」名稱對齊。");
-  }, [coachPortal, coaches]);
+  }, [portalResolved, coachPortal, coaches]);
 
   const { from: rangeFrom, to: rangeTo } = useMemo(
     () => monthRangeIso(viewYear, viewMonth),
@@ -157,7 +162,7 @@ export default function CoachCalendarPage() {
   );
 
   const loadMonth = useCallback(async () => {
-    if (coachId === "") return;
+    if (!portalResolved || coachId === "") return;
     setLoading(true);
     try {
       const c = (await api.coachCourses(Number(coachId), { fromDate: rangeFrom, toDate: rangeTo })) as CourseRow[];
@@ -169,7 +174,7 @@ export default function CoachCalendarPage() {
     } finally {
       setLoading(false);
     }
-  }, [coachId, rangeFrom, rangeTo]);
+  }, [portalResolved, coachId, rangeFrom, rangeTo]);
 
   useEffect(() => {
     void loadMonth();
