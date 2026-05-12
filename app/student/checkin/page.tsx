@@ -290,7 +290,7 @@ export default function StudentCheckinPage() {
           {!cameraOn ? (
             <button
               type="button"
-              className="inline-flex rounded-md border border-slate-300 bg-slate-900 px-4 py-2.5 text-sm font-medium text-ink shadow-sm hover:bg-slate-800"
+              className="inline-flex rounded-md border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
               onClick={() => {
                 setScanMsg("");
                 void startCamera();
@@ -311,7 +311,7 @@ export default function StudentCheckinPage() {
                 </button>
                 <button
                   type="button"
-                  className="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-ink hover:bg-slate-600"
+                  className="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700"
                   onClick={stopCamera}
                 >
                   關閉相機
@@ -357,7 +357,7 @@ export default function StudentCheckinPage() {
                   <button
                     type="button"
                     className={`w-full rounded px-3 py-2 text-left text-sm transition ${
-                      selected?.id === r.id ? "bg-slate-900 text-ink" : "hover:bg-slate-100"
+                      selected?.id === r.id ? "bg-slate-900 text-white" : "hover:bg-slate-100"
                     }`}
                     onClick={() => {
                       setSelected(r);
@@ -420,7 +420,7 @@ export default function StudentCheckinPage() {
                 </button>
                 <button
                   type="submit"
-                  className="h-14 w-14 rounded-lg border border-slate-300 bg-slate-900 text-sm font-semibold text-ink hover:bg-slate-700 disabled:opacity-50"
+                  className="h-14 w-14 rounded-lg border border-slate-600 bg-slate-900 text-sm font-semibold text-white hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 disabled:opacity-50"
                   disabled={!selected || pin.trim().length < 5}
                 >
                   確認
@@ -470,7 +470,7 @@ export default function StudentCheckinPage() {
               </label>
               <button
                 type="submit"
-                className="w-full rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-ink hover:bg-slate-800"
+                className="w-full rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
               >
                 簽到
               </button>

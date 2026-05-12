@@ -57,7 +57,7 @@ export default function StudentTrialPage() {
         />
         <button
           type="submit"
-          className="rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-ink shadow-sm hover:bg-slate-800"
+          className="rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         >
           加堂 + 歡迎訊息
         </button>

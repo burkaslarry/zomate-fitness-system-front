@@ -317,6 +317,13 @@ export const api = {
   memberLookupByPhone: (phone: string) =>
     request(`/api/members/lookup-phone?phone=${encodeURIComponent(phone)}`),
   trialClassKinds: () => request("/api/trial-class-kinds"),
+  /** Course／試堂種類 — 後台含停用列（分店管理）。 */
+  adminTrialClassKinds: () => request("/api/admin/trial-class-kinds"),
+  patchTrialClassKind: (kindId: number, payload: { active: boolean }) =>
+    request(`/api/admin/trial-class-kinds/${kindId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    }),
   uploadMemberPhoto: (hkid: string, file: File) => {
     const form = new FormData();
     form.append("file", file);
@@ -419,11 +426,22 @@ export const api = {
     const qs = sp.toString();
     return request(`/api/admin/coaches${qs ? `?${qs}` : ""}`);
   },
-  createCoach: (payload: { full_name: string; phone: string; branch_id: number | null }) =>
-    request("/api/admin/coaches", { method: "POST", body: JSON.stringify(payload) }),
+  createCoach: (payload: {
+    full_name: string;
+    phone: string;
+    branch_id: number | null;
+    hire_date?: string | null;
+  }) => request("/api/admin/coaches", { method: "POST", body: JSON.stringify(payload) }),
   updateCoach: (
     coachId: number,
-    payload: { full_name?: string; phone?: string; branch_id?: number | null; specialty?: string | null; active?: boolean }
+    payload: {
+      full_name?: string;
+      phone?: string;
+      branch_id?: number | null;
+      specialty?: string | null;
+      active?: boolean;
+      hire_date?: string | null;
+    }
   ) =>
     request(`/api/admin/coaches/${coachId}`, {
       method: "PATCH",

@@ -31,6 +31,7 @@ export type CoachDto = {
   active: boolean;
   branch_id: number | null;
   branch_name?: string | null;
+  hire_date?: string | null;
 };
 
 export type TrialClassKindDto = {
@@ -47,6 +48,9 @@ export type BranchDto = {
   address: string;
   code: string;
   active: boolean;
+  business_start_time?: string;
+  business_end_time?: string;
+  remarks?: string | null;
 };
 
 export type CourseCheckinPinRow = {

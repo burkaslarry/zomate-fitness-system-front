@@ -49,20 +49,20 @@
 - **教練日程·簽到**（`/coach/calendar`）：教練端日程與簽到相關畫面。
 - **教練課表**（`/coach`）：課表檢視。
 - **QR 簽到中心**（`/admin/attendance/qr-console`）：管理／產出 QR 簽到相關流程之控制台。
-- **Session Ledger**（`/admin/attendance/session-ledger`）：節數／堂數帳本；可記錄理由類型（例如：實際出席、遲到取消、教練補堂等）。報表支援匯出 Excel。
-- **試堂／開課管理**（`/student/trial`）：試聽課程相關管理（與完整後端整合狀態請以專案需求文件為準）。
+- **Session Ledger · 扣堂原因**（`/admin/attendance/session-ledger`）：節數／堂數帳本；可記錄理由類型（例如：實際出席、遲到取消、教練補堂等）。報表支援匯出 Excel。
+- **試堂／開課管理**（`/student/trial`）：試聽課程相關管理（與完整後端整合狀態請以專案 `REQUIREMENTS.md` 為準）。
 - **學生入口**（`/student`）：學員面向之入口頁連結。
 
 ### 3.4 財務與行政（Finance & Admin）
 
-- **銷售與分期**（`/admin/finance/sales`）：月銷售報表、分期欄位等；可匯出 Excel。
+- **銷售與分期**（`/admin/finance/sales`）：月銷售報表、分期欄位等；可匯出 Excel／CSV（與畫面表格一致）。
 - **支出管理**（`/admin/finance/expenses`）：支出／單據類資料；可新增與匯出。
-- **薪酬／出勤輔表**（`/admin/finance/payroll`）：會籍與教練出勤相關報表；可匯出 Excel。
+- **薪酬／出勤輔表**（`/admin/finance/payroll`）：會籍與教練出勤相關報表；可匯出 Excel／CSV。
+- 側欄已不再提供「財務總覽」入口；若開啟 **`/admin/finance`**，會自動 **重新導向** 至 **`/admin/finance/sales`**。
 
 ### 3.5 系統設定（System Settings）
 
-- **WhatsApp API 狀態**（`/admin/settings/whatsapp`）：檢視 WhatsApp 整合相關狀態與設定介面。
-- **免責聲明內容設定**（`/admin/settings/disclaimer`）：維護免責聲明等文案設定。
+- **Whatsapp 設定**（`/admin/settings/whatsapp`）：示範用連線欄位、**template 訊息草稿**，以及 **已發送訊息** 列表（優先顯示後端 `GET /api/admin/whatsapp-logs`，無資料時用前端 demo）。舊路徑 **`/admin/whatsapp`** 會導向此頁。
 
 ---
 

@@ -76,7 +76,14 @@ export default function AdminStudentsPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-2xl font-semibold text-ink">學生名單</h2>
-            <p className="mt-1 text-sm text-ink/70">點姓名可開啟會員詳情（需已填 HKID）。支援 CSV 批次匯入／匯出（以電話對應更新）。</p>
+            <p className="mt-1 text-sm text-ink/70">
+              點姓名可開啟會員詳情（需已填 HKID）。CSV 批次匯入／匯出：僅當<strong className="font-medium text-ink">姓名與電話皆與現有學員吻合</strong>
+              時才更新該筆；電話相同但姓名不同會略過。亦可於{" "}
+              <Link href="/admin/onboarding-records" className="font-medium text-ink underline underline-offset-4">
+                入職紀錄（CSV 格）
+              </Link>{" "}
+              檢視同一批資料。
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -96,6 +103,12 @@ export default function AdminStudentsPage() {
                 onChange={(e) => void onImportFile(e.target.files?.[0] ?? null)}
               />
             </label>
+            <Link
+              href="/admin/onboarding-records"
+              className="rounded-lg border border-ink/15 bg-canvas px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-canvas/80"
+            >
+              入職紀錄（CSV）
+            </Link>
             <Link
               href="/register"
               className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-primary"

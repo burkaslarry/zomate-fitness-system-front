@@ -43,7 +43,7 @@ const MENU_SECTIONS: { frameClass: string; items: NavItem[] }[] = [
       { href: "/coach/calendar", label: "教練日程 · 簽到" },
       { href: "/coach", label: "教練課表" },
       { href: "/admin/attendance/qr-console", label: "QR 簽到中心" },
-      { href: "/admin/attendance/session-ledger", label: "Session Ledger" },
+      { href: "/admin/attendance/session-ledger", label: "Session Ledger · 扣堂原因" },
       { href: "/student/trial", label: "試堂 / 開課管理" },
       { href: "/student", label: "學生入口" }
     ]
@@ -52,18 +52,13 @@ const MENU_SECTIONS: { frameClass: string; items: NavItem[] }[] = [
     frameClass: "rounded-xl border-2 border-ink/12 bg-surface/60 p-2.5",
     items: [
       { href: "/admin/finance/sales", label: "銷售與分期" },
-      { href: "/admin/finance", label: "財務總覽" },
       { href: "/admin/finance/expenses", label: "支出管理" },
       { href: "/admin/finance/payroll", label: "薪酬 / 出勤報表" }
     ]
   },
   {
     frameClass: "rounded-xl border-2 border-ink/10 bg-canvas p-2.5",
-    items: [
-      { href: "/admin/settings/whatsapp", label: "WhatsApp API 狀態" },
-      { href: "/admin/whatsapp", label: "WhatsApp Placeholder" },
-      { href: "/admin/settings/disclaimer", label: "免責聲明內容設定" }
-    ]
+    items: [{ href: "/admin/settings/whatsapp", label: "Whatsapp 設定" }]
   }
 ];
 

@@ -6,6 +6,7 @@
  * 僅在設定 NEXT_PUBLIC_USE_NEXT_MOCK_API=1 時才用 Next mock routes。
  */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import BackendShell from "../../../components/backend-shell";
 import { api, downloadCsv, getResolvedApiBaseUrl, isUsingNextMockApi, uploadCsv } from "../../../lib/api";
@@ -126,12 +127,24 @@ export default function AdminOnboardingRecordsPage() {
   return (
     <BackendShell title="入職紀錄 / 健康表單">
       <div className="mx-auto max-w-6xl space-y-4">
-        <h2 className="text-2xl font-semibold">入職紀錄 (Onboarding Records)</h2>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h2 className="text-2xl font-semibold">入職紀錄 (Onboarding Records)</h2>
+          <Link
+            href="/admin/students"
+            className="rounded-lg border border-ink/15 bg-canvas px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-canvas/80"
+          >
+            學生名單（表格）
+          </Link>
+        </div>
         <div className="space-y-2 rounded-lg border border-ink/10 bg-surface px-4 py-3 text-sm text-ink/70 shadow-sm ring-1 ring-ink/[0.04]">
           <p>
             資料來源：<span className="font-medium text-ink">FastAPI</span> → PostgreSQL（表前缀{" "}
             <code className="rounded bg-canvas px-1.5 py-0.5 font-mono text-xs text-ink ring-1 ring-ink/10">zomate_fs_*</code>
             ，由後端 <code className="rounded bg-canvas px-1 font-mono text-xs ring-1 ring-ink/10">DATABASE_URL</code> 連 eventxp）。
+          </p>
+          <p className="text-xs text-ink/55">
+            與「學生名單」共用同一後端名單與 CSV 規則：更新僅在 CSV 的<strong className="font-medium text-ink">姓名</strong>與
+            <strong className="font-medium text-ink">電話</strong>皆與資料庫同一筆吻合時執行。
           </p>
           <p className="text-xs text-ink/55">
             前端 API：<code className="rounded bg-canvas px-1 font-mono ring-1 ring-ink/10">{getResolvedApiBaseUrl() || "(mock)"}</code>
@@ -167,8 +180,14 @@ export default function AdminOnboardingRecordsPage() {
                 const file = ev.target.files?.[0];
                 if (!file) return;
                 try {
-                  const r = await uploadCsv("/api/admin/students/import", file);
-                  setStatus(`匯入完成：${r.imported ?? 0} 筆（略過 ${r.skipped ?? 0}）`);
+                  const r = (await uploadCsv("/api/admin/students/import", file)) as {
+                    imported?: number;
+                    updated?: number;
+                    skipped?: number;
+                  };
+                  setStatus(
+                    `匯入完成：新增 ${r.imported ?? 0}，更新 ${r.updated ?? 0}，略過 ${r.skipped ?? 0}`
+                  );
                   await refreshGrid();
                 } catch (err) {
                   setStatus(String(err));

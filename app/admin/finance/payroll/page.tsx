@@ -213,106 +213,112 @@ export default function AdminFinancePayrollPage() {
             </label>
             <button
               type="button"
-              className="rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink hover:bg-surface"
+              className="rounded-lg border border-ink/15 bg-canvas px-3 py-2 text-sm font-medium text-ink shadow-sm ring-1 ring-ink/[0.04] hover:border-primary/35 hover:bg-surface disabled:opacity-40"
               onClick={() => void exportLessonsExcel()}
               disabled={lessons.length === 0}
             >
-              Export Excel（明細）
+              Export Excel（明細 · table view）
             </button>
             <button
               type="button"
-              className="rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink hover:bg-surface"
+              className="rounded-lg border border-ink/15 bg-canvas px-3 py-2 text-sm font-medium text-ink shadow-sm ring-1 ring-ink/[0.04] hover:border-primary/35 hover:bg-surface disabled:opacity-40"
               onClick={() => exportLessonsCsv()}
               disabled={lessons.length === 0}
             >
-              Export CSV（明細）
+              Export CSV（明細 · table view）
             </button>
           </div>
         </div>
 
         {loading ? (
-          <p className="text-sm text-zinc-500">載入中…</p>
+          <p className="text-sm text-ink/55">載入中…</p>
         ) : (
           <>
             <div>
-              <h3 className="mb-2 text-lg font-medium text-zinc-200">每月上堂明細</h3>
-              <p className="mb-3 text-xs text-zinc-500">欄位：學員、課程、時間、教練、課程開始／結束日 · 點欄位標題可排序（預設按學員姓名）。</p>
-              <div className="overflow-x-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
-                <table className="min-w-full border-collapse text-left text-sm">
-                  <thead>
-                    {lessonTable.getHeaderGroups().map((hg) => (
-                      <tr key={hg.id} className="border-b border-ink/[0.08] bg-canvas">
-                        {hg.headers.map((h) => (
-                          <th
-                            key={h.id}
-                            className="cursor-pointer select-none px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-400"
-                            onClick={h.column.getToggleSortingHandler()}
-                          >
-                            {flexRender(h.column.columnDef.header, h.getContext())}
-                            {h.column.getIsSorted() === "asc" ? " ↑" : h.column.getIsSorted() === "desc" ? " ↓" : ""}
-                          </th>
-                        ))}
-                      </tr>
-                    ))}
-                  </thead>
-                  <tbody>
-                    {lessonTable.getRowModel().rows.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="px-4 py-6 text-zinc-500">
-                          此月份未有上堂／簽到記錄。
-                        </td>
-                      </tr>
-                    ) : (
-                      lessonTable.getRowModel().rows.map((row) => (
-                        <tr key={row.id} className="border-b border-ink/[0.08] hover:bg-canvas/80">
-                          {row.getVisibleCells().map((cell) => (
-                            <td key={cell.id} className="px-4 py-3 align-middle text-zinc-200">
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                            </td>
+              <h3 className="mb-2 text-lg font-semibold text-ink">每月上堂明細</h3>
+              <p className="mb-3 text-xs text-ink/55">
+                欄位：學員、課程、時間、教練、課程開始／結束日 · 點欄位標題可排序（預設按學員姓名）。
+              </p>
+              <div className="relative overflow-hidden rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border-collapse text-left text-sm">
+                    <thead>
+                      {lessonTable.getHeaderGroups().map((hg) => (
+                        <tr key={hg.id} className="border-b border-ink/10 bg-canvas">
+                          {hg.headers.map((h) => (
+                            <th
+                              key={h.id}
+                              className="cursor-pointer select-none px-4 py-3 text-xs font-semibold uppercase tracking-wide text-ink/55"
+                              onClick={h.column.getToggleSortingHandler()}
+                            >
+                              {flexRender(h.column.columnDef.header, h.getContext())}
+                              {h.column.getIsSorted() === "asc" ? " ↑" : h.column.getIsSorted() === "desc" ? " ↓" : ""}
+                            </th>
                           ))}
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      ))}
+                    </thead>
+                    <tbody>
+                      {lessonTable.getRowModel().rows.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="px-4 py-12 text-center text-ink/55">
+                            此月份未有上堂／簽到記錄。
+                          </td>
+                        </tr>
+                      ) : (
+                        lessonTable.getRowModel().rows.map((row) => (
+                          <tr key={row.id} className="border-b border-ink/[0.08] last:border-0 hover:bg-canvas/80">
+                            {row.getVisibleCells().map((cell) => (
+                              <td key={cell.id} className="px-4 py-3 align-middle text-ink/85">
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              </td>
+                            ))}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
 
             <div>
-              <h3 className="mb-2 text-lg font-medium text-zinc-200">教練彙總（參考）</h3>
-              <div className="overflow-x-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
-                <table className="min-w-full border-collapse text-left text-sm">
-                  <thead>
-                    {summaryTable.getHeaderGroups().map((hg) => (
-                      <tr key={hg.id} className="border-b border-ink/[0.08] bg-canvas">
-                        {hg.headers.map((h) => (
-                          <th key={h.id} className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-                            {flexRender(h.column.columnDef.header, h.getContext())}
-                          </th>
-                        ))}
-                      </tr>
-                    ))}
-                  </thead>
-                  <tbody>
-                    {summaryTable.getRowModel().rows.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="px-4 py-4 text-zinc-500">
-                          無彙總資料。
-                        </td>
-                      </tr>
-                    ) : (
-                      summaryTable.getRowModel().rows.map((row) => (
-                        <tr key={row.id} className="border-b border-ink/[0.08] hover:bg-canvas/80">
-                          {row.getVisibleCells().map((cell) => (
-                            <td key={cell.id} className="px-4 py-3 align-middle text-zinc-200">
-                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                            </td>
+              <h3 className="mb-2 text-lg font-semibold text-ink">教練彙總（參考）</h3>
+              <div className="relative overflow-hidden rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full border-collapse text-left text-sm">
+                    <thead>
+                      {summaryTable.getHeaderGroups().map((hg) => (
+                        <tr key={hg.id} className="border-b border-ink/10 bg-canvas">
+                          {hg.headers.map((h) => (
+                            <th key={h.id} className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-ink/55">
+                              {flexRender(h.column.columnDef.header, h.getContext())}
+                            </th>
                           ))}
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      ))}
+                    </thead>
+                    <tbody>
+                      {summaryTable.getRowModel().rows.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-12 text-center text-ink/55">
+                            無彙總資料。
+                          </td>
+                        </tr>
+                      ) : (
+                        summaryTable.getRowModel().rows.map((row) => (
+                          <tr key={row.id} className="border-b border-ink/[0.08] last:border-0 hover:bg-canvas/80">
+                            {row.getVisibleCells().map((cell) => (
+                              <td key={cell.id} className="px-4 py-3 align-middle text-ink/85">
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              </td>
+                            ))}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </>

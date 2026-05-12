@@ -126,7 +126,7 @@ export default function SessionLedgerPage() {
   }
 
   return (
-    <BackendShell title="Session Ledger">
+    <BackendShell title="Session Ledger · 扣堂原因">
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>

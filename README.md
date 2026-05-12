@@ -31,7 +31,9 @@ New management routes include:
 - `/register` → member form, photo, receipt, PIN success
 - `/renewal` → HKID lookup + package renewal + receipt
 - `/trial-class` → trial/add-on class record
-- `/admin/students`, `/admin/students/[hkid]`, `/admin/coaches`, `/admin/branches`, `/admin/finance`, `/admin/whatsapp`
+- `/admin/students`, `/admin/students/[hkid]`, `/admin/coaches`, `/admin/branches`
+- `/admin/finance/sales`, `/admin/finance/expenses`, `/admin/finance/payroll`（`/admin/finance` 會重新導向至銷售與分期）
+- `/admin/settings/whatsapp`（Whatsapp 設定；舊路徑 `/admin/whatsapp` 亦會導向此頁）
 - `/admin/students/[hkid]` → student profile, course-specific check-in PINs, category lesson enrollment, coach trial quota
 
 ## Verify F01-F04

@@ -111,61 +111,84 @@ export default function AdminFinanceExpensesPage() {
           </div>
           <button
             type="button"
-            className="rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink hover:bg-surface"
+            className="rounded-lg border border-ink/15 bg-canvas px-3 py-2 text-sm font-medium text-ink shadow-sm ring-1 ring-ink/[0.04] hover:border-primary/35 hover:bg-surface"
             onClick={() => void exportExcel()}
           >
-            Export Excel (WYSIWYG)
+            Export Excel (table view)
           </button>
         </div>
 
-        <p className="rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] px-4 py-3 text-sm text-zinc-300">
+        <p className="rounded-xl border border-ink/10 bg-surface px-4 py-3 text-sm font-medium text-ink/85 shadow-sm ring-1 ring-ink/[0.04]">
           Total Expenses (loaded): HKD {total.toLocaleString()}
         </p>
 
         {loading ? (
-          <p className="text-sm text-zinc-500">載入中…</p>
+          <p className="text-sm text-ink/55">載入中…</p>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
-            <table className="min-w-full border-collapse text-left text-sm">
-              <thead>
-                {table.getHeaderGroups().map((hg) => (
-                  <tr key={hg.id} className="border-b border-ink/[0.08] bg-canvas">
-                    {hg.headers.map((h) => (
-                      <th key={h.id} className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
-                        {flexRender(h.column.columnDef.header, h.getContext())}
-                      </th>
-                    ))}
-                  </tr>
-                ))}
-              </thead>
-              <tbody>
-                {table.getRowModel().rows.map((row) => (
-                  <tr key={row.id} className="border-b border-ink/[0.08] hover:bg-canvas/80">
-                    {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-4 py-3 align-middle text-zinc-200">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="relative overflow-hidden rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
+            <div className="overflow-x-auto">
+              <table className="min-w-full border-collapse text-left text-sm">
+                <thead>
+                  {table.getHeaderGroups().map((hg) => (
+                    <tr key={hg.id} className="border-b border-ink/10 bg-canvas">
+                      {hg.headers.map((h) => (
+                        <th key={h.id} className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-ink/55">
+                          {flexRender(h.column.columnDef.header, h.getContext())}
+                        </th>
+                      ))}
+                    </tr>
+                  ))}
+                </thead>
+                <tbody>
+                  {table.getRowModel().rows.map((row) => (
+                    <tr key={row.id} className="border-b border-ink/[0.08] last:border-0 hover:bg-canvas/80">
+                      {row.getVisibleCells().map((cell) => (
+                        <td key={cell.id} className="px-4 py-3 align-middle text-ink/85">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
-        <form className="grid gap-3 rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-5 md:grid-cols-4" onSubmit={form.handleSubmit(onSubmit)}>
-          <select {...form.register("category")}>
+        <form
+          className="grid gap-3 rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-5 md:grid-cols-4"
+          onSubmit={form.handleSubmit(onSubmit)}
+        >
+          <select {...form.register("category")} className="rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink">
             <option value="Rent">Rent</option>
             <option value="Staff">Staff</option>
             <option value="Utilities">Utilities</option>
             <option value="Equipment">Equipment</option>
             <option value="Other">Other</option>
           </select>
-          <input type="number" step="0.01" {...form.register("amount", { valueAsNumber: true })} placeholder="Amount" />
-          <input type="date" {...form.register("date")} />
-          <input {...form.register("invoiceRef")} placeholder="發票編號（入機）" />
-          <textarea className="md:col-span-4" rows={2} {...form.register("memo")} placeholder="備註" />
-          <button type="submit" className="md:col-span-4 rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-primary">
+          <input
+            type="number"
+            step="0.01"
+            className="rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink"
+            {...form.register("amount", { valueAsNumber: true })}
+            placeholder="Amount"
+          />
+          <input type="date" {...form.register("date")} className="rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink" />
+          <input
+            {...form.register("invoiceRef")}
+            placeholder="發票編號（入機）"
+            className="rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink"
+          />
+          <textarea
+            className="md:col-span-4 rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink"
+            rows={2}
+            {...form.register("memo")}
+            placeholder="備註"
+          />
+          <button
+            type="submit"
+            className="md:col-span-4 rounded-lg border border-ink/15 bg-primary/90 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-primary"
+          >
             新增支出（POST）
           </button>
           {status && <p className="md:col-span-4 text-sm text-emerald-700">{status}</p>}

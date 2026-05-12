@@ -223,7 +223,7 @@ export default function AdminPage() {
               href="/admin/attendance/session-ledger"
               className="rounded-xl border border-emerald-200/70 bg-emerald-50/90 px-4 py-3 text-sm font-semibold text-ink shadow-sm ring-1 ring-ink/[0.04] hover:bg-emerald-100/90"
             >
-              Session Ledger
+              Session Ledger · 扣堂原因
               <span className="mt-1 block text-xs font-normal text-ink/65">上堂、late cancel、補堂記錄</span>
             </Link>
           </div>

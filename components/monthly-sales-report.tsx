@@ -35,6 +35,12 @@ const COLUMN_LABELS: Record<SalesReportColumnId, string> = {
   installmentStatus: "Installment"
 };
 
+/** Checkbox rows in the export-columns modal (visual grouping). */
+const EXPORT_COLUMN_ROWS: SalesReportColumnId[][] = [
+  ["date", "clientName", "courseType", "amount"],
+  ["coachName", "paymentStatus", "installmentStatus"]
+];
+
 function normalizeRows(json: unknown): CourseSaleRow[] {
   if (Array.isArray(json)) return json as CourseSaleRow[];
   if (!json || typeof json !== "object") return [];
@@ -87,7 +93,7 @@ function formatCurrencyHkd(amount: number) {
   }).format(amount);
 }
 
-/** Same strings as rendered cells — Excel / CSV exports must match the grid (WYSIWYG). */
+/** Same strings as rendered cells — Excel / CSV exports match the on-screen table. */
 function formatSalesReportExportValue(id: SalesReportColumnId, row: CourseSaleRow): string {
   switch (id) {
     case "date":
@@ -443,7 +449,7 @@ function MonthlySalesReportImpl() {
   const filteredEmpty = !loading && !error && data.length > 0 && rowCount === 0;
   const totallyEmpty = !loading && !error && data.length === 0;
 
-  /** Rows / columns match the filtered grid row order (API sort + client search filter). */
+  /** Rows / columns match the filtered table (API sort + client search filter). */
   function buildWysiwygExportPayload() {
     const ids = visibleSalesColumnIds(table);
     const cols = ids.map((id) => ({
@@ -491,7 +497,7 @@ function MonthlySalesReportImpl() {
     }
   }
   return (
-    <section className="space-y-4">
+    <section className="-mt-0.5 space-y-4">
       {installmentEnrollmentOnlyActive ? (
         <div
           className="flex flex-col gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-900 [html.light_&]:border-emerald-600/35 [html.light_&]:bg-emerald-50 [html.light_&]:text-emerald-950"
@@ -518,68 +524,75 @@ function MonthlySalesReportImpl() {
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-3 border-b border-ink/10 pb-4 md:flex-row md:items-center md:justify-between">
-        <div>
+      <div className="space-y-4 border-b border-ink/10 pb-5">
+        <div className="space-y-1">
           <h2 className="text-xl font-semibold text-ink [html.light_&]:text-slate-900">
             Monthly sales report{" "}
             <span className="ml-2 rounded-md border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-sm font-semibold uppercase tracking-wide text-amber-900 [html.light_&]:border-amber-600/50 [html.light_&]:bg-amber-50 [html.light_&]:text-amber-900">
               (DEMO)
             </span>
           </h2>
-          <p className="mt-1 text-sm text-ink/55 [html.light_&]:text-slate-600">
-            撳 <strong className="text-ink/70 [html.light_&]:text-slate-800">Visible columns to print out</strong>{" "}
+          <p className="text-sm text-ink/55 [html.light_&]:text-slate-600">
+            撳 <strong className="text-ink/70 [html.light_&]:text-slate-800">Columns to export</strong>{" "}
             或表頭 <strong className="text-ink/70 [html.light_&]:text-slate-800">Course</strong> /{" "}
             <strong className="text-ink/70 [html.light_&]:text-slate-800">Installment</strong> 可揀欄（後兩者會多顯示該欄 sort）。
-            Sort / columns sync to{" "}
-            <code className="rounded bg-canvas px-1 py-0.5 text-xs text-ink/70 ring-1 ring-ink/10">/api/v1/reports/sales</code>.
-            Excel &amp; CSV 跟住表與 export 所見欄位。
+            Sort / visibility sync to{" "}
+            <code className="rounded bg-canvas px-1 py-0.5 text-xs text-ink/70 ring-1 ring-ink/10">/api/v1/reports/sales</code>
+            ，Excel／CSV 與目前表格一致。
           </p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+
+        {/* Columns trigger first — highest local stacking so it stays above the grid while interacting */}
+        <div className="relative z-[100] flex flex-col gap-3">
           <button
             type="button"
-            className="inline-flex w-full items-center justify-center rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100 sm:w-auto"
+            className="inline-flex w-full items-center justify-center rounded-lg border-2 border-amber-400/80 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-950 shadow-sm transition hover:border-amber-500 hover:bg-amber-100 hover:shadow-md active:scale-[0.99] [html.light_&]:border-amber-500/70"
             onClick={() => openVisibleColumnsModal(null)}
           >
-            Visible columns to print out
+            Columns to export
           </button>
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/50" />
-            <input
-              ref={searchRef}
-              type="search"
-              className="w-full min-w-[220px] rounded-lg border border-ink/15 bg-canvas py-2 pl-9 pr-3 text-sm text-ink shadow-sm ring-1 ring-ink/[0.04] placeholder:text-ink/45 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/35 sm:w-64"
-              placeholder={
-                installmentEnrollmentOnlyActive ? "再配合搜尋：客戶、課種、Coach、分期⋯" : "Search clients, courses, coaches…"
-              }
-              value={globalFilter}
-              onChange={(e) => setGlobalFilter(e.target.value)}
-              aria-label="Filter rows"
-            />
+
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-3">
+            <div className="relative md:col-span-2">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/50"
+                aria-hidden
+              />
+              <input
+                ref={searchRef}
+                type="search"
+                className="w-full min-w-0 rounded-lg border border-ink/15 bg-canvas py-2 pr-3 pl-[2.25rem] text-sm text-ink shadow-sm ring-1 ring-ink/[0.04] placeholder:text-ink/45 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/35"
+                placeholder={
+                  installmentEnrollmentOnlyActive ? "再配合搜尋：客戶、課種、Coach、分期⋯" : "Search clients, courses, coaches…"
+                }
+                value={globalFilter}
+                onChange={(e) => setGlobalFilter(e.target.value)}
+                aria-label="Filter rows"
+              />
+            </div>
+            <button
+              type="button"
+              disabled={rowCount === 0}
+              onClick={() => void exportExcel()}
+              className="inline-flex min-h-[2.75rem] w-full items-center justify-center rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm font-medium text-ink shadow-sm ring-1 ring-ink/[0.04] hover:border-primary/40 hover:bg-canvas enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Export Excel (table view)
+            </button>
+            <button
+              type="button"
+              disabled={rowCount === 0}
+              onClick={() => exportCsv()}
+              className="inline-flex min-h-[2.75rem] w-full items-center justify-center rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm font-medium text-ink shadow-sm ring-1 ring-ink/[0.04] hover:border-primary/40 hover:bg-canvas enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Export CSV (table view)
+            </button>
           </div>
-          <button
-            type="button"
-            disabled={rowCount === 0}
-            onClick={() => void exportExcel()}
-            className="inline-flex w-full items-center justify-center rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm font-medium text-ink shadow-sm ring-1 ring-ink/[0.04] hover:border-primary/40 hover:bg-canvas enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
-          >
-            Export Excel (WYSIWYG)
-          </button>
-          <button
-            type="button"
-            disabled={rowCount === 0}
-            onClick={() => exportCsv()}
-            className="inline-flex w-full items-center justify-center rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm font-medium text-ink shadow-sm ring-1 ring-ink/[0.04] hover:border-primary/40 hover:bg-canvas enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
-          >
-            Export CSV (WYSIWYG)
-          </button>
-          
         </div>
       </div>
 
       {visibleColumnsModalOpen ? (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-ink/45 p-4"
+          className="fixed inset-0 z-[10050] flex items-center justify-center bg-ink/45 p-4"
           role="presentation"
           onClick={(e) => {
             if (e.target === e.currentTarget) closeVisibleColumnsModal();
@@ -592,67 +605,78 @@ function MonthlySalesReportImpl() {
             className="w-[min(92vw,26rem)] max-w-none rounded-xl border border-ink/15 bg-surface p-5 text-left text-sm text-ink shadow-lg ring-1 ring-ink/[0.04]"
             onClick={(e) => e.stopPropagation()}
           >
-        <header className="space-y-1">
-          <h3 id="visible-columns-dialog-title" className="text-base font-semibold text-ink [html.light_&]:text-slate-900">
-            Visible columns to print out
-          </h3>
-          <p className="text-xs text-ink/55 [html.light_&]:text-slate-600">
-            勾選會顯示喺表同 Excel / CSV；至少保留一欄。由 Course 或 Installment 表頭開窗時，下面可為該欄排序。
-          </p>
-        </header>
-        <div
-          className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2"
-          role="group"
-          aria-label="Visible columns"
-        >
-          <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-ink/50 [html.light_&]:text-slate-600">
-            Visible
-          </span>
-          {SALES_REPORT_COLUMN_IDS.map((id) => (
-            <label
-              key={id}
-              className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-ink/80 hover:bg-canvas"
-            >
-              <input
-                type="checkbox"
-                className="rounded border-ink/20 bg-canvas text-primary focus:ring-primary/40"
-                checked={columnVisibility[id] !== false}
-                onChange={(e) => setSalesColumnVisible(id, e.target.checked)}
-              />
-              <span className="whitespace-nowrap font-medium">{COLUMN_LABELS[id]}</span>
-            </label>
-          ))}
-        </div>
-        {columnPickerSource ? (
-          <div className="mt-4 flex flex-wrap gap-2 border-t border-ink/[0.08] pt-4 [html.light_&]:border-slate-200">
-            <span className="mr-1 shrink-0 self-center text-xs text-ink/50 [html.light_&]:text-slate-600">
-              Sort 「{COLUMN_LABELS[columnPickerSource]}」:
-            </span>
-            <button
-              type="button"
-              className="rounded-md border border-ink/15 bg-surface px-2.5 py-1 text-xs font-medium text-ink hover:bg-canvas"
-              onClick={() => sortPickerSourceColumn(false)}
-            >
-              A → Z
-            </button>
-            <button
-              type="button"
-              className="rounded-md border border-ink/15 bg-surface px-2.5 py-1 text-xs font-medium text-ink hover:bg-canvas"
-              onClick={() => sortPickerSourceColumn(true)}
-            >
-              Z → A
-            </button>
-          </div>
-        ) : null}
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            className="rounded-lg border border-ink/15 bg-primary/90 px-3 py-1.5 text-xs font-semibold text-ink shadow-sm hover:bg-primary"
-            onClick={closeVisibleColumnsModal}
-          >
-            Close
-          </button>
-        </div>
+            <header className="space-y-3">
+              <h3 id="visible-columns-dialog-title" className="text-base font-semibold text-ink [html.light_&]:text-slate-900">
+                Columns to export
+              </h3>
+              <div className="space-y-2 text-xs leading-relaxed text-ink/55 [html.light_&]:text-slate-600">
+                <p>Select at least one column. These columns will appear in the Excel / CSV export.</p>
+                <p>
+                  勾選會顯示喺表同 Excel／CSV；至少保留一欄。由 Course 或 Installment 表頭開窗時，下面可為該欄排序。
+                </p>
+              </div>
+            </header>
+
+            <div className="mt-5 space-y-3" role="presentation">
+              <span className="block text-xs font-semibold tracking-wide text-ink/60 [html.light_&]:text-slate-700">
+                Show
+              </span>
+              {EXPORT_COLUMN_ROWS.map((rowIds, rowIdx) => (
+                <div
+                  key={rowIds.join("-")}
+                  className="flex flex-wrap items-center gap-x-3 gap-y-2.5"
+                  role="group"
+                  aria-label={
+                    rowIdx === 0 ? "Columns to show — date, client, course, amount" : "Columns to show — coach, status, installment"
+                  }
+                >
+                  {rowIds.map((id) => (
+                    <label
+                      key={id}
+                      className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-ink/80 hover:bg-canvas"
+                    >
+                      <input
+                        type="checkbox"
+                        className="rounded border-ink/20 bg-canvas text-primary focus:ring-primary/40"
+                        checked={columnVisibility[id] !== false}
+                        onChange={(e) => setSalesColumnVisible(id, e.target.checked)}
+                      />
+                      <span className="whitespace-nowrap font-medium">{COLUMN_LABELS[id]}</span>
+                    </label>
+                  ))}
+                </div>
+              ))}
+            </div>
+            {columnPickerSource ? (
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-ink/[0.08] pt-4 [html.light_&]:border-slate-200">
+                <span className="mr-1 shrink-0 self-center text-xs text-ink/50 [html.light_&]:text-slate-600">
+                  Sort 「{COLUMN_LABELS[columnPickerSource]}」:
+                </span>
+                <button
+                  type="button"
+                  className="rounded-md border border-ink/15 bg-surface px-2.5 py-1 text-xs font-medium text-ink hover:bg-canvas"
+                  onClick={() => sortPickerSourceColumn(false)}
+                >
+                  A → Z
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md border border-ink/15 bg-surface px-2.5 py-1 text-xs font-medium text-ink hover:bg-canvas"
+                  onClick={() => sortPickerSourceColumn(true)}
+                >
+                  Z → A
+                </button>
+              </div>
+            ) : null}
+            <div className="mt-6 flex justify-start border-t border-ink/[0.06] pt-4 [html.light_&]:border-slate-200">
+              <button
+                type="button"
+                className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary"
+                onClick={closeVisibleColumnsModal}
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
