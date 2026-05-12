@@ -56,6 +56,7 @@ const defaults: Partial<StudentRegistrationPayload> = {
 export default function StudentOnboardingWizard({ quickName }: { quickName?: string }) {
   const [step, setStep] = useState(1);
   const [status, setStatus] = useState("");
+  const [dupToastMsg, setDupToastMsg] = useState<string | null>(null);
   const [assignedPin, setAssignedPin] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement | null>(null);
   const router = useRouter();
@@ -72,11 +73,18 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     if (quickName) form.setValue("full_name", quickName);
   }, [quickName, form]);
 
+  useEffect(() => {
+    if (!dupToastMsg) return;
+    const t = window.setTimeout(() => setDupToastMsg(null), 6500);
+    return () => window.clearTimeout(t);
+  }, [dupToastMsg]);
+
   const clearanceNeeded = parqRequiresClearance(parqWatch ?? defaultParq);
 
   async function goNext() {
     setStatus("");
     if (step === 1) {
+      setDupToastMsg(null);
       const ok = await form.trigger([
         "full_name",
         "hkid",
@@ -86,7 +94,22 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         "emergency_contact_phone",
         "form_type"
       ]);
-      if (ok) setStep(2);
+      if (!ok) return;
+      try {
+        const vals = form.getValues();
+        const res = (await api.memberDuplicateCheck({
+          full_name: vals.full_name.trim(),
+          hkid: vals.hkid.trim(),
+          phone: vals.phone.trim()
+        })) as { blocked?: boolean; message?: string | null };
+        if (res.blocked) {
+          setDupToastMsg(res.message ?? "系統已有相同會員紀錄，請改用續會或聯絡櫃台。");
+          return;
+        }
+        setStep(2);
+      } catch (err) {
+        alertApiError(err);
+      }
       return;
     }
     if (step === 2) {
@@ -152,6 +175,15 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         <li className={step >= 3 ? "font-medium text-primary" : ""}>③ 冷靜期／簽署</li>
       </ol>
 
+      {dupToastMsg ? (
+        <div
+          className="fixed left-4 right-4 top-4 z-[140] mx-auto max-w-lg rounded-xl border border-amber-300/90 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950 shadow-lg ring-1 ring-amber-500/30"
+          role="alert"
+        >
+          {dupToastMsg}
+        </div>
+      ) : null}
+
       <form
         ref={formRef}
         className="space-y-5 rounded-xl border border-ink/10 bg-surface p-5 shadow-sm ring-1 ring-ink/[0.04]"
@@ -166,17 +198,90 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
             {form.formState.errors.full_name && (
               <p className="text-xs text-rose-400">{form.formState.errors.full_name.message}</p>
             )}
-            <input className={fieldClass} placeholder="HKID *（例：A1234567）" {...form.register("hkid")} />
-            {form.formState.errors.hkid && (
-              <p className="text-xs text-rose-400">{form.formState.errors.hkid.message}</p>
-            )}
-            <input className={fieldClass} placeholder="電話 * +852…" {...form.register("phone")} />
-            {form.formState.errors.phone && (
-              <p className="text-xs text-rose-400">{form.formState.errors.phone.message}</p>
-            )}
+            <div>
+              <input
+                className={fieldClass}
+                placeholder="證件號碼／HKID（簡填 · 例：英文字 + 頭幾個數字 · A123）"
+                autoCapitalize="characters"
+                {...form.register("hkid")}
+              />
+              <p className="mt-1 text-[11px] leading-relaxed text-ink/50">
+                F01：只需填寫字首英文 + 頭幾個數字（最少 4 字），唔使填足傳統身份證號碼。
+              </p>
+              {form.formState.errors.hkid && (
+                <p className="text-xs text-rose-400">{form.formState.errors.hkid.message}</p>
+              )}
+            </div>
+            <div className="space-y-1">
+              <p className="text-[11px] font-medium text-ink/70">香港手機號碼 · 已固定 +852，只輸入八位數字</p>
+              <div className="flex max-w-full items-stretch overflow-hidden rounded-lg border border-ink/15 bg-canvas shadow-sm ring-ink/10 focus-within:ring-2 focus-within:ring-primary/35">
+                <span className="flex shrink-0 items-center border-r border-ink/10 bg-surface/80 px-3 text-sm font-semibold text-ink/80">
+                  +852
+                </span>
+                <Controller
+                  name="phone"
+                  control={form.control}
+                  render={({ field }) => {
+                    const m = /^\+852(\d{0,8})$/.exec(field.value || "");
+                    const digits = m?.[1] ?? "";
+                    return (
+                      <input
+                        className="min-w-0 flex-1 border-0 bg-transparent px-3 py-2 text-sm text-ink outline-none placeholder:text-ink/35"
+                        placeholder="12345678"
+                        inputMode="numeric"
+                        autoComplete="tel-national"
+                        maxLength={8}
+                        value={digits}
+                        onChange={(e) => {
+                          const d = e.target.value.replace(/\D/g, "").slice(0, 8);
+                          field.onChange(d.length > 0 ? `+852${d}` : "");
+                        }}
+                        onBlur={field.onBlur}
+                      />
+                    );
+                  }}
+                />
+              </div>
+              {form.formState.errors.phone && (
+                <p className="text-xs text-rose-400">{form.formState.errors.phone.message}</p>
+              )}
+            </div>
             <input className={fieldClass} placeholder="電郵（可選）" {...form.register("email")} />
             <input className={fieldClass} placeholder="緊急聯絡人姓名 *" {...form.register("emergency_contact_name")} />
-            <input className={fieldClass} placeholder="緊急聯絡人電話 *" {...form.register("emergency_contact_phone")} />
+            <div className="space-y-1">
+              <p className="text-[11px] font-medium text-ink/70">緊急聯絡人電話 · +852 八位數</p>
+              <div className="flex max-w-full items-stretch overflow-hidden rounded-lg border border-ink/15 bg-canvas shadow-sm ring-ink/10 focus-within:ring-2 focus-within:ring-primary/35">
+                <span className="flex shrink-0 items-center border-r border-ink/10 bg-surface/80 px-3 text-sm font-semibold text-ink/80">
+                  +852
+                </span>
+                <Controller
+                  name="emergency_contact_phone"
+                  control={form.control}
+                  render={({ field }) => {
+                    const m = /^\+852(\d{0,8})$/.exec(field.value || "");
+                    const digits = m?.[1] ?? "";
+                    return (
+                      <input
+                        className="min-w-0 flex-1 border-0 bg-transparent px-3 py-2 text-sm text-ink outline-none placeholder:text-ink/35"
+                        placeholder="87654321"
+                        inputMode="numeric"
+                        autoComplete="tel-national"
+                        maxLength={8}
+                        value={digits}
+                        onChange={(e) => {
+                          const d = e.target.value.replace(/\D/g, "").slice(0, 8);
+                          field.onChange(d.length > 0 ? `+852${d}` : "");
+                        }}
+                        onBlur={field.onBlur}
+                      />
+                    );
+                  }}
+                />
+              </div>
+              {form.formState.errors.emergency_contact_phone && (
+                <p className="text-xs text-rose-400">{form.formState.errors.emergency_contact_phone.message}</p>
+              )}
+            </div>
           </div>
         )}
 

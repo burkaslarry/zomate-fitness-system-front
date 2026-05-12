@@ -307,6 +307,9 @@ export const api = {
     request("/api/v1/students/register", { method: "POST", body: JSON.stringify(payload) }),
   createMember: (payload: Record<string, unknown>) =>
     request("/api/members", { method: "POST", body: JSON.stringify(payload) }),
+  /** F01 步驟 1 — 檢查姓名／簡填 HKID／電話是否已有紀錄（公開，毋須 Bearer）。 */
+  memberDuplicateCheck: (payload: { full_name: string; hkid: string; phone: string }) =>
+    request("/api/members/duplicate-check", { method: "POST", body: JSON.stringify(payload) }),
   member: (hkid: string) => request(`/api/members/${encodeURIComponent(hkid)}`),
   memberFull: (hkid: string) => request(`/api/members/${encodeURIComponent(hkid)}/full`),
   memberSearch: (q: string) => request(`/api/members/search?q=${encodeURIComponent(q)}`),

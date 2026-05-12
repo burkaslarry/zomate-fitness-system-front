@@ -2,18 +2,20 @@
 
 import { z } from "zod";
 
-/** Loose HKID — validates common Hong Kong ID shape (letters + digits + check char). */
+/** F01 縮填：英文「證件字首」+ 頭幾個數字即可（最少 4 字；例：A123）。唔再強制標準 9 碼 HKID + 較驗字符。 */
 export const hkidSchema = z
   .string()
-  .min(8)
+  .trim()
+  .min(4, "請至少輸入 4 個字元（例：英文字 + 頭幾個數字 · A123）")
   .max(12)
-  .regex(/^[A-Z]{1,2}[0-9]{6}[0-9A]$/i, { message: "HKID 格式不正確（例：A1234567）" });
+  .regex(/^[A-Z]{1,2}[0-9]+$/i, {
+    message: "格式須為英文前置 + 數字（例如 A123）"
+  });
 
+/** 存入 API 嘅字串係 ``+852`` + **8** 位（表單只輸入 8 個數字）。 */
 export const phoneHkSchema = z
   .string()
-  .min(8)
-  .max(20)
-  .regex(/^\+?[0-9][0-9\s-]{7,}$/, { message: "請輸入有效電話號碼" });
+  .regex(/^\+852[0-9]{8}$/, { message: "請輸入香港手機號碼 8 位數字（自動帶 +852）" });
 
 /** Standard PAR-Q — seven Yes/No questions. Any "Yes" → medical clearance required. */
 export const parqQuestionsSchema = z.object({
