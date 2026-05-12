@@ -51,33 +51,33 @@ export default function RenewalPage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-2xl space-y-5 bg-zinc-950 p-6 text-white">
+    <main className="mx-auto min-h-screen max-w-2xl space-y-5 bg-canvas p-6 text-ink">
       <h1 className="text-2xl font-semibold">續會 Renewal</h1>
-      <section className="rounded-xl border border-white/15 bg-[#141414] p-5">
-        <p className="mb-3 text-sm text-white/70">Step 1 · HKID lookup</p>
+      <section className="rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-5">
+        <p className="mb-3 text-sm text-ink/65">Step 1 · HKID lookup</p>
         <div className="flex gap-2">
-          <input value={hkid} onChange={(e) => setHkid(e.target.value)} placeholder="HKID" className="flex-1 rounded-lg border border-white/15 bg-[#1a1a1a] px-3 py-2" />
-          <button type="button" onClick={() => void lookup()} className="rounded-md bg-[#6366f1] px-4 py-2 text-sm font-medium">搜尋</button>
+          <input value={hkid} onChange={(e) => setHkid(e.target.value)} placeholder="HKID" className="flex-1 rounded-lg border border-ink/10 bg-canvas px-3 py-2" />
+          <button type="button" onClick={() => void lookup()} className="rounded-md border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-medium text-ink shadow-sm hover:bg-primary">搜尋</button>
         </div>
       </section>
       {member && (
-        <form onSubmit={submit} className="space-y-4 rounded-xl border border-white/15 bg-[#141414] p-5">
-          <p className="text-sm text-white/70">Step 2 · Read-only member: <strong className="text-white">{member.full_name}</strong> · {member.phone}</p>
+        <form onSubmit={submit} className="space-y-4 rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-5">
+          <p className="text-sm text-ink/65">Step 2 · Read-only member: <strong className="text-ink">{member.full_name}</strong> · {member.phone}</p>
           <label className="block space-y-1 text-sm">
-            <span className="text-slate-300">Package</span>
-            <select name="package_id" required className="w-full rounded-lg border border-white/15 bg-[#1a1a1a] px-3 py-2 text-white">
+            <span className="text-ink/70">Package</span>
+            <select name="package_id" required className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-ink">
               <option value="">請選擇</option>
               {packages.map((pkg) => <option key={pkg.id} value={pkg.id}>{pkg.name} · {pkg.sessions} 堂</option>)}
             </select>
           </label>
           <SelectAsync name="coach_id" label="教練" load={api.publicCoaches} />
           <SelectAsync name="branch_id" label="分店" load={api.publicBranches} />
-          <input name="amount" required inputMode="decimal" placeholder="收費" className="w-full rounded-lg border border-white/15 bg-[#1a1a1a] px-3 py-2" />
+          <input name="amount" required inputMode="decimal" placeholder="收費" className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2" />
           <PaymentMethodRadio />
           <FileUpload name="receipt" label="收據 upload" required />
-          <textarea name="note" rows={3} placeholder="備註" className="w-full rounded-lg border border-white/15 bg-[#1a1a1a] px-3 py-2" />
-          <button type="submit" className="w-full rounded-md bg-emerald-600 px-4 py-3 text-sm font-semibold">提交續會</button>
-          {status && <p className="text-sm text-emerald-300">{status}</p>}
+          <textarea name="note" rows={3} placeholder="備註" className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2" />
+          <button type="submit" className="w-full rounded-md border border-emerald-200/80 bg-emerald-50 px-4 py-3 text-sm font-semibold text-ink hover:bg-emerald-100">提交續會</button>
+          {status && <p className="text-sm text-emerald-800">{status}</p>}
         </form>
       )}
     </main>

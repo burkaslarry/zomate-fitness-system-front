@@ -195,25 +195,25 @@ export default function AdminFinancePayrollPage() {
       <div className="mx-auto max-w-7xl space-y-8">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-semibold text-white">教練出勤（學員上堂 = 出勤記錄）</h2>
-            <p className="mt-1 text-sm text-zinc-500">
-              <code className="rounded bg-[#262626] px-1 py-0.5 text-xs">GET /api/v1/reports/coach-attendance?month=YYYY-MM</code>
+            <h2 className="text-xl font-semibold text-ink">教練出勤（學員上堂 = 出勤記錄）</h2>
+            <p className="mt-1 text-sm text-ink/55">
+              <code className="rounded bg-canvas px-1 py-0.5 text-xs ring-1 ring-ink/10">GET /api/v1/reports/coach-attendance?month=YYYY-MM</code>
               · PostgreSQL：<code className="text-xs">AuditLog.checkin_redeem</code> + 課程日期
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-2 text-sm text-zinc-400">
+            <label className="flex items-center gap-2 text-sm text-ink/65">
               月份
               <input
                 type="month"
-                className="rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-2 py-1.5 text-zinc-100"
+                className="rounded-lg border border-ink/10 bg-canvas px-2 py-1.5 text-ink"
                 value={month}
                 onChange={(e) => setMonth(e.target.value)}
               />
             </label>
             <button
               type="button"
-              className="rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-sm text-zinc-100 hover:bg-[#262626]"
+              className="rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink hover:bg-surface"
               onClick={() => void exportLessonsExcel()}
               disabled={lessons.length === 0}
             >
@@ -221,7 +221,7 @@ export default function AdminFinancePayrollPage() {
             </button>
             <button
               type="button"
-              className="rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-sm text-zinc-100 hover:bg-[#262626]"
+              className="rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink hover:bg-surface"
               onClick={() => exportLessonsCsv()}
               disabled={lessons.length === 0}
             >
@@ -237,11 +237,11 @@ export default function AdminFinancePayrollPage() {
             <div>
               <h3 className="mb-2 text-lg font-medium text-zinc-200">每月上堂明細</h3>
               <p className="mb-3 text-xs text-zinc-500">欄位：學員、課程、時間、教練、課程開始／結束日 · 點欄位標題可排序（預設按學員姓名）。</p>
-              <div className="overflow-x-auto rounded-xl border border-white/[0.1] bg-[#141414]">
+              <div className="overflow-x-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
                 <table className="min-w-full border-collapse text-left text-sm">
                   <thead>
                     {lessonTable.getHeaderGroups().map((hg) => (
-                      <tr key={hg.id} className="border-b border-white/[0.08] bg-[#1a1a1a]">
+                      <tr key={hg.id} className="border-b border-ink/[0.08] bg-canvas">
                         {hg.headers.map((h) => (
                           <th
                             key={h.id}
@@ -264,7 +264,7 @@ export default function AdminFinancePayrollPage() {
                       </tr>
                     ) : (
                       lessonTable.getRowModel().rows.map((row) => (
-                        <tr key={row.id} className="border-b border-[#222] hover:bg-[#1a1a1a]/80">
+                        <tr key={row.id} className="border-b border-ink/[0.08] hover:bg-canvas/80">
                           {row.getVisibleCells().map((cell) => (
                             <td key={cell.id} className="px-4 py-3 align-middle text-zinc-200">
                               {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -280,11 +280,11 @@ export default function AdminFinancePayrollPage() {
 
             <div>
               <h3 className="mb-2 text-lg font-medium text-zinc-200">教練彙總（參考）</h3>
-              <div className="overflow-x-auto rounded-xl border border-white/[0.1] bg-[#141414]">
+              <div className="overflow-x-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
                 <table className="min-w-full border-collapse text-left text-sm">
                   <thead>
                     {summaryTable.getHeaderGroups().map((hg) => (
-                      <tr key={hg.id} className="border-b border-white/[0.08] bg-[#1a1a1a]">
+                      <tr key={hg.id} className="border-b border-ink/[0.08] bg-canvas">
                         {hg.headers.map((h) => (
                           <th key={h.id} className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
                             {flexRender(h.column.columnDef.header, h.getContext())}
@@ -302,7 +302,7 @@ export default function AdminFinancePayrollPage() {
                       </tr>
                     ) : (
                       summaryTable.getRowModel().rows.map((row) => (
-                        <tr key={row.id} className="border-b border-[#222] hover:bg-[#1a1a1a]/80">
+                        <tr key={row.id} className="border-b border-ink/[0.08] hover:bg-canvas/80">
                           {row.getVisibleCells().map((cell) => (
                             <td key={cell.id} className="px-4 py-3 align-middle text-zinc-200">
                               {flexRender(cell.column.columnDef.cell, cell.getContext())}

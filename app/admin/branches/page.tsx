@@ -110,98 +110,101 @@ export default function AdminBranchesPage() {
     <BackendShell title="分店管理">
       <div className="mx-auto max-w-6xl space-y-6">
         <div>
-          <h2 className="text-2xl font-semibold text-white">分店管理</h2>
-          <p className="mt-2 text-sm text-slate-300">
+          <h2 className="text-2xl font-semibold text-ink">分店管理</h2>
+          <p className="mt-2 text-sm text-ink/70">
             分店資料包含 name、address、business start time、business end time、remarks，並支援 CSV 匯入/匯出。
           </p>
         </div>
 
         <section className="grid gap-4 md:grid-cols-2">
           {DEFAULT_BRANCHES.map((branch) => (
-            <article key={branch.name} className="rounded-xl border border-white/[0.12] bg-[#111827] p-4">
-              <h3 className="text-lg font-semibold text-white">{branch.name}</h3>
-              <p className="mt-1 text-sm text-slate-300">{branch.address}</p>
-              <p className="mt-1 text-sm text-slate-400">
+            <article key={branch.name} className="rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-4">
+              <h3 className="text-lg font-semibold text-ink">{branch.name}</h3>
+              <p className="mt-1 text-sm text-ink/70">{branch.address}</p>
+              <p className="mt-1 text-sm text-ink/55">
                 {branch.business_start_time}–{branch.business_end_time} · {branch.remarks}
               </p>
             </article>
           ))}
         </section>
 
-        <section className="rounded-xl border border-white/[0.12] bg-[#111827] p-5">
-          <h3 className="text-lg font-semibold text-white">新增分店</h3>
+        <section className="rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-5">
+          <h3 className="text-lg font-semibold text-ink">新增分店</h3>
           <form onSubmit={onSubmit} className="mt-4 grid gap-4 md:grid-cols-2">
             <label className="block text-sm">
-              <span className="text-slate-300">Name</span>
+              <span className="text-ink/70">Name</span>
               <input
                 name="name"
                 required
-                className="mt-1 w-full rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-white"
+                className="mt-1 w-full"
                 placeholder="尖沙咀分店"
               />
             </label>
             <label className="block text-sm">
-              <span className="text-slate-300">Address</span>
+              <span className="text-ink/70">Address</span>
               <input
                 name="address"
                 required
-                className="mt-1 w-full rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-white"
+                className="mt-1 w-full"
                 placeholder="柯士甸道102號22樓"
               />
             </label>
             <label className="block text-sm">
-              <span className="text-slate-300">Business Start Time</span>
+              <span className="text-ink/70">Business Start Time</span>
               <input
                 name="business_start_time"
                 type="time"
                 required
                 defaultValue="09:00"
-                className="mt-1 w-full rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-white"
+                className="mt-1 w-full"
               />
             </label>
             <label className="block text-sm">
-              <span className="text-slate-300">Business End Time</span>
+              <span className="text-ink/70">Business End Time</span>
               <input
                 name="business_end_time"
                 type="time"
                 required
                 defaultValue="22:00"
-                className="mt-1 w-full rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-white"
+                className="mt-1 w-full"
               />
             </label>
             <label className="block text-sm">
-              <span className="text-slate-300">Code（CSV/教練匯入用，可留空）</span>
+              <span className="text-ink/70">Code（CSV/教練匯入用，可留空）</span>
               <input
                 name="code"
-                className="mt-1 w-full rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-white"
+                className="mt-1 w-full"
                 placeholder="TST"
               />
             </label>
             <label className="block text-sm md:col-span-2">
-              <span className="text-slate-300">Remarks</span>
+              <span className="text-ink/70">Remarks</span>
               <textarea
                 name="remarks"
                 rows={3}
-                className="mt-1 w-full rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-white"
+                className="mt-1 w-full"
                 placeholder="近佐敦地鐵站D出口"
               />
             </label>
-            <button type="submit" className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500">
+            <button
+              type="submit"
+              className="rounded-lg border border-violet-200/80 bg-violet-50 px-4 py-2 text-sm font-semibold text-ink hover:bg-violet-100"
+            >
               建立分店
             </button>
           </form>
         </section>
 
-        <section className="space-y-3 rounded-xl border border-white/[0.12] bg-[#111827] p-5">
+        <section className="space-y-3 rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-5">
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => void downloadCsv("/api/admin/branches/export.csv", "branches.csv")}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+              className="rounded-lg border border-emerald-200/80 bg-emerald-50 px-4 py-2 text-sm font-semibold text-ink hover:bg-emerald-100"
             >
               匯出 branches.csv
             </button>
-            <label className="cursor-pointer rounded-lg bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-500">
+            <label className="cursor-pointer rounded-lg border border-sky-200/80 bg-sky-50 px-4 py-2 text-sm font-semibold text-ink hover:bg-sky-100">
               匯入 CSV
               <input
                 type="file"
@@ -216,16 +219,16 @@ export default function AdminBranchesPage() {
               />
             </label>
           </div>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-ink/55">
             CSV columns: name, address, code, business_start_time, business_end_time, remarks
           </p>
         </section>
 
-        {status && <p className="rounded-md border border-white/[0.12] bg-[#0f172a] px-3 py-2 text-sm text-slate-200">{status}</p>}
+        {status && <p className="rounded-md border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink/85">{status}</p>}
 
-        <section className="overflow-x-auto rounded-xl border border-white/[0.12] bg-[#111827]">
+        <section className="overflow-x-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
           <table className="min-w-full text-left text-sm">
-            <thead className="border-b border-white/[0.12] text-slate-300">
+            <thead className="border-b border-ink/10 text-ink/70">
               <tr>
                 <th className="px-3 py-2">Name</th>
                 <th className="px-3 py-2">Address</th>
@@ -239,72 +242,72 @@ export default function AdminBranchesPage() {
               {branches.map((branch) => (
                 <Fragment key={branch.id}>
                   {editingId === branch.id ? (
-                    <tr className="border-b border-white/[0.08] bg-[#0f172a]/80 text-slate-200">
+                    <tr className="border-b border-ink/[0.08] bg-canvas/90 text-ink/80">
                       <td colSpan={6} className="px-3 py-4">
                         <form
                           className="grid gap-3 md:grid-cols-2 lg:grid-cols-3"
                           onSubmit={(e) => void saveEdit(branch, e)}
                         >
                           <label className="block text-sm">
-                            <span className="text-slate-400">Name</span>
+                            <span className="text-ink/55">Name</span>
                             <input
                               name="edit_name"
                               required
                               defaultValue={branch.name}
-                              className="mt-1 w-full rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-white"
+                              className="mt-1 w-full"
                             />
                           </label>
                           <label className="block text-sm md:col-span-2">
-                            <span className="text-slate-400">Address</span>
+                            <span className="text-ink/55">Address</span>
                             <input
                               name="edit_address"
                               required
                               defaultValue={branch.address}
-                              className="mt-1 w-full rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-white"
+                              className="mt-1 w-full"
                             />
                           </label>
                           <label className="block text-sm">
-                            <span className="text-slate-400">Business Start</span>
+                            <span className="text-ink/55">Business Start</span>
                             <input
                               name="edit_business_start_time"
                               type="time"
                               required
                               defaultValue={branch.business_start_time}
-                              className="mt-1 w-full rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-white"
+                              className="mt-1 w-full"
                             />
                           </label>
                           <label className="block text-sm">
-                            <span className="text-slate-400">Business End</span>
+                            <span className="text-ink/55">Business End</span>
                             <input
                               name="edit_business_end_time"
                               type="time"
                               required
                               defaultValue={branch.business_end_time}
-                              className="mt-1 w-full rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-white"
+                              className="mt-1 w-full"
                             />
                           </label>
                           <label className="block text-sm md:col-span-2">
-                            <span className="text-slate-400">Remarks</span>
+                            <span className="text-ink/55">Remarks</span>
                             <textarea
                               name="edit_remarks"
                               rows={2}
                               defaultValue={branch.remarks ?? ""}
-                              className="mt-1 w-full rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-white"
+                              className="mt-1 w-full"
                             />
                           </label>
-                          <p className="text-sm text-slate-500 md:col-span-2">
-                            Code（只讀）: <span className="font-mono text-slate-300">{branch.code}</span>
+                          <p className="text-sm text-ink/50 md:col-span-2">
+                            Code（只讀）: <span className="font-mono text-ink/70">{branch.code}</span>
                           </p>
                           <div className="flex flex-wrap gap-2 md:col-span-2 lg:col-span-3">
                             <button
                               type="submit"
-                              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500"
+                              className="rounded-lg border border-emerald-200/80 bg-emerald-50 px-4 py-2 text-sm font-semibold text-ink hover:bg-emerald-100"
                             >
                               儲存
                             </button>
                             <button
                               type="button"
-                              className="rounded-lg border border-white/[0.15] px-4 py-2 text-sm text-slate-300 hover:bg-white/[0.06]"
+                              className="rounded-lg border border-ink/15 bg-canvas px-4 py-2 text-sm text-ink hover:bg-surface"
                               onClick={() => setEditingId(null)}
                             >
                               取消
@@ -314,18 +317,18 @@ export default function AdminBranchesPage() {
                       </td>
                     </tr>
                   ) : (
-                    <tr className="border-b border-white/[0.08] text-slate-200">
+                    <tr className="border-b border-ink/[0.08] text-ink/80">
                       <td className="px-3 py-2 font-medium">{branch.name}</td>
                       <td className="px-3 py-2">{branch.address}</td>
                       <td className="px-3 py-2">
                         {branch.business_start_time}–{branch.business_end_time}
                       </td>
                       <td className="px-3 py-2">{branch.remarks || "—"}</td>
-                      <td className="px-3 py-2 text-slate-400">{branch.code}</td>
+                      <td className="px-3 py-2 text-ink/55">{branch.code}</td>
                       <td className="px-3 py-2">
                         <button
                           type="button"
-                          className="rounded-md border border-violet-400/50 bg-violet-600/20 px-3 py-1 text-xs font-medium text-violet-200 hover:bg-violet-600/30"
+                          className="rounded-md border border-violet-300/70 bg-violet-50 px-3 py-1 text-xs font-medium text-violet-900 hover:bg-violet-100"
                           onClick={() => setEditingId(branch.id)}
                         >
                           編輯
@@ -337,7 +340,7 @@ export default function AdminBranchesPage() {
               ))}
               {!loading && branches.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-6 text-center text-slate-400">
+                  <td colSpan={6} className="px-3 py-6 text-center text-ink/55">
                     未有分店資料
                   </td>
                 </tr>

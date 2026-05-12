@@ -63,21 +63,21 @@ export default function RegisterPhotoPage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-lg space-y-5 bg-zinc-950 p-6 text-white">
+    <main className="mx-auto min-h-screen max-w-lg space-y-5 bg-canvas p-6 text-ink">
       <h1 className="text-xl font-semibold">會員相片</h1>
-      <p className="text-sm text-white/75">{ctx?.full_name} · Photo required before continuing.</p>
-      <video ref={videoRef} autoPlay playsInline muted className="aspect-video w-full rounded-xl border border-white/15 bg-black" />
+      <p className="text-sm text-ink/70">{ctx?.full_name} · Photo required before continuing.</p>
+      <video ref={videoRef} autoPlay playsInline muted className="aspect-video w-full rounded-xl border border-ink/10 bg-black" />
       <canvas ref={canvasRef} className="hidden" />
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={capture} className="rounded-md bg-[#6366f1] px-4 py-2 text-sm font-medium text-white">拍攝相片</button>
-        <label className="rounded-md border border-white/20 px-4 py-2 text-sm">
+        <button type="button" onClick={capture} className="rounded-md border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-medium text-ink shadow-sm hover:bg-primary">拍攝相片</button>
+        <label className="rounded-md border border-ink/15 px-4 py-2 text-sm">
           上載相片
           <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
         </label>
       </div>
-      {file && <p className="text-sm text-emerald-300">已選擇：{file.name}</p>}
-      {status && <p className="text-sm text-amber-200">{status}</p>}
-      <button type="button" onClick={() => void submit()} className="w-full rounded-md bg-emerald-600 px-4 py-3 text-sm font-semibold text-white">下一步：收據</button>
+      {file && <p className="text-sm text-emerald-800">已選擇：{file.name}</p>}
+      {status && <p className="text-sm text-amber-900">{status}</p>}
+      <button type="button" onClick={() => void submit()} className="w-full rounded-md border border-emerald-200/80 bg-emerald-50 px-4 py-3 text-sm font-semibold text-ink hover:bg-emerald-100">下一步：收據</button>
     </main>
   );
 }

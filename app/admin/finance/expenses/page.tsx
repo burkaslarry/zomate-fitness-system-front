@@ -107,29 +107,29 @@ export default function AdminFinanceExpensesPage() {
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-semibold text-white">支出管理 · Expenses</h2>
+            <h2 className="text-xl font-semibold text-ink">支出管理 · Expenses</h2>
           </div>
           <button
             type="button"
-            className="rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-sm text-zinc-100 hover:bg-[#262626]"
+            className="rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink hover:bg-surface"
             onClick={() => void exportExcel()}
           >
             Export Excel (WYSIWYG)
           </button>
         </div>
 
-        <p className="rounded-xl border border-white/[0.1] bg-[#141414] px-4 py-3 text-sm text-zinc-300">
+        <p className="rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] px-4 py-3 text-sm text-zinc-300">
           Total Expenses (loaded): HKD {total.toLocaleString()}
         </p>
 
         {loading ? (
           <p className="text-sm text-zinc-500">載入中…</p>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-white/[0.1] bg-[#141414]">
+          <div className="overflow-x-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
             <table className="min-w-full border-collapse text-left text-sm">
               <thead>
                 {table.getHeaderGroups().map((hg) => (
-                  <tr key={hg.id} className="border-b border-white/[0.08] bg-[#1a1a1a]">
+                  <tr key={hg.id} className="border-b border-ink/[0.08] bg-canvas">
                     {hg.headers.map((h) => (
                       <th key={h.id} className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
                         {flexRender(h.column.columnDef.header, h.getContext())}
@@ -140,7 +140,7 @@ export default function AdminFinanceExpensesPage() {
               </thead>
               <tbody>
                 {table.getRowModel().rows.map((row) => (
-                  <tr key={row.id} className="border-b border-[#222] hover:bg-[#1a1a1a]/80">
+                  <tr key={row.id} className="border-b border-ink/[0.08] hover:bg-canvas/80">
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id} className="px-4 py-3 align-middle text-zinc-200">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -153,7 +153,7 @@ export default function AdminFinanceExpensesPage() {
           </div>
         )}
 
-        <form className="grid gap-3 rounded-xl border border-white/[0.12] bg-[#141414] p-5 md:grid-cols-4" onSubmit={form.handleSubmit(onSubmit)}>
+        <form className="grid gap-3 rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-5 md:grid-cols-4" onSubmit={form.handleSubmit(onSubmit)}>
           <select {...form.register("category")}>
             <option value="Rent">Rent</option>
             <option value="Staff">Staff</option>
@@ -165,10 +165,10 @@ export default function AdminFinanceExpensesPage() {
           <input type="date" {...form.register("date")} />
           <input {...form.register("invoiceRef")} placeholder="發票編號（入機）" />
           <textarea className="md:col-span-4" rows={2} {...form.register("memo")} placeholder="備註" />
-          <button type="submit" className="md:col-span-4 bg-[#6366f1] text-white hover:bg-[#535bf0]">
+          <button type="submit" className="md:col-span-4 rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-primary">
             新增支出（POST）
           </button>
-          {status && <p className="md:col-span-4 text-sm text-emerald-400">{status}</p>}
+          {status && <p className="md:col-span-4 text-sm text-emerald-700">{status}</p>}
         </form>
       </div>
     </BackendShell>

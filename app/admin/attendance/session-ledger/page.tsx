@@ -130,14 +130,14 @@ export default function SessionLedgerPage() {
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl font-semibold text-white">Session Ledger · 扣堂原因</h2>
+            <h2 className="text-xl font-semibold text-ink">Session Ledger · 扣堂原因</h2>
             <p className="mt-1 text-sm text-zinc-500">
               24 小時內逾時取消會標記為 late_cancel（終端會輸出規則提示）。
             </p>
           </div>
           <button
             type="button"
-            className="rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-sm text-zinc-100 hover:bg-[#262626]"
+            className="rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink hover:bg-surface"
             onClick={() => void exportExcel()}
           >
             Export Excel (WYSIWYG)
@@ -147,11 +147,11 @@ export default function SessionLedgerPage() {
         {loading ? (
           <p className="text-sm text-zinc-500">載入中…</p>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-white/[0.1] bg-[#141414]">
+          <div className="overflow-x-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
             <table className="min-w-full border-collapse text-left text-sm">
               <thead>
                 {table.getHeaderGroups().map((hg) => (
-                  <tr key={hg.id} className="border-b border-white/[0.08] bg-[#1a1a1a]">
+                  <tr key={hg.id} className="border-b border-ink/[0.08] bg-canvas">
                     {hg.headers.map((h) => (
                       <th key={h.id} className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">
                         {flexRender(h.column.columnDef.header, h.getContext())}
@@ -162,7 +162,7 @@ export default function SessionLedgerPage() {
               </thead>
               <tbody>
                 {table.getRowModel().rows.map((row) => (
-                  <tr key={row.id} className="border-b border-[#222] hover:bg-[#1a1a1a]/80">
+                  <tr key={row.id} className="border-b border-ink/[0.08] hover:bg-canvas/80">
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id} className="px-4 py-3 align-middle text-zinc-200">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -176,10 +176,10 @@ export default function SessionLedgerPage() {
         )}
 
         <form
-          className="space-y-3 rounded-xl border border-white/[0.12] bg-[#141414] p-5"
+          className="space-y-3 rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-5"
           onSubmit={form.handleSubmit(onAppend)}
         >
-          <h3 className="text-sm font-semibold text-white">新增紀錄（示範）</h3>
+          <h3 className="text-sm font-semibold text-ink">新增紀錄（示範）</h3>
           <input placeholder="學員姓名" {...form.register("studentName")} />
           <label className="block text-xs text-zinc-500">課堂開始（datetime-local）</label>
           <input type="datetime-local" {...form.register("sessionStartIso")} />
@@ -195,10 +195,10 @@ export default function SessionLedgerPage() {
             </>
           ) : null}
           <textarea placeholder="備註" rows={2} {...form.register("notes")} />
-          <button type="submit" className="bg-[#6366f1] text-white hover:bg-[#535bf0]">
+          <button type="submit" className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-primary">
             提交
           </button>
-          {msg && <p className="text-sm text-emerald-400">{msg}</p>}
+          {msg && <p className="text-sm text-emerald-700">{msg}</p>}
         </form>
       </div>
     </BackendShell>

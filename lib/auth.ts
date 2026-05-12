@@ -1,7 +1,11 @@
+/*
+ * CF09:AuthSessionRoles — Bearer 對應後台 ``/api/auth/login``／``auth_me`` 之 ``ADMIN``／``CLERK``／``COACH``（COACH 僅許可見 ``CoachScopeGuard`` + 教練行事曆 API）。
+ */
+
 export type AuthSession = {
   token: string;
   username: string;
-  role: "ADMIN" | "CLERK";
+  role: "ADMIN" | "CLERK" | "COACH";
 };
 
 const AUTH_STORAGE_KEY = "zomate_auth_session";

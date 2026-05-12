@@ -56,10 +56,10 @@ export default function AdminFinancePage() {
     <BackendShell title="財務">
       <div className="mx-auto max-w-6xl space-y-5">
         <div className="flex flex-wrap gap-2">
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-white/15 bg-[#1a1a1a] px-3 py-2 text-white" />
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-lg border border-white/15 bg-[#1a1a1a] px-3 py-2 text-white" />
-          <button onClick={() => void load()} className="rounded-lg bg-[#6366f1] px-4 py-2 text-sm font-semibold text-white">更新</button>
-          <button onClick={exportCsv} className="rounded-lg border border-white/15 px-4 py-2 text-sm text-white">Export CSV</button>
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-ink" />
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-ink" />
+          <button onClick={() => void load()} className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-primary">更新</button>
+          <button onClick={exportCsv} className="rounded-lg border border-ink/10 px-4 py-2 text-sm text-ink">Export CSV</button>
         </div>
         <div className="grid gap-3 md:grid-cols-4">
           {[
@@ -68,9 +68,9 @@ export default function AdminFinancePage() {
             ["淨收入", data?.net ?? 0],
             ["交易數", data?.txn_count ?? 0]
           ].map(([label, value]) => (
-            <div key={label} className="rounded-xl border border-white/15 bg-[#111827] p-4">
-              <p className="text-xs text-slate-400">{label}</p>
-              <p className="mt-2 text-3xl font-semibold text-white">{value}</p>
+            <div key={label} className="rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-4">
+              <p className="text-xs text-ink/55">{label}</p>
+              <p className="mt-2 text-3xl font-semibold text-ink">{value}</p>
             </div>
           ))}
         </div>
@@ -79,31 +79,31 @@ export default function AdminFinancePage() {
           <Breakdown title="Branch" rows={data?.by_branch ?? []} />
           <Breakdown title="Coach" rows={data?.by_coach ?? []} />
         </div>
-        <section className="h-72 rounded-xl border border-white/15 bg-[#111827] p-4">
-          <h3 className="mb-3 font-semibold text-white">Daily income</h3>
+        <section className="h-72 rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-4">
+          <h3 className="mb-3 font-semibold text-ink">Daily income</h3>
           <ResponsiveContainer width="100%" height="85%">
             <BarChart data={data?.daily_income ?? []}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.12)" />
-              <XAxis dataKey="date" stroke="#cbd5e1" fontSize={12} />
-              <YAxis stroke="#cbd5e1" fontSize={12} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(45,36,34,0.08)" />
+              <XAxis dataKey="date" stroke="#6b5f5c" fontSize={12} />
+              <YAxis stroke="#6b5f5c" fontSize={12} />
               <Tooltip />
-              <Bar dataKey="amount" fill="#6366f1" />
+              <Bar dataKey="amount" fill="#E8A598" />
             </BarChart>
           </ResponsiveContainer>
         </section>
-        <section className="rounded-xl border border-white/15 bg-[#111827] p-5">
-          <h3 className="font-semibold text-white">Manual expense</h3>
+        <section className="rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-5">
+          <h3 className="font-semibold text-ink">Manual expense</h3>
           <form onSubmit={addExpense} className="mt-3 grid gap-3 md:grid-cols-5">
-            <input name="date" type="date" defaultValue={today()} className="rounded-lg border border-white/15 bg-[#1a1a1a] px-3 py-2 text-white" />
-            <select name="category" className="rounded-lg border border-white/15 bg-[#1a1a1a] px-3 py-2 text-white">
+            <input name="date" type="date" defaultValue={today()} className="rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-ink" />
+            <select name="category" className="rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-ink">
               <option value="rent">rent</option>
               <option value="salary">salary</option>
               <option value="supplies">supplies</option>
               <option value="other">other</option>
             </select>
-            <input name="amount" required inputMode="decimal" placeholder="金額" className="rounded-lg border border-white/15 bg-[#1a1a1a] px-3 py-2 text-white" />
-            <input name="note" placeholder="備註" className="rounded-lg border border-white/15 bg-[#1a1a1a] px-3 py-2 text-white" />
-            <button className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white">新增</button>
+            <input name="amount" required inputMode="decimal" placeholder="金額" className="rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-ink" />
+            <input name="note" placeholder="備註" className="rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-ink" />
+            <button className="rounded-lg border border-emerald-200/80 bg-emerald-50 px-4 py-2 text-sm font-semibold text-ink hover:bg-emerald-100">新增</button>
           </form>
         </section>
       </div>
@@ -113,9 +113,9 @@ export default function AdminFinancePage() {
 
 function Breakdown({ title, rows }: { title: string; rows: Array<{ key: string; amount: number }> }) {
   return (
-    <section className="rounded-xl border border-white/15 bg-[#111827] p-4">
-      <h3 className="font-semibold text-white">{title}</h3>
-      <div className="mt-3 space-y-2 text-sm text-slate-200">
+    <section className="rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-4">
+      <h3 className="font-semibold text-ink">{title}</h3>
+      <div className="mt-3 space-y-2 text-sm text-ink/80">
         {rows.map((row) => <div key={row.key} className="flex justify-between"><span>{row.key}</span><span>{row.amount}</span></div>)}
       </div>
     </section>

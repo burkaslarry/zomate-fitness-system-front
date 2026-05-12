@@ -2,12 +2,19 @@
 
 /*
  * Coach calendar — monthly grid of courses + realtime check-ins via FastAPI WebSocket `/ws/checkins`.
+ *
+ * CF09: ``role===COACH`` → 直行「教練入口」版面、 coach 選單用 ``api.publicCoaches``（毋須 ``/api/admin/coaches``）；
+ *       ``CLERK``／``ADMIN`` 保持後台側欄 + ``api.coaches()`` 下拉揀任意教練。
+ *
+ * Mobile coach：底部 Gmail 式雙頁 slider（日程 Calendar | 簽到實時）、簽到 toast、後端 WS 附上之 ``course_id`` 用於已扣堂標色。
  */
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { TouchEvent as ReactTouchEvent } from "react";
 import BackendShell from "../../../components/backend-shell";
 import { api, getCheckinsWebSocketUrl } from "../../../lib/api";
+import { getAuthSession } from "../../../lib/auth";
 
 type CoachOpt = { id: number; full_name: string; phone: string; branch_id: number | null };
 type Enr = { student_id: number; student_name: string; student_phone: string; checkin_pin: string };
@@ -30,6 +37,9 @@ type WsCheckinEvent = {
   lesson_balance?: number;
   channel?: string;
   created_at?: string;
+  course_id?: number | null;
+  session_calendar_date?: string | null;
+  course_title?: string | null;
 };
 
 function pad2(n: number): string {
@@ -70,7 +80,23 @@ function buildCalendarCells(viewYear: number, viewMonth: number): { date: Date; 
 
 const WEEKDAYS = ["一", "二", "三", "四", "五", "六", "日"];
 
+/** ``course_id:student_id`` — 已由 WS 確認扣堂簽到，用於細項列變色。 */
+function redeemedPairKey(courseId: number, studentId: number): string {
+  return `${courseId}:${studentId}`;
+}
+
 export default function CoachCalendarPage() {
+  const [coachPortal, setCoachPortal] = useState(false);
+  /** COACH mobile：底欄 Gmail 式兩 pane（日程 | 簽到實時） */
+  const [mobileCoachTab, setMobileCoachTab] = useState<"calendar" | "live">("calendar");
+  const touchStartX = useRef<number | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [courseIdsRedeemed, setCourseIdsRedeemed] = useState<Set<number>>(() => new Set());
+  const [redeemedPairs, setRedeemedPairs] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    setCoachPortal(getAuthSession()?.role === "COACH");
+  }, []);
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
@@ -83,19 +109,47 @@ export default function CoachCalendarPage() {
   const [feed, setFeed] = useState<WsCheckinEvent[]>([]);
   const [wsState, setWsState] = useState<"connecting" | "open" | "closed">("connecting");
   const [filterMyStudents, setFilterMyStudents] = useState(true);
+  const [portalCoachNote, setPortalCoachNote] = useState("");
 
   useEffect(() => {
-    api
-      .coaches()
+    const loader = coachPortal ? api.publicCoaches : api.coaches;
+    void loader()
       .then((list) => {
         const arr = list as CoachOpt[];
         setCoaches(arr);
-        if (arr.length) {
+        if (!coachPortal && arr.length) {
           setCoachId((prev) => (prev === "" ? arr[0].id : prev));
         }
       })
       .catch((e) => setStatus(String(e)));
-  }, []);
+  }, [coachPortal]);
+
+  useEffect(() => {
+    if (!coachPortal || coaches.length === 0) {
+      setPortalCoachNote("");
+      return;
+    }
+    const uname = (getAuthSession()?.username ?? "").trim().toLowerCase();
+    const byName =
+      coaches.find((c) => {
+        const fn = c.full_name.trim().toLowerCase();
+        if (!uname) return false;
+        if (fn === uname) return true;
+        if (fn.replace(/\s+/g, "") === uname.replace(/\s+/g, "")) return true;
+        return fn.split(/\s+/).some((p) => p === uname || uname.includes(p));
+      }) ?? null;
+    if (byName) {
+      setCoachId(byName.id);
+      setPortalCoachNote("");
+      return;
+    }
+    if (coaches.length === 1) {
+      setCoachId(coaches[0].id);
+      setPortalCoachNote("");
+      return;
+    }
+    setPortalCoachNote("未能自動對應教練，請聯絡 admin 將登入帳號與「教練」名稱對齊。");
+  }, [coachPortal, coaches]);
 
   const { from: rangeFrom, to: rangeTo } = useMemo(
     () => monthRangeIso(viewYear, viewMonth),
@@ -120,6 +174,18 @@ export default function CoachCalendarPage() {
   useEffect(() => {
     void loadMonth();
   }, [loadMonth]);
+
+  /** 換月／換 coach 視圖後清空「已簽到」標記，避免套用舊班別。 */
+  useEffect(() => {
+    setCourseIdsRedeemed(new Set());
+    setRedeemedPairs(new Set());
+  }, [coachId, viewYear, viewMonth]);
+
+  useEffect(() => {
+    if (!toastMsg) return;
+    const id = window.setTimeout(() => setToastMsg(null), 3800);
+    return () => window.clearTimeout(id);
+  }, [toastMsg]);
 
   const byDay = useMemo(() => {
     const m = new Map<string, CourseRow[]>();
@@ -168,6 +234,15 @@ export default function CoachCalendarPage() {
           !filterOn || ids.size === 0 || (sid != null && ids.has(sid));
         if (!allow) return;
         setFeed((prev) => [parsed, ...prev].slice(0, 40));
+        const name = parsed.student_name?.trim() || "學員";
+        const ttl = parsed.course_title?.trim();
+        const line = ttl ? `${name} 已於「${ttl}」簽到扣堂` : `${name} 已簽到扣堂`;
+        setToastMsg(line);
+        const cid = parsed.course_id;
+        if (typeof cid === "number" && sid != null) {
+          setCourseIdsRedeemed((prev) => new Set(prev).add(cid));
+          setRedeemedPairs((prev) => new Set(prev).add(redeemedPairKey(cid, sid)));
+        }
       } catch {
         /* ignore */
       }
@@ -194,39 +269,161 @@ export default function CoachCalendarPage() {
   const title = `${viewYear} 年 ${viewMonth + 1} 月`;
   const selectedCourses = selectedKey ? byDay.get(selectedKey) ?? [] : [];
 
+  const selectedCoachLabel = coaches.find((c) => c.id === coachId)?.full_name ?? "—";
+
+  const courseIsRedeemed = useCallback(
+    (c: CourseRow) =>
+      courseIdsRedeemed.has(c.id) ||
+      c.enrollments.some((e) => redeemedPairs.has(redeemedPairKey(c.id, e.student_id))),
+    [courseIdsRedeemed, redeemedPairs]
+  );
+
+  /** 僅對「載入嘅本月課」加上 WS course_id — 避免標記到其他教練班。 */
+  const courseLooksRedeemedHere = useCallback(
+    (c: CourseRow) => {
+      const inLoaded = courses.some((x) => x.id === c.id);
+      return inLoaded && courseIsRedeemed(c);
+    },
+    [courses, courseIsRedeemed]
+  );
+
+  const liveAside = (
+    <aside className={`space-y-3 ${coachPortal ? "" : "lg:sticky lg:top-24 lg:self-start"}`}>
+      <div className="rounded-xl border border-ink/10 bg-surface p-4">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-ink">簽到直播</h2>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase ${
+              wsState === "open"
+                ? "bg-emerald-500/20 text-emerald-800"
+                : wsState === "connecting"
+                  ? "bg-amber-500/15 text-amber-900"
+                  : "bg-rose-500/15 text-rose-800"
+            }`}
+          >
+            {wsState === "open" ? "Live" : wsState === "connecting" ? "連線中" : "已斷線"}
+          </span>
+        </div>
+        <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs text-ink/55">
+          <input
+            type="checkbox"
+            className="rounded border-ink/15 bg-canvas"
+            checked={filterMyStudents}
+            onChange={(e) => setFilterMyStudents(e.target.checked)}
+          />
+          只顯示「本月堂上」學員簽到
+        </label>
+      </div>
+      <div
+        className={`space-y-2 overflow-y-auto rounded-xl border border-ink/10 bg-canvas p-3 shadow-sm ring-1 ring-ink/[0.04] ${coachPortal ? "min-h-[52vh] max-h-[min(78vh,620px)]" : "max-h-[min(520px,70vh)] sm:max-h-[min(560px,72vh)]"}`}
+      >
+        {feed.length === 0 ? (
+          <p className="py-8 text-center text-xs text-ink/50">等候學生於學生簽到頁扣堂…</p>
+        ) : (
+          feed.map((ev, i) => (
+            <div
+              key={`${ev.checkin_id ?? i}-${ev.created_at ?? ""}`}
+              className="rounded-lg border border-ink/[0.08] bg-surface p-3 text-sm shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span className="font-medium text-ink">{ev.student_name ?? "—"}</span>
+                <span className="shrink-0 text-xs font-medium text-emerald-700">餘 {ev.lesson_balance ?? "—"} 堂</span>
+              </div>
+              <p className="mt-1 text-[11px] text-ink/50">
+                {ev.created_at ? new Date(ev.created_at).toLocaleString() : ""} · {ev.channel ?? "—"}
+              </p>
+              {ev.course_title ? (
+                <p className="mt-1 text-[11px] font-medium text-emerald-800/90">課堂：{ev.course_title}</p>
+              ) : null}
+            </div>
+          ))
+        )}
+      </div>
+    </aside>
+  );
+
+  const coachTouchStart = (e: ReactTouchEvent) => {
+    touchStartX.current = e.changedTouches[0]?.clientX ?? null;
+  };
+  const coachTouchEnd = (e: ReactTouchEvent) => {
+    if (!coachPortal) return;
+    const start = touchStartX.current;
+    touchStartX.current = null;
+    if (start == null) return;
+    const end = e.changedTouches[0]?.clientX;
+    if (end == null) return;
+    const dx = end - start;
+    if (dx < -56) setMobileCoachTab("live");
+    else if (dx > 56) setMobileCoachTab("calendar");
+  };
+
   return (
-    <BackendShell title="教練日程 · 簽到直播">
-      <div className="mx-auto max-w-6xl space-y-6 px-1 pb-8 md:px-0">
+    <BackendShell layout={coachPortal ? "coach" : "admin"} title="教練日程 · 簽到直播">
+      <>
+        {toastMsg ? (
+          <div
+            className="pointer-events-none fixed left-3 right-3 top-[4.75rem] z-[120] mx-auto max-w-lg md:left-auto md:right-8 md:mx-0 md:max-w-md"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="rounded-xl border border-emerald-200/90 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-950 shadow-lg ring-1 ring-emerald-500/25">
+              {toastMsg}
+            </div>
+          </div>
+        ) : null}
+      <div
+        className={`touch-pan-y space-y-4 ${coachPortal ? "pb-[5.25rem]" : "pb-8"} ${coachPortal ? "mx-auto max-w-lg px-0" : "mx-auto max-w-6xl space-y-6 px-1 md:px-0"}`}
+        onTouchStart={coachPortal ? coachTouchStart : undefined}
+        onTouchEnd={coachPortal ? coachTouchEnd : undefined}
+      >
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-white">教練日程 · 簽到直播</h1>
-            <p className="mt-1 max-w-xl text-sm text-slate-400">
-              月曆顯示堂數；右側 WebSocket 即時顯示學生簽到（與{" "}
-              <code className="rounded bg-[#262626] px-1 font-mono text-xs">/ws/checkins</code> 相同頻道）。可篩選「本月堂上學員」。
-            </p>
-            <Link href="/coach" className="mt-2 inline-block text-sm text-[#818cf8] hover:underline">
-              返回單日課表（改時間）
-            </Link>
+            {!coachPortal ? (
+              <h1 className="text-xl font-bold tracking-tight text-ink">教練日程 · 簽到直播</h1>
+            ) : null}
+            {!coachPortal ? (
+              <>
+                <p className="mt-1 max-w-xl text-sm text-ink/55">
+                  月曆顯示堂數；右側 WebSocket 即時顯示學生簽到（與{" "}
+                  <code className="rounded bg-canvas px-1 font-mono text-xs ring-1 ring-ink/10">/ws/checkins</code>{" "}
+                  相同頻道）。可篩選「本月堂上學員」。
+                </p>
+                <Link href="/coach" className="mt-2 inline-block text-sm text-primary hover:text-ink hover:underline">
+                  返回單日課表（改時間）
+                </Link>
+              </>
+            ) : (
+              <p className="text-xs text-ink/55">
+                底部滑動選單切換<strong className="text-ink/80"> Calendar／簽到實時</strong>
+                ，亦可左右扫屏。簽到会 toast · 課堂格顯示已扣堂青色。
+              </p>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="flex flex-wrap items-center gap-2 text-sm text-slate-200">
-              <span className="shrink-0">教練</span>
-              <select
-                className="!w-auto min-w-[10rem] max-w-[min(100%,16rem)] rounded-lg border border-white/15 bg-neutral-900 px-2 py-1.5 text-sm text-zinc-100 shadow-sm outline-none focus:ring-2 focus:ring-indigo-500/40 [&>option]:bg-neutral-900 [&>option]:text-zinc-100"
-                value={coachId === "" ? "" : String(coachId)}
-                onChange={(ev) => setCoachId(ev.target.value ? Number(ev.target.value) : "")}
-              >
-                <option value="">—</option>
-                {coaches.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.full_name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {coachPortal ? (
+              <p className="text-sm font-medium text-ink">
+                教練：<span className="text-ink/75">{selectedCoachLabel}</span>
+              </p>
+            ) : (
+              <label className="flex flex-wrap items-center gap-2 text-sm text-ink/80">
+                <span className="shrink-0">教練</span>
+                <select
+                  className="!w-auto min-w-[10rem] max-w-[min(100%,16rem)] rounded-lg border border-ink/15 bg-canvas px-2 py-1.5 text-sm text-ink shadow-sm outline-none focus:ring-2 focus:ring-primary/35 [&>option]:bg-surface [&>option]:text-ink"
+                  value={coachId === "" ? "" : String(coachId)}
+                  onChange={(ev) => setCoachId(ev.target.value ? Number(ev.target.value) : "")}
+                >
+                  <option value="">—</option>
+                  {coaches.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.full_name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <button
               type="button"
-              className="rounded-lg border border-white/15 bg-neutral-700 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-neutral-600 disabled:opacity-50"
+              className="rounded-lg border border-ink/15 bg-primary/90 px-3 py-1.5 text-sm font-medium text-ink shadow-sm hover:bg-primary disabled:opacity-50"
               onClick={() => void loadMonth()}
               disabled={loading}
             >
@@ -235,32 +432,38 @@ export default function CoachCalendarPage() {
           </div>
         </div>
 
-        {status && <p className="text-sm text-amber-300">{status}</p>}
+        {portalCoachNote && coachPortal ? (
+          <p className="rounded-lg border border-amber-200/80 bg-amber-50 px-3 py-2 text-xs text-amber-950">{portalCoachNote}</p>
+        ) : null}
 
-        <div className="grid gap-6 lg:grid-cols-[1fr_minmax(280px,340px)]">
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.1] bg-[#171717] px-4 py-3">
+        {status && <p className="text-sm text-amber-900">{status}</p>}
+
+        <div className={coachPortal ? "" : "grid gap-6 lg:grid-cols-[1fr_minmax(280px,340px)]"}>
+          <div
+            className={`space-y-3 ${coachPortal && mobileCoachTab !== "calendar" ? "hidden" : ""}`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-ink/10 bg-surface px-4 py-3">
               <button
                 type="button"
-                className="min-w-[2.25rem] rounded-lg border border-white/15 bg-neutral-800 px-2 py-1.5 text-lg font-medium leading-none text-zinc-100 shadow-sm hover:bg-neutral-700"
+                className="min-w-[2.25rem] rounded-lg border border-ink/15 bg-canvas px-2 py-1.5 text-lg font-medium leading-none text-ink shadow-sm hover:bg-surface"
                 onClick={() => shiftMonth(-1)}
                 aria-label="上個月"
               >
                 ‹
               </button>
               <div className="flex flex-wrap items-center justify-center gap-2">
-                <span className="text-base font-semibold text-white">{title}</span>
+                <span className="text-base font-semibold text-ink">{title}</span>
                 <button
                   type="button"
                   onClick={goToday}
-                  className="rounded-md border border-indigo-400/50 bg-indigo-600/30 px-2.5 py-1 text-xs font-medium text-white shadow-sm hover:bg-indigo-600/45"
+                  className="rounded-md border border-primary/35 bg-primary/15 px-2.5 py-1 text-xs font-medium text-ink shadow-sm hover:bg-primary/25"
                 >
                   今天
                 </button>
               </div>
               <button
                 type="button"
-                className="min-w-[2.25rem] rounded-lg border border-white/15 bg-neutral-800 px-2 py-1.5 text-lg font-medium leading-none text-zinc-100 shadow-sm hover:bg-neutral-700"
+                className="min-w-[2.25rem] rounded-lg border border-ink/15 bg-canvas px-2 py-1.5 text-lg font-medium leading-none text-ink shadow-sm hover:bg-surface"
                 onClick={() => shiftMonth(1)}
                 aria-label="下個月"
               >
@@ -268,18 +471,19 @@ export default function CoachCalendarPage() {
               </button>
             </div>
 
-            <div className="overflow-hidden rounded-xl border border-white/[0.1] bg-[#141414]">
-              <div className="grid grid-cols-7 border-b border-white/[0.08] bg-[#1a1a1a] text-center text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <div className="overflow-hidden rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
+              <div className="grid grid-cols-7 border-b border-ink/[0.08] bg-canvas text-center text-[11px] font-semibold uppercase tracking-wide text-ink/50">
                 {WEEKDAYS.map((w) => (
                   <div key={w} className="py-2">
                     {w}
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-7 gap-px bg-[#2a2a2a]">
+              <div className="grid grid-cols-7 gap-px bg-ink/10">
                 {cells.map((cell, idx) => {
                   const key = `${cell.date.getFullYear()}-${pad2(cell.date.getMonth() + 1)}-${pad2(cell.date.getDate())}`;
                   const dayCourses = byDay.get(key) ?? [];
+                  const dayHasRedeemedLesson = dayCourses.some((c) => courseLooksRedeemedHere(c));
                   const isSel = selectedKey === key;
                   const isToday =
                     cell.date.toDateString() === new Date().toDateString();
@@ -288,18 +492,22 @@ export default function CoachCalendarPage() {
                       key={idx}
                       type="button"
                       onClick={() => setSelectedKey(key)}
-                      className={`min-h-[92px] bg-[#141414] p-1.5 text-left transition hover:bg-[#1f1f1f] md:min-h-[104px] ${
-                        !cell.inMonth ? "opacity-40" : ""
-                      } ${isSel ? "ring-1 ring-inset ring-[#6366f1]/70" : ""}`}
+                      className={`min-h-[88px] shadow-sm ring-1 ring-ink/[0.04] p-1.5 text-left transition hover:bg-canvas sm:min-h-[92px] md:min-h-[104px] ${
+                        dayHasRedeemedLesson ?
+                          cell.inMonth ?
+                            "bg-emerald-50/95 ring-emerald-300/55"
+                          : "bg-emerald-50/50 opacity-[0.45]"
+                        : "bg-surface"
+                      } ${!cell.inMonth && !dayHasRedeemedLesson ? "opacity-40" : ""} ${isSel ? "ring-2 ring-inset ring-primary/60" : ""}`}
                     >
                       <div className="flex items-center justify-between gap-1">
                         <span
-                          className={`text-[13px] font-medium ${isToday ? "text-[#a5b4fc]" : cell.inMonth ? "text-white" : "text-slate-500"}`}
+                          className={`text-[13px] font-medium ${isToday ? "text-primary" : cell.inMonth ? "text-ink" : "text-ink/50"}`}
                         >
                           {cell.date.getDate()}
                         </span>
                         {dayCourses.length > 0 && (
-                          <span className="rounded-full bg-[#6366f1]/25 px-1.5 py-px text-[10px] text-indigo-200">
+                          <span className="rounded-full bg-primary/25 px-1.5 py-px text-[10px] text-ink">
                             {dayCourses.length}
                           </span>
                         )}
@@ -308,7 +516,11 @@ export default function CoachCalendarPage() {
                         {dayCourses.slice(0, 3).map((c) => (
                           <div
                             key={c.id}
-                            className="truncate rounded bg-white/[0.06] px-1 py-px text-[10px] leading-tight text-slate-300"
+                            className={`truncate rounded px-1 py-px text-[10px] leading-tight ${
+                              courseLooksRedeemedHere(c)
+                                ? "border border-emerald-400/65 bg-emerald-100/90 font-semibold text-emerald-950"
+                                : "border border-ink/[0.06] bg-canvas text-ink/70"
+                            }`}
                             title={c.title}
                           >
                             {new Date(c.scheduled_start).toLocaleTimeString(undefined, {
@@ -319,7 +531,7 @@ export default function CoachCalendarPage() {
                           </div>
                         ))}
                         {dayCourses.length > 3 && (
-                          <p className="text-[10px] text-slate-500">+{dayCourses.length - 3}…</p>
+                          <p className="text-[10px] text-ink/50">+{dayCourses.length - 3}…</p>
                         )}
                       </div>
                     </button>
@@ -329,96 +541,118 @@ export default function CoachCalendarPage() {
             </div>
 
             {selectedKey && (
-              <div className="rounded-xl border border-white/[0.1] bg-[#171717] p-4">
-                <h3 className="text-sm font-semibold text-white">
+              <div className="rounded-xl border border-ink/10 bg-surface p-4">
+                <h3 className="text-sm font-semibold text-ink">
                   {selectedKey} 的課堂
                 </h3>
                 <ul className="mt-3 space-y-3">
                   {selectedCourses.length === 0 ? (
-                    <li className="text-sm text-slate-500">當日無堂。</li>
+                    <li className="text-sm text-ink/50">當日無堂。</li>
                   ) : (
-                    selectedCourses.map((c) => (
-                      <li key={c.id} className="rounded-lg border border-white/[0.06] bg-[#1c1c1c] p-3 text-sm">
-                        <p className="font-medium text-white">{c.title}</p>
-                        <p className="text-xs text-slate-400">
-                          {new Date(c.scheduled_start).toLocaleString()} —{" "}
-                          {new Date(c.scheduled_end).toLocaleString()}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {c.branch_name}
-                        </p>
-                        <ul className="mt-2 space-y-0.5 text-xs text-slate-300">
-                          {c.enrollments.map((e) => (
-                            <li key={e.student_id}>
-                              {e.student_name} · PIN{" "}
-                              <span className="font-mono text-indigo-200">{e.checkin_pin}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </li>
-                    ))
+                    selectedCourses.map((c) => {
+                      const cr = courseLooksRedeemedHere(c);
+                      return (
+                        <li
+                          key={c.id}
+                          className={`rounded-lg border p-3 text-sm shadow-sm ${
+                            cr
+                              ? "border-emerald-400/70 bg-emerald-50/95 ring-1 ring-emerald-500/25"
+                              : "border border-ink/[0.08] bg-canvas"
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className={`font-medium ${cr ? "text-emerald-950" : "text-ink"}`}>{c.title}</p>
+                            {cr ? (
+                              <span className="rounded-full bg-emerald-600/95 px-2 py-px text-[10px] font-semibold uppercase text-white">
+                                已簽到
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="text-xs text-ink/55">
+                            {new Date(c.scheduled_start).toLocaleString()} —{" "}
+                            {new Date(c.scheduled_end).toLocaleString()}
+                          </p>
+                          <p className="mt-1 text-xs text-ink/50">{c.branch_name}</p>
+                          <ul className="mt-2 space-y-0.5 text-xs text-ink/70">
+                            {c.enrollments.map((e) => {
+                              const rowRedeemed = redeemedPairs.has(redeemedPairKey(c.id, e.student_id));
+                              return (
+                                <li
+                                  key={e.student_id}
+                                  className={`rounded px-1 py-0.5 ${
+                                    rowRedeemed ? "bg-emerald-100/90 font-medium text-emerald-950" : ""
+                                  }`}
+                                >
+                                  {e.student_name} · PIN{" "}
+                                  <span className="font-mono text-primary">{e.checkin_pin}</span>
+                                  {rowRedeemed ? (
+                                    <span className="ml-1 text-[10px] text-emerald-800">✓已扣</span>
+                                  ) : null}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </li>
+                      );
+                    })
                   )}
                 </ul>
               </div>
             )}
           </div>
 
-          <aside className="space-y-3 lg:sticky lg:top-24 lg:self-start">
-            <div className="rounded-xl border border-white/[0.1] bg-[#171717] p-4">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold text-white">簽到直播</h2>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase ${
-                    wsState === "open"
-                      ? "bg-emerald-500/20 text-emerald-300"
-                      : wsState === "connecting"
-                        ? "bg-amber-500/15 text-amber-200"
-                        : "bg-rose-500/15 text-rose-300"
-                  }`}
-                >
-                  {wsState === "open" ? "Live" : wsState === "connecting" ? "連線中" : "已斷線"}
-                </span>
-              </div>
-              <label className="mt-3 flex cursor-pointer items-center gap-2 text-xs text-slate-400">
-                <input
-                  type="checkbox"
-                  className="rounded border-white/20 bg-[#2a2a2a]"
-                  checked={filterMyStudents}
-                  onChange={(e) => setFilterMyStudents(e.target.checked)}
-                />
-                只顯示「本月堂上」學員簽到
-              </label>
-            </div>
-            <div className="max-h-[min(520px,70vh)] space-y-2 overflow-y-auto rounded-xl border border-white/[0.1] bg-[#0f0f0f] p-3">
-              {feed.length === 0 ? (
-                <p className="py-8 text-center text-xs text-slate-500">
-                  等候學生於學生簽到頁扣堂…
-                </p>
-              ) : (
-                feed.map((ev, i) => (
-                  <div
-                    key={`${ev.checkin_id ?? i}-${ev.created_at ?? ""}`}
-                    className="rounded-lg border border-white/[0.06] bg-[#1a1a1a] p-3 text-sm"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="font-medium text-white">{ev.student_name ?? "—"}</span>
-                      <span className="shrink-0 text-xs text-emerald-400">
-                        餘 {ev.lesson_balance ?? "—"} 堂
-                      </span>
-                    </div>
-                    <p className="mt-1 text-[11px] text-slate-500">
-                      {ev.created_at
-                        ? new Date(ev.created_at).toLocaleString()
-                        : ""}{" "}
-                      · {ev.channel ?? "—"}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-          </aside>
+          <div className={`${coachPortal && mobileCoachTab !== "live" ? "hidden" : ""}`}>
+            {liveAside}
+          </div>
         </div>
+
+        {coachPortal ?
+          <nav
+            className="fixed bottom-0 left-0 right-0 z-[100] border-t border-ink/15 bg-surface/98 pb-[env(safe-area-inset-bottom,0)] shadow-[0_-6px_24px_rgba(45,36,34,0.08)] backdrop-blur-md md:mx-auto md:max-w-lg"
+            aria-label="教練日程主選單（Gmail 式雙欄）"
+          >
+            <div className="mx-auto grid max-w-lg grid-cols-2 gap-1.5 p-2">
+              <button
+                type="button"
+                className={`flex flex-col items-center justify-center gap-1 rounded-xl py-2.5 text-[13px] font-semibold transition-colors ${
+                  mobileCoachTab === "calendar"
+                    ? "!border-transparent !bg-zinc-800 !text-white shadow-md"
+                    : "!border-transparent !bg-transparent !text-zinc-700 hover:!bg-black/[0.04] hover:!text-zinc-900"
+                }`}
+                aria-current={mobileCoachTab === "calendar" ? "page" : undefined}
+                onClick={() => setMobileCoachTab("calendar")}
+              >
+                <span
+                  className={`text-[17px] leading-none ${mobileCoachTab === "calendar" ? "!text-white" : "!text-zinc-700"}`}
+                  aria-hidden
+                >
+                  ▣
+                </span>
+                Calendar
+              </button>
+              <button
+                type="button"
+                className={`flex flex-col items-center justify-center gap-1 rounded-xl py-2.5 text-[13px] font-semibold transition-colors ${
+                  mobileCoachTab === "live"
+                    ? "!border-transparent !bg-zinc-800 !text-white shadow-md"
+                    : "!border-transparent !bg-transparent !text-zinc-700 hover:!bg-black/[0.04] hover:!text-zinc-900"
+                }`}
+                aria-current={mobileCoachTab === "live" ? "page" : undefined}
+                onClick={() => setMobileCoachTab("live")}
+              >
+                <span
+                  className={`text-[17px] leading-none ${mobileCoachTab === "live" ? "!text-white" : "!text-zinc-700"}`}
+                  aria-hidden
+                >
+                  ●
+                </span>
+                簽到實時
+              </button>
+            </div>
+          </nav>
+        : null}
       </div>
+      </>
     </BackendShell>
   );
 }

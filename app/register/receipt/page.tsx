@@ -47,18 +47,18 @@ export default function RegisterReceiptPage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-lg space-y-5 bg-zinc-950 p-6 text-white">
+    <main className="mx-auto min-h-screen max-w-lg space-y-5 bg-canvas p-6 text-ink">
       <h1 className="text-xl font-semibold">上載收據記錄</h1>
-      <p className="text-sm text-white/75">{ctx?.full_name} · image/pdf max 5MB</p>
-      <form onSubmit={onSubmit} className="space-y-4 rounded-xl border border-white/15 bg-[#141414] p-5">
-        <input name="receipt" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="block w-full text-sm text-white/80" />
-        <input name="amount" inputMode="decimal" placeholder="金額（可選）" className="w-full rounded-lg border border-white/15 bg-[#1a1a1a] px-3 py-2 text-white" />
+      <p className="text-sm text-ink/70">{ctx?.full_name} · image/pdf max 5MB</p>
+      <form onSubmit={onSubmit} className="space-y-4 rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-5">
+        <input name="receipt" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" className="block w-full text-sm text-ink/75" />
+        <input name="amount" inputMode="decimal" placeholder="金額（可選）" className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-ink" />
         <PaymentMethodRadio />
-        <textarea name="note" rows={3} placeholder="備註（可選）" className="w-full rounded-lg border border-white/15 bg-[#1a1a1a] px-3 py-2 text-white" />
-        {status && <p className="text-sm text-amber-200">{status}</p>}
+        <textarea name="note" rows={3} placeholder="備註（可選）" className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-ink" />
+        {status && <p className="text-sm text-amber-900">{status}</p>}
         <div className="flex gap-2">
-          <button type="submit" className="rounded-md bg-[#6366f1] px-4 py-2 text-sm font-medium text-white">完成上載</button>
-          <button type="button" onClick={() => router.push("/register/success")} className="rounded-md border border-white/20 px-4 py-2 text-sm text-white">Skip — 之後再上載</button>
+          <button type="submit" className="rounded-md border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-medium text-ink shadow-sm hover:bg-primary">完成上載</button>
+          <button type="button" onClick={() => router.push("/register/success")} className="rounded-md border border-ink/15 px-4 py-2 text-sm text-ink">Skip — 之後再上載</button>
         </div>
       </form>
     </main>

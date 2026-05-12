@@ -35,7 +35,7 @@ const defaultParq: StudentRegistrationPayload["parq"] = {
 };
 
 const fieldClass =
-  "w-full rounded-lg border border-white/15 bg-[#1a1a1a] px-3 py-2 text-white shadow-sm placeholder:text-zinc-500 [color-scheme:dark] focus:border-[#6366f1] focus:outline-none focus:ring-1 focus:ring-[#6366f1]";
+  "w-full rounded-lg border border-ink/15 bg-canvas px-3 py-2 text-sm text-ink shadow-sm placeholder:text-ink/45 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40";
 
 const defaults: Partial<StudentRegistrationPayload> = {
   full_name: "",
@@ -138,28 +138,28 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-lg space-y-6 bg-zinc-950 p-6 text-white">
+    <main className="mx-auto min-h-screen max-w-lg space-y-6 bg-canvas p-6 text-ink">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold tracking-tight text-white">新人入會 · F01</h1>
-        <Link href="/student" className="text-sm text-white/80 underline underline-offset-4 hover:text-white">
+        <h1 className="text-xl font-semibold tracking-tight text-ink">新人入會 · F01</h1>
+        <Link href="/student" className="text-sm text-ink/70 underline underline-offset-4 hover:text-ink">
           返回
         </Link>
       </div>
 
-      <ol className="flex flex-wrap gap-2 text-xs text-white/70">
-        <li className={step >= 1 ? "font-medium text-emerald-400" : ""}>① 個人／緊急聯絡</li>
-        <li className={step >= 2 ? "font-medium text-emerald-400" : ""}>② PAR-Q</li>
-        <li className={step >= 3 ? "font-medium text-emerald-400" : ""}>③ 冷靜期／簽署</li>
+      <ol className="flex flex-wrap gap-2 text-xs text-ink/65">
+        <li className={step >= 1 ? "font-medium text-primary" : ""}>① 個人／緊急聯絡</li>
+        <li className={step >= 2 ? "font-medium text-primary" : ""}>② PAR-Q</li>
+        <li className={step >= 3 ? "font-medium text-primary" : ""}>③ 冷靜期／簽署</li>
       </ol>
 
       <form
         ref={formRef}
-        className="space-y-5 rounded-xl border border-white/[0.12] bg-[#141414] p-5 shadow-sm"
+        className="space-y-5 rounded-xl border border-ink/10 bg-surface p-5 shadow-sm ring-1 ring-ink/[0.04]"
         onSubmit={form.handleSubmit(onFinalSubmit)}
       >
         {step === 1 && (
           <div className="space-y-3">
-            <p className="text-sm leading-relaxed text-white [text-wrap:pretty]">
+            <p className="text-sm leading-relaxed text-ink [text-wrap:pretty]">
               新人入會：掃描後台「登記 QR」填此表。簽到：掃「簽到 QR」→ 搜尋自己姓名 → 輸入 PIN 扣堂。
             </p>
             <input className={fieldClass} placeholder="姓名 *" {...form.register("full_name")} />
@@ -182,7 +182,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
 
         {step === 2 && (
           <div className="space-y-4">
-            <p className="text-xs leading-relaxed text-white/90">
+            <p className="text-xs leading-relaxed text-ink/80">
               PAR-Q：請如實選「是／否」。任一題為「是」須上載醫生 clearance。
             </p>
             {PARQ_LABELS.map(({ key, label }) => (
@@ -191,10 +191,10 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                 name={`parq.${key}`}
                 control={form.control}
                 render={({ field }) => (
-                  <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-white/[0.08] bg-[#121212] px-3 py-2 text-sm text-white">
+                  <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-ink/[0.08] bg-canvas px-3 py-2 text-sm text-ink">
                     <input
                       type="checkbox"
-                      className="mt-1 h-4 w-4 shrink-0 accent-[#6366f1]"
+                      className="mt-1 h-4 w-4 shrink-0 accent-primary"
                       checked={field.value}
                       onChange={(e) => field.onChange(e.target.checked)}
                     />
@@ -205,11 +205,11 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
             ))}
             {clearanceNeeded ? (
               <div className="space-y-2">
-                <p className="text-sm font-medium text-amber-100">請上載醫療／醫生 clearance</p>
+                <p className="text-sm font-medium text-amber-900">請上載醫療／醫生 clearance</p>
                 <input
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png"
-                  className="text-xs text-white/80 file:mr-3 file:rounded-md file:border-0 file:bg-[#6366f1] file:px-3 file:py-1.5 file:text-white"
+                  className="text-xs text-ink/80 file:mr-3 file:rounded-md file:border file:border-ink/15 file:bg-primary/90 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
                     form.setValue("medical_clearance_file_name", f?.name ?? "");
@@ -220,26 +220,26 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                 )}
               </div>
             ) : (
-              <p className="text-xs text-white/75">無需額外 clearance。</p>
+              <p className="text-xs text-ink/65">無需額外 clearance。</p>
             )}
           </div>
         )}
 
         {step === 3 && (
           <div className="space-y-4">
-            <div data-cooling-copy className="rounded-lg border border-white/[0.1] bg-[#121212] p-4 text-xs leading-relaxed text-white/85">
-              <p className="font-semibold text-white">7 天冷靜期</p>
+            <div data-cooling-copy className="rounded-lg border border-ink/10 bg-canvas p-4 text-xs leading-relaxed text-ink/85">
+              <p className="font-semibold text-ink">7 天冷靜期</p>
               <p className="mt-2">
                 會員可在簽署後 7 個曆日內書面通知中心終止合約（扣除合理行政費用之條款以實際合約為準）
               </p>
             </div>
             <label
               data-cooling-ack
-              className="grid w-full touch-manipulation grid-cols-[1.5rem_1fr] items-start gap-3 rounded-lg border border-white/[0.08] bg-[#121212] p-3 text-sm text-white"
+              className="grid w-full touch-manipulation grid-cols-[1.5rem_1fr] items-start gap-3 rounded-lg border border-ink/[0.08] bg-canvas p-3 text-sm text-ink"
             >
               <input
                 type="checkbox"
-                className="mt-0.5 h-6 w-6 min-h-[1.5rem] min-w-[1.5rem] shrink-0 cursor-pointer accent-[#6366f1]"
+                className="mt-0.5 h-6 w-6 min-h-[1.5rem] min-w-[1.5rem] shrink-0 cursor-pointer accent-primary"
                 {...form.register("cooling_off_acknowledged")}
               />
               <span className="block min-w-0 text-left leading-6 [word-break:keep-all]">
@@ -249,19 +249,19 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
             {form.formState.errors.cooling_off_acknowledged && (
               <p className="text-xs text-rose-400">{String(form.formState.errors.cooling_off_acknowledged.message)}</p>
             )}
-            <div className="rounded-lg border border-white/[0.1] bg-[#121212] p-4 text-xs leading-relaxed text-white/85">
-              <p className="font-semibold text-white">免責聲明</p>
+            <div className="rounded-lg border border-ink/10 bg-canvas p-4 text-xs leading-relaxed text-ink/85">
+              <p className="font-semibold text-ink">免責聲明</p>
               <p className="mt-2">
                 參加本中心訓練前，請確認已理解運動風險；如有長期病患請先諮詢醫生
               </p>
             </div>
             <label
               data-disclaimer-ack
-              className="grid w-full touch-manipulation grid-cols-[1.5rem_1fr] items-start gap-3 rounded-lg border border-white/[0.08] bg-[#121212] p-3 text-sm text-white"
+              className="grid w-full touch-manipulation grid-cols-[1.5rem_1fr] items-start gap-3 rounded-lg border border-ink/[0.08] bg-canvas p-3 text-sm text-ink"
             >
               <input
                 type="checkbox"
-                className="mt-0.5 h-6 w-6 min-h-[1.5rem] min-w-[1.5rem] shrink-0 cursor-pointer accent-[#6366f1]"
+                className="mt-0.5 h-6 w-6 min-h-[1.5rem] min-w-[1.5rem] shrink-0 cursor-pointer accent-primary"
                 {...form.register("disclaimer_accepted")}
               />
               <span className="block min-w-0 text-left leading-6 [word-break:keep-all]">
@@ -284,11 +284,11 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
           </div>
         )}
 
-        <div className="flex flex-wrap gap-2 border-t border-white/[0.08] pt-4">
+        <div className="flex flex-wrap gap-2 border-t border-ink/[0.08] pt-4">
           {step > 1 && (
             <button
               type="button"
-              className="rounded-md border border-white/20 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-100"
+              className="rounded-md border border-ink/15 bg-surface px-4 py-2 text-sm font-medium text-ink hover:bg-canvas"
               onClick={() => setStep((s) => s - 1)}
             >
               上一步
@@ -297,7 +297,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
           {step < 3 ? (
             <button
               type="button"
-              className="rounded-md bg-[#6366f1] px-4 py-2 text-sm font-medium text-white hover:bg-[#535bf0]"
+              className="rounded-md border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-medium text-ink shadow-sm hover:bg-primary"
               onClick={() => void goNext()}
             >
               下一步
@@ -305,7 +305,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
           ) : (
             <button
               type="submit"
-              className="rounded-md bg-[#6366f1] px-4 py-2 text-sm font-medium text-white hover:bg-[#535bf0]"
+              className="rounded-md border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-medium text-ink shadow-sm hover:bg-primary"
             >
               提交登記
             </button>
@@ -314,20 +314,20 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
       </form>
 
       {assignedPin && (
-        <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm text-emerald-100">
+        <div className="space-y-3 rounded-xl border border-emerald-200/80 bg-emerald-50/90 p-4 text-sm text-ink shadow-sm ring-1 ring-ink/[0.04]">
           <p>
             簽到 PIN：<span className="font-mono text-lg">{assignedPin}</span>
           </p>
           <button
             type="button"
-            className="w-full rounded-md bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-500"
+            className="w-full rounded-md border border-ink/15 bg-primary/90 px-4 py-3 text-sm font-semibold text-ink shadow-sm hover:bg-primary"
             onClick={() => router.push("/register/photo")}
           >
             下一步：影會員相
           </button>
         </div>
       )}
-      {status && <p className="text-sm text-white/90">{status}</p>}
+      {status && <p className="text-sm text-ink/85">{status}</p>}
     </main>
   );
 }

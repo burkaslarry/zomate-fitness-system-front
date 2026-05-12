@@ -269,9 +269,9 @@ export default function StudentCheckinPage() {
   }
 
   return (
-    <main className="mx-auto max-w-lg space-y-6 p-6 pb-16 text-white">
+    <main className="mx-auto max-w-lg space-y-6 p-6 pb-16 text-ink">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-bold text-white">Zomate 智能 QR 簽到</h1>
+        <h1 className="text-xl font-bold text-ink">Zomate 智能 QR 簽到</h1>
         <Link
           href="/student"
           className="text-sm text-sky-400 underline underline-offset-2 hover:text-sky-300"
@@ -290,7 +290,7 @@ export default function StudentCheckinPage() {
           {!cameraOn ? (
             <button
               type="button"
-              className="inline-flex rounded-md border border-slate-300 bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-slate-800"
+              className="inline-flex rounded-md border border-slate-300 bg-slate-900 px-4 py-2.5 text-sm font-medium text-ink shadow-sm hover:bg-slate-800"
               onClick={() => {
                 setScanMsg("");
                 void startCamera();
@@ -311,7 +311,7 @@ export default function StudentCheckinPage() {
                 </button>
                 <button
                   type="button"
-                  className="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600"
+                  className="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-ink hover:bg-slate-600"
                   onClick={stopCamera}
                 >
                   關閉相機
@@ -339,11 +339,11 @@ export default function StudentCheckinPage() {
                 autoComplete="off"
               />
             </div>
-            {searching && <p className="text-xs text-slate-500">搜尋中…</p>}
+            {searching && <p className="text-xs text-ink/50">搜尋中…</p>}
             <ul className="max-h-56 space-y-1 overflow-y-auto rounded border border-slate-200 p-1">
               {results.length === 0 && searchQ.trim().length >= 1 && !searching && (
                 <li className="space-y-2 p-2">
-                  <p className="text-sm text-slate-500">沒有符合結果</p>
+                  <p className="text-sm text-ink/50">沒有符合結果</p>
                   <Link
                     href={`/student/onboard?quickName=${encodeURIComponent(searchQ.trim())}`}
                     className="inline-flex items-center rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-xs font-medium text-slate-900 transition hover:bg-slate-200"
@@ -357,7 +357,7 @@ export default function StudentCheckinPage() {
                   <button
                     type="button"
                     className={`w-full rounded px-3 py-2 text-left text-sm transition ${
-                      selected?.id === r.id ? "bg-slate-900 text-white" : "hover:bg-slate-100"
+                      selected?.id === r.id ? "bg-slate-900 text-ink" : "hover:bg-slate-100"
                     }`}
                     onClick={() => {
                       setSelected(r);
@@ -377,7 +377,7 @@ export default function StudentCheckinPage() {
           <section className="space-y-3 rounded-lg bg-white p-4 shadow [color-scheme:light] text-slate-900">
             <h2 className="font-semibold text-slate-900">步驟 3 · 輸入 PIN 扣堂</h2>
             {!selected ? (
-              <p className="text-sm text-slate-500">請先喺上面揀返自己。</p>
+              <p className="text-sm text-ink/50">請先喺上面揀返自己。</p>
             ) : (
               <p className="text-sm text-slate-800">
                 已揀：<span className="font-medium">{selected.full_name}</span>
@@ -420,7 +420,7 @@ export default function StudentCheckinPage() {
                 </button>
                 <button
                   type="submit"
-                  className="h-14 w-14 rounded-lg border border-slate-300 bg-slate-900 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50"
+                  className="h-14 w-14 rounded-lg border border-slate-300 bg-slate-900 text-sm font-semibold text-ink hover:bg-slate-700 disabled:opacity-50"
                   disabled={!selected || pin.trim().length < 5}
                 >
                   確認
@@ -470,7 +470,7 @@ export default function StudentCheckinPage() {
               </label>
               <button
                 type="submit"
-                className="w-full rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                className="w-full rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-ink hover:bg-slate-800"
               >
                 簽到
               </button>

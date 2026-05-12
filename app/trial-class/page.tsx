@@ -49,10 +49,10 @@ export default function TrialClassPage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-2xl space-y-5 bg-zinc-950 p-6 text-white">
+    <main className="mx-auto min-h-screen max-w-2xl space-y-5 bg-canvas p-6 text-ink">
       <h1 className="text-2xl font-semibold">試堂 / 加堂</h1>
-      <section className="rounded-xl border border-white/15 bg-[#141414] p-5">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="HKID / 姓名 / 電話 autocomplete" className="w-full rounded-lg border border-white/15 bg-[#1a1a1a] px-3 py-2" />
+      <section className="rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-5">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="HKID / 姓名 / 電話 autocomplete" className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2" />
         {rows.length > 0 && (
           <div className="mt-2 space-y-1">
             {rows.map((row) => (
@@ -63,18 +63,18 @@ export default function TrialClassPage() {
           </div>
         )}
       </section>
-      <form onSubmit={submit} className="space-y-4 rounded-xl border border-white/15 bg-[#141414] p-5">
-        <p className="text-sm text-white/70">已選擇：{selected ? `${selected.full_name} (${selected.hkid})` : "未選擇"}</p>
-        <select name="type" className="w-full rounded-lg border border-white/15 bg-[#1a1a1a] px-3 py-2">
+      <form onSubmit={submit} className="space-y-4 rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-5">
+        <p className="text-sm text-ink/65">已選擇：{selected ? `${selected.full_name} (${selected.hkid})` : "未選擇"}</p>
+        <select name="type" className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2">
           <option value="TRIAL">試堂</option>
           <option value="ADD_ON">加堂</option>
         </select>
         <SelectAsync name="coach_id" label="教練" load={api.publicCoaches} />
         <SelectAsync name="branch_id" label="分店" load={api.publicBranches} />
-        <input name="class_date" type="date" defaultValue={today()} className="w-full rounded-lg border border-white/15 bg-[#1a1a1a] px-3 py-2" />
-        <textarea name="note" rows={3} placeholder="備註" className="w-full rounded-lg border border-white/15 bg-[#1a1a1a] px-3 py-2" />
-        <button type="submit" className="w-full rounded-md bg-[#6366f1] px-4 py-3 text-sm font-semibold">提交</button>
-        {status && <p className="text-sm text-emerald-300">{status}</p>}
+        <input name="class_date" type="date" defaultValue={today()} className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2" />
+        <textarea name="note" rows={3} placeholder="備註" className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2" />
+        <button type="submit" className="w-full rounded-md border border-ink/15 bg-primary/90 px-4 py-3 text-sm font-semibold text-ink shadow-sm hover:bg-primary">提交</button>
+        {status && <p className="text-sm text-emerald-800">{status}</p>}
       </form>
     </main>
   );

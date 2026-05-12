@@ -41,7 +41,7 @@ export default function StudentRenewalPage() {
   const [selected, setSelected] = useState<SearchRow | null>(null);
 
   const fieldClass =
-    "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm [color-scheme:light] placeholder:text-slate-400";
+    "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm [color-scheme:light] placeholder:text-ink/55";
 
   useEffect(() => {
     const q = searchQ.trim().replace(/\s+/g, " ");
@@ -111,7 +111,7 @@ export default function StudentRenewalPage() {
     <main className="mx-auto max-w-2xl space-y-6 p-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-slate-500">Zomate Fitness</p>
+          <p className="text-sm font-medium text-ink/50">Zomate Fitness</p>
           <h1 className="text-2xl font-bold">Membership Renewal Form</h1>
         </div>
         <Link href="/student" className="text-sm text-slate-600 underline">
@@ -136,7 +136,7 @@ export default function StudentRenewalPage() {
             autoComplete="off"
           />
         </label>
-        {searchBusy && <p className="text-xs text-slate-500">搜尋中…</p>}
+        {searchBusy && <p className="text-xs text-ink/50">搜尋中…</p>}
         {searchError && <p className="text-sm text-red-600">{searchError}</p>}
         {!searchBusy &&
           !searchError &&
@@ -155,12 +155,12 @@ export default function StudentRenewalPage() {
                   onClick={() => setSelected(row)}
                   className={`w-full rounded-md px-3 py-2 text-left text-sm ${
                     selected?.id === row.id
-                      ? "bg-slate-900 text-white"
+                      ? "bg-slate-900 text-ink"
                       : "bg-white text-slate-900 hover:bg-slate-100"
                   }`}
                 >
                   <span className="font-medium">{row.full_name}</span>
-                  <span className="text-slate-500"> · {row.phone}</span>
+                  <span className="text-ink/50"> · {row.phone}</span>
                   {typeof row.lesson_balance === "number" && (
                     <span className="block text-xs opacity-80">現有餘額 {row.lesson_balance} 堂</span>
                   )}
@@ -313,7 +313,7 @@ export default function StudentRenewalPage() {
         <button
           type="submit"
           disabled={submitting || !selected}
-          className="w-full rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-slate-400"
+          className="w-full rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-ink shadow-sm disabled:cursor-not-allowed disabled:bg-slate-400"
         >
           {submitting ? "提交中…" : selected ? "提交續會表並更新堂數" : "請先搜尋並揀選學員"}
         </button>

@@ -10,13 +10,13 @@ export default function AdminSettingsWhatsappPage() {
     <BackendShell title="WhatsApp API 狀態">
       <div className="mx-auto max-w-6xl space-y-4">
         <h2 className="text-2xl font-semibold">WhatsApp 設定</h2>
-        <p className="text-sm text-slate-400">
+        <p className="text-sm text-ink/55">
           Demo 版頁面：可查看 API 連線狀態與訊息 template（例如 Congrats! 你已有 10 堂課餘額）。
         </p>
-        <div className="overflow-x-auto rounded-xl border border-[#333] bg-[#171717]">
-          <table className="w-full border-collapse text-left text-sm">
+        <div className="overflow-x-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
+          <table className="w-full border-collapse text-left text-sm text-ink">
             <thead>
-              <tr className="text-[#a0a0a0]">
+              <tr className="border-b border-ink/10 text-ink/55">
                 <th className="px-4 py-3">時間</th>
                 <th className="px-4 py-3">接收者</th>
                 <th className="px-4 py-3">訊息</th>
@@ -25,7 +25,7 @@ export default function AdminSettingsWhatsappPage() {
             </thead>
             <tbody>
               {whatsappLogs.map((log) => (
-                <tr key={log.id} className="border-t border-[#262626]">
+                <tr key={log.id} className="border-t border-ink/10">
                   <td className="px-4 py-2">{new Date(log.timestamp).toLocaleString()}</td>
                   <td className="px-4 py-2">{log.recipient}</td>
                   <td className="px-4 py-2">{log.message}</td>

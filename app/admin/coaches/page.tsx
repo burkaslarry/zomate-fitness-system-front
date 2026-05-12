@@ -49,21 +49,35 @@ export default function AdminCoachesPage() {
   return (
     <BackendShell title="教練管理">
       <div className="mx-auto max-w-5xl space-y-5">
-        <h2 className="text-2xl font-semibold text-white">教練管理</h2>
-        <form onSubmit={submit} className="grid gap-3 rounded-xl border border-white/15 bg-[#111827] p-5 md:grid-cols-2">
-          <input name="full_name" required placeholder="教練姓名" className="rounded-lg border border-white/15 bg-[#1a1a1a] px-3 py-2 text-white" />
-          <input name="phone" required placeholder="電話" className="rounded-lg border border-white/15 bg-[#1a1a1a] px-3 py-2 text-white" />
+        <h2 className="text-2xl font-semibold text-ink">教練管理</h2>
+        <form onSubmit={submit} className="grid gap-3 rounded-xl border border-ink/10 bg-surface p-5 shadow-sm ring-1 ring-ink/[0.04] md:grid-cols-2">
+          <input name="full_name" required placeholder="教練姓名" />
+          <input name="phone" required placeholder="電話" />
           <SelectAsync name="branch_id" label="分店" load={api.publicBranches} />
-          <button className="rounded-lg bg-[#6366f1] px-4 py-2 text-sm font-semibold text-white md:self-end">新增</button>
+          <button className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-primary md:self-end">
+            新增
+          </button>
         </form>
-        {status && <p className="text-sm text-emerald-300">{status}</p>}
-        <div className="rounded-xl border border-white/15 bg-[#0b1220]">
+        {status && <p className="text-sm text-emerald-800">{status}</p>}
+        <div className="rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
           {rows.map((row) => (
-            <div key={row.id} className="flex items-center justify-between border-b border-white/10 px-4 py-3 text-sm text-white">
+            <div key={row.id} className="flex items-center justify-between border-b border-ink/10 px-4 py-3 text-sm text-ink">
               <span>{row.full_name} · {row.phone}</span>
               <div className="flex gap-2">
-                <button type="button" onClick={() => void edit(row)} className="rounded-md border border-white/15 px-3 py-1 text-xs">Edit</button>
-                <button type="button" onClick={() => void deactivate(row.id)} className="rounded-md border border-white/15 px-3 py-1 text-xs">Deactivate</button>
+                <button
+                  type="button"
+                  onClick={() => void edit(row)}
+                  className="rounded-md border border-ink/15 bg-canvas px-3 py-1 text-xs text-ink hover:border-primary/40"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void deactivate(row.id)}
+                  className="rounded-md border border-ink/15 bg-canvas px-3 py-1 text-xs text-ink hover:border-rose-300/60"
+                >
+                  Deactivate
+                </button>
               </div>
             </div>
           ))}

@@ -127,14 +127,14 @@ export default function AdminOnboardingRecordsPage() {
     <BackendShell title="入職紀錄 / 健康表單">
       <div className="mx-auto max-w-6xl space-y-4">
         <h2 className="text-2xl font-semibold">入職紀錄 (Onboarding Records)</h2>
-        <div className="space-y-2 rounded-lg border border-[#374151] bg-[#0f172a]/80 px-4 py-3 text-sm text-slate-300">
+        <div className="space-y-2 rounded-lg border border-ink/10 bg-surface px-4 py-3 text-sm text-ink/70 shadow-sm ring-1 ring-ink/[0.04]">
           <p>
-            資料來源：<span className="font-medium text-white">FastAPI</span> → PostgreSQL（表前缀{" "}
-            <code className="rounded bg-[#262626] px-1.5 py-0.5 font-mono text-xs text-emerald-200/95">zomate_fs_*</code>
-            ，由後端 <code className="rounded bg-[#262626] px-1 font-mono text-xs">DATABASE_URL</code> 連 eventxp）。
+            資料來源：<span className="font-medium text-ink">FastAPI</span> → PostgreSQL（表前缀{" "}
+            <code className="rounded bg-canvas px-1.5 py-0.5 font-mono text-xs text-ink ring-1 ring-ink/10">zomate_fs_*</code>
+            ，由後端 <code className="rounded bg-canvas px-1 font-mono text-xs ring-1 ring-ink/10">DATABASE_URL</code> 連 eventxp）。
           </p>
-          <p className="text-xs text-slate-400">
-            前端 API：<code className="rounded bg-[#262626] px-1 font-mono">{getResolvedApiBaseUrl() || "(mock)"}</code>
+          <p className="text-xs text-ink/55">
+            前端 API：<code className="rounded bg-canvas px-1 font-mono ring-1 ring-ink/10">{getResolvedApiBaseUrl() || "(mock)"}</code>
             {isUsingNextMockApi() ? (
               <> · 目前為 Next mock；正式環境請勿設定 NEXT_PUBLIC_USE_NEXT_MOCK_API。</>
             ) : (
@@ -145,7 +145,7 @@ export default function AdminOnboardingRecordsPage() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className="rounded-md bg-[#FFFFFF] px-3 py-2 text-sm font-medium text-black hover:bg-neutral-100"
+            className="rounded-lg border border-ink/10 bg-primary/90 px-3 py-2 text-sm font-medium text-ink shadow-sm hover:bg-primary"
             onClick={async () => {
               try {
                 await downloadCsv("/api/admin/students/export.csv", "students.csv");
@@ -157,7 +157,7 @@ export default function AdminOnboardingRecordsPage() {
           >
             匯出 students.csv（後端）
           </button>
-          <label className="cursor-pointer rounded-md border border-[#333] px-3 py-2 text-sm text-slate-200 hover:bg-white/[0.04]">
+          <label className="cursor-pointer rounded-md border border-ink/15 px-3 py-2 text-sm text-ink/80 hover:bg-canvas">
             匯入 CSV（後端）
             <input
               type="file"
@@ -179,28 +179,28 @@ export default function AdminOnboardingRecordsPage() {
           </label>
           <button
             type="button"
-            className="rounded-md border border-[#334155] px-3 py-2 text-sm text-slate-200 hover:border-[#6366f1]/50 hover:bg-white/[0.04]"
+            className="rounded-md border border-ink/20 px-3 py-2 text-sm text-ink/80 hover:border-primary/50 hover:bg-canvas"
             onClick={() => void refreshGrid()}
             disabled={loading}
           >
             {loading ? "重新載入中…" : "重新載入列表"}
           </button>
         </div>
-        {loadError && <p className="text-sm text-rose-400">{loadError}</p>}
-        {status && !loadError && <p className="text-sm text-emerald-300">{status}</p>}
+        {loadError && <p className="text-sm text-rose-600">{loadError}</p>}
+        {status && !loadError && <p className="text-sm text-emerald-800">{status}</p>}
 
         <div className="space-y-2">
           <div className="flex items-baseline justify-between gap-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+            <p className="text-xs font-medium uppercase tracking-wide text-ink/50">
               CSV 對應欄位（full_name · phone · … — 與匯出 students.csv 相同順序）
             </p>
             {!loading && rows.length > 0 && (
-              <span className="text-[11px] text-slate-500">{rows.length} 筆</span>
+              <span className="text-[11px] text-ink/50">{rows.length} 筆</span>
             )}
           </div>
-          <div className="overflow-x-auto rounded-lg border border-[#374151] bg-[#0b1220] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+          <div className="overflow-x-auto rounded-lg border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
             <table className="min-w-full text-left text-sm">
-              <thead className="border-b border-[#374151] text-slate-300">
+              <thead className="border-b border-ink/10 text-ink/70">
                 <tr>
                   {GRID_COLUMNS.map((col) => (
                     <th key={col.label} className="whitespace-nowrap px-3 py-2.5 font-medium">
@@ -212,9 +212,9 @@ export default function AdminOnboardingRecordsPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={GRID_COLUMNS.length} className="px-3 py-10 text-center text-slate-400">
+                    <td colSpan={GRID_COLUMNS.length} className="px-3 py-10 text-center text-ink/55">
                       <span className="inline-flex items-center gap-2">
-                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-600 border-t-[#6366f1]" />
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-ink/20 border-t-primary" />
                         從資料庫載入…
                       </span>
                     </td>
@@ -223,7 +223,7 @@ export default function AdminOnboardingRecordsPage() {
                   rows.map((row, i) => (
                     <tr
                       key={row.id != null ? String(row.id) : `${row.phone}-${i}`}
-                      className="border-b border-[#1f2937] text-slate-200 transition hover:bg-white/[0.02]"
+                      className="border-b border-ink/[0.08] text-ink/80 transition hover:bg-canvas/80"
                     >
                       {GRID_COLUMNS.map((col) => (
                         <td key={col.label} className="max-w-[220px] truncate px-3 py-2 font-mono text-xs">
@@ -234,7 +234,7 @@ export default function AdminOnboardingRecordsPage() {
                   ))
                 ) : loadError ? null : (
                   <tr>
-                    <td colSpan={GRID_COLUMNS.length} className="px-3 py-10 text-center text-slate-400">
+                    <td colSpan={GRID_COLUMNS.length} className="px-3 py-10 text-center text-ink/55">
                       無資料。請確認後端已連線資料庫並已登入後台。
                     </td>
                   </tr>

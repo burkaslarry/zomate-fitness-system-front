@@ -6,7 +6,7 @@ import { alertApiError, api } from "../../../lib/api";
 import { usePeriodicHealthPing } from "../../../hooks/use-periodic-health-ping";
 
 const fieldClass =
-  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm [color-scheme:light] placeholder:text-slate-400";
+  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm [color-scheme:light] placeholder:text-ink/55";
 
 export default function StudentTrialPage() {
   usePeriodicHealthPing();
@@ -29,9 +29,9 @@ export default function StudentTrialPage() {
   }
 
   return (
-    <main className="mx-auto max-w-lg space-y-6 p-6 text-white">
+    <main className="mx-auto max-w-lg space-y-6 p-6 text-ink">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-bold text-white">試堂／加堂</h1>
+        <h1 className="text-xl font-bold text-ink">試堂／加堂</h1>
         <Link
           href="/student"
           className="text-sm text-sky-400 underline underline-offset-2 hover:text-sky-300"
@@ -57,7 +57,7 @@ export default function StudentTrialPage() {
         />
         <button
           type="submit"
-          className="rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+          className="rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-ink shadow-sm hover:bg-slate-800"
         >
           加堂 + 歡迎訊息
         </button>

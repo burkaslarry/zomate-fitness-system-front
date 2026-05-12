@@ -23,11 +23,11 @@ export default function SelectAsync({
 
   return (
     <label className="block space-y-1 text-sm">
-      <span className="text-slate-300">{label}</span>
-      <select name={name} required={required} className="w-full rounded-lg border border-white/15 bg-[#1a1a1a] px-3 py-2 text-white">
+      <span className="text-ink/70">{label}</span>
+      <select name={name} required={required}>
         <option value="">請選擇</option>
         {rows.map((row) => (
-          <option key={row.id} value={row.id} className="bg-[#1a1a1a]">
+          <option key={row.id} value={row.id}>
             {row.name ?? row.full_name ?? row.id}
           </option>
         ))}

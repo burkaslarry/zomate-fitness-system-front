@@ -24,15 +24,15 @@ export default function FileUpload({
   }, [preview]);
 
   return (
-    <label className="block rounded-xl border border-dashed border-white/20 bg-white/[0.03] p-4 text-sm text-white">
+    <label className="block rounded-xl border border-dashed border-ink/20 bg-canvas/80 p-4 text-sm text-ink shadow-sm ring-1 ring-ink/[0.04]">
       <span className="font-medium">{label}</span>
-      <span className="mt-1 block text-xs text-white/55">Drag-drop or click to upload. Images/PDF only, max 5MB.</span>
+      <span className="mt-1 block text-xs text-ink/55">拖放或按此上載。支援圖片／PDF，上限 5MB。</span>
       <input
         name={name}
         type="file"
         accept={accept}
         required={required}
-        className="mt-3 block w-full text-xs text-white/80"
+        className="mt-3 block w-full text-xs text-ink/80 file:mr-3 file:rounded-md file:border file:border-ink/15 file:bg-primary/90 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink"
         onChange={(event) => {
           const file = event.target.files?.[0];
           setError("");
@@ -54,10 +54,10 @@ export default function FileUpload({
       />
       {preview && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={preview} alt="Upload preview" className="mt-3 max-h-40 rounded-lg border border-white/15 object-contain" />
+        <img src={preview} alt="Upload preview" className="mt-3 max-h-40 rounded-lg border border-ink/10 object-contain" />
       )}
-      {pdfName && <span className="mt-3 block rounded-lg border border-white/15 px-3 py-2 text-xs">PDF: {pdfName}</span>}
-      {error && <span className="mt-2 block text-xs text-rose-300">{error}</span>}
+      {pdfName && <span className="mt-3 block rounded-lg border border-ink/10 bg-surface px-3 py-2 text-xs text-ink">PDF: {pdfName}</span>}
+      {error && <span className="mt-2 block text-xs text-rose-600">{error}</span>}
     </label>
   );
 }

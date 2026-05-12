@@ -11,7 +11,7 @@ import { clearAuthSession, getAuthSession, setAuthSession } from "../../lib/auth
  * Steps:
  * 01. 檢查既有 session，有則直接轉跳後台
  * 02. 呼叫 /api/auth/login 取得 token
- * 03. 將 token 與角色存到 localStorage 後，導向 /admin
+ * 03. localStorage：`ADMIN`、`CLERK` → `/admin`；``COACH``（教練帳號，僅日程）→ `/coach/calendar`（見 CF09）。
  */
 
 export default function LoginPage() {
@@ -26,7 +26,7 @@ export default function LoginPage() {
     }
     const existing = getAuthSession();
     if (existing) {
-      router.push("/admin");
+      router.push(existing.role === "COACH" ? "/coach/calendar" : "/admin");
     }
   }, [router]);
 
@@ -44,14 +44,16 @@ export default function LoginPage() {
       const data = (await api.login({ username: username.trim(), password })) as {
         token: string;
         username: string;
-        role: "ADMIN" | "CLERK";
+        role: "ADMIN" | "CLERK" | "COACH";
       };
+      const role: "ADMIN" | "CLERK" | "COACH" =
+        data.role === "ADMIN" || data.role === "CLERK" || data.role === "COACH" ? data.role : "CLERK";
       setAuthSession({
         token: data.token,
         username: data.username,
-        role: data.role === "ADMIN" ? "ADMIN" : "CLERK"
+        role
       });
-      router.push(data.role === "ADMIN" ? "/admin" : "/admin");
+      router.push(role === "COACH" ? "/coach/calendar" : "/admin");
     } catch (err) {
       setError((err as Error).message ?? "Login failed");
     } finally {
@@ -63,7 +65,9 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-white p-6">
       <form onSubmit={onSubmit} className="w-full max-w-md space-y-4 rounded-lg border border-slate-200 bg-white p-6 shadow">
         <h1 className="text-2xl font-bold text-black">後台登入</h1>
-        <p className="text-sm text-black">預設帳號：masterzoe / 12345678（ADMIN），worker / 12347890（CLERK）</p>
+        <p className="text-sm text-black">
+          預設帳號：masterzoe / 12345678（ADMIN），worker / 12347890（CLERK），coachdemo / 12347890（COACH·僅教練日程）
+        </p>
         <div className="space-y-2">
           <label className="text-sm text-black">
             帳號

@@ -3,6 +3,9 @@
 /*
  * Features F015:AdminChromeFrontend -- bilingual shell nav, auth teardown, periodic health ping hook.
  * Code: MENU_SECTIONS, pathname highlighting, PERIODIC_HEALTH_INTERVAL_MS handshake with ``lib/api``.
+ *
+ * CF09: COACH 帳號由 ``CoachScopeGuard`` 鎖定只去 `/coach/calendar`；
+ *       該頁會傳 ``layout=\"coach\"`` 以停用左欄、行動版面；ADMIN／CLERK 仍為此處全套後台側欄。
  */
 
 import Link from "next/link";
@@ -77,8 +80,22 @@ function isNavActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export default function BackendShell({ children, title }: { children: ReactNode; title: string }) {
-  const [session, setSession] = useState<AuthSession | false | null>(false);
+export default function BackendShell({
+  children,
+  title,
+  layout = "admin"
+}: {
+  children: ReactNode;
+  title: string;
+  /** `coach`: 教練入口 — 無左欄、全寬內容（配合行動版主畫面） */
+  layout?: "admin" | "coach";
+}) {
+  /** Verified session from `/api/auth/me`; `null` until first successful ping */
+  const [verifiedSession, setVerifiedSession] = useState<AuthSession | null>(null);
+  /** 已確認無效／已登出，準備顯示空白並由 login 接手 */
+  const [rejected, setRejected] = useState(false);
+  /** 來自 localStorage（僅在 client mounted 後讀取，避免 SSR hydration 不匹配） */
+  const [storedSession, setStoredSession] = useState<AuthSession | null>(null);
   const [apiStatus, setApiStatus] = useState<"checking" | "online" | "offline">("checking");
   const [dbStatus, setDbStatus] = useState<"idle" | "checking" | "ok" | "error" | "na">("idle");
   const router = useRouter();
@@ -87,20 +104,22 @@ export default function BackendShell({ children, title }: { children: ReactNode;
   useEffect(() => {
     let cancelled = false;
     const s = getAuthSession();
+    setStoredSession(s);
     if (!s) {
       router.replace("/login");
-      setSession(null);
+      setRejected(true);
       return;
     }
     void api
       .me()
       .then(() => {
-        if (!cancelled) setSession(s);
+        if (!cancelled) setVerifiedSession(s);
       })
       .catch(() => {
         clearAuthSession();
+        setStoredSession(null);
         if (!cancelled) {
-          setSession(null);
+          setRejected(true);
           router.replace("/login");
         }
       });
@@ -144,18 +163,17 @@ export default function BackendShell({ children, title }: { children: ReactNode;
     };
   }, []);
 
-  if (session === false) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-canvas text-sm text-ink/55">
-        驗證登入…
-      </div>
-    );
-  }
+  const provisional = storedSession;
+  const verifying = Boolean(provisional && !verifiedSession && !rejected);
+  const displaySession = verifiedSession ?? provisional;
 
-  if (!session) {
+  if (rejected || (!provisional && !displaySession)) {
     return null;
   }
 
+  if (!displaySession) {
+    return null;
+  }
   async function doLogout() {
     try {
       await api.logout();
@@ -165,8 +183,11 @@ export default function BackendShell({ children, title }: { children: ReactNode;
     }
   }
 
+  const showAdminSidebar = layout === "admin";
+
   return (
     <div className="flex min-h-screen bg-canvas text-ink">
+      {showAdminSidebar ? (
       <aside
         data-admin-sidebar
         className="sticky top-0 h-screen w-[260px] shrink-0 overflow-y-auto border-r border-ink/10 bg-surface"
@@ -251,25 +272,50 @@ export default function BackendShell({ children, title }: { children: ReactNode;
           </button>
         </div>
       </aside>
+      ) : null}
       <div className="flex min-h-screen min-w-0 flex-1 flex-col bg-canvas">
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-ink/10 bg-canvas/95 px-4 py-3 backdrop-blur-md md:px-6">
-          <h1 className="text-[17px] font-semibold tracking-[-0.02em] text-ink md:text-lg">{title}</h1>
-          <div
-            data-admin-user-badge
-            className="flex h-9 shrink-0 items-center gap-2 rounded-full border border-ink/15 bg-surface px-3 text-[12px] text-ink md:text-[13px]"
-          >
+          <h1 className="min-w-0 flex-1 text-[17px] font-semibold tracking-[-0.02em] text-ink md:text-lg">{title}</h1>
+          <div className="flex shrink-0 items-center gap-2">
+            {layout === "coach" ? (
+              <button
+                type="button"
+                onClick={() => void doLogout()}
+                className="rounded-lg border border-ink/15 bg-surface px-3 py-1.5 text-xs font-medium text-ink hover:bg-canvas"
+              >
+                登出
+              </button>
+            ) : null}
+            <div
+              data-admin-user-badge
+              className="flex h-9 shrink-0 items-center gap-2 rounded-full border border-ink/15 bg-surface px-3 text-[12px] text-ink md:text-[13px]"
+            >
             <span
               className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/90 text-[11px] font-semibold text-ink"
               aria-hidden="true"
             >
-              {session.username.slice(0, 1).toUpperCase()}
+              {displaySession.username.slice(0, 1).toUpperCase()}
             </span>
             <span className="max-w-[10rem] truncate whitespace-nowrap md:max-w-none">
-              {session.username} ({session.role})
+              {displaySession.username} ({displaySession.role})
+              {verifying ? <span className="text-ink/45"> · 驗證中</span> : null}
             </span>
           </div>
+          </div>
         </header>
-        <main className="min-w-0 flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+        <main className={`relative min-w-0 flex-1 overflow-y-auto ${layout === "coach" ? "p-3 sm:p-4" : "p-4 md:p-6"}`}>
+          {verifying ? (
+            <div
+              className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-canvas/80 backdrop-blur-[2px]"
+              aria-busy="true"
+              aria-live="polite"
+            >
+              <span className="inline-block h-8 w-8 animate-spin rounded-full border-2 border-ink/15 border-t-primary" />
+              <span className="text-sm text-ink/55">驗證登入…</span>
+            </div>
+          ) : null}
+          {children}
+        </main>
         <nav data-admin-bottom-nav className="hidden" aria-hidden="true" />
       </div>
     </div>

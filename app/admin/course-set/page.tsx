@@ -113,18 +113,18 @@ export default function CourseSetPage() {
     <BackendShell title="Course 套餐開課">
       <div className="mx-auto max-w-2xl space-y-6">
         <div>
-          <h2 className="text-xl font-semibold text-white">開課（套餐）</h2>
+          <h2 className="text-xl font-semibold text-ink">開課（套餐）</h2>
           <p className="mt-2 text-sm text-zinc-400">
             堂數 1–10；每星期揀一至日（最多 3 個上課日）；用行事曆揀首日。建立後伺服器會計算<strong>預計最後一堂日期</strong>（系列結束）。
           </p>
         </div>
 
-        <form onSubmit={onSubmit} className="space-y-4 rounded-xl border border-white/[0.1] bg-[#141414] p-6">
+        <form onSubmit={onSubmit} className="space-y-4 rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-6">
           <label className="block text-sm">
             <span className="text-zinc-400">課程名稱</span>
             <input
               required
-              className="mt-1 w-full rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-zinc-100"
+              className="mt-1 w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-ink"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
@@ -135,7 +135,7 @@ export default function CourseSetPage() {
               <span className="text-zinc-400">分店（必填）</span>
               <select
                 required
-                className="mt-1 w-full rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-zinc-100"
+                className="mt-1 w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-ink"
                 value={branchId === "" ? "" : String(branchId)}
                 onChange={(e) => {
                   const next = e.target.value === "" ? "" : Number(e.target.value);
@@ -161,7 +161,7 @@ export default function CourseSetPage() {
               <span className="text-zinc-400">教練</span>
               <select
                 required
-                className="mt-1 w-full rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-zinc-100"
+                className="mt-1 w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-ink"
                 value={coachId === "" ? "" : String(coachId)}
                 onChange={(e) => setCoachId(e.target.value === "" ? "" : Number(e.target.value))}
               >
@@ -180,7 +180,7 @@ export default function CourseSetPage() {
             <input
               type="date"
               required
-              className="mt-1 w-full rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-zinc-100"
+              className="mt-1 w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-ink"
               value={courseStartDate}
               onChange={(e) => setCourseStartDate(e.target.value)}
             />
@@ -191,7 +191,7 @@ export default function CourseSetPage() {
               <span className="text-zinc-400">開始時間</span>
               <input
                 type="time"
-                className="mt-1 w-full rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-zinc-100"
+                className="mt-1 w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-ink"
                 value={timeStart}
                 onChange={(e) => setTimeStart(e.target.value)}
               />
@@ -200,7 +200,7 @@ export default function CourseSetPage() {
               <span className="text-zinc-400">結束時間</span>
               <input
                 type="time"
-                className="mt-1 w-full rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-zinc-100"
+                className="mt-1 w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-ink"
                 value={timeEnd}
                 onChange={(e) => setTimeEnd(e.target.value)}
               />
@@ -220,8 +220,8 @@ export default function CourseSetPage() {
                     onClick={() => toggleWeekday(idx)}
                     className={`rounded-lg border px-3 py-1.5 text-sm ${
                       active
-                        ? "border-violet-500 bg-violet-500/20 text-white"
-                        : "border-white/[0.15] bg-[#1a1a1a] text-zinc-400 hover:border-zinc-500"
+                        ? "border-violet-500 bg-violet-500/20 text-ink"
+                        : "border-white/[0.15] bg-canvas text-zinc-400 hover:border-zinc-500"
                     }`}
                   >
                     {label}
@@ -239,7 +239,7 @@ export default function CourseSetPage() {
               min={1}
               max={10}
               required
-              className="mt-1 w-full rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-zinc-100"
+              className="mt-1 w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-ink"
               value={totalLessons}
               onChange={(e) => setTotalLessons(Number(e.target.value))}
             />
@@ -247,11 +247,11 @@ export default function CourseSetPage() {
 
           <fieldset className="text-sm">
             <legend className="text-zinc-400">編入學員（可多選）</legend>
-            <div className="mt-2 max-h-44 space-y-1 overflow-auto rounded-lg border border-white/[0.08] p-2">
+            <div className="mt-2 max-h-44 space-y-1 overflow-auto rounded-lg border border-ink/[0.08] p-2">
               {students.map((s) => {
                 const on = pickedStudents.includes(s.id);
                 return (
-                  <label key={s.id} className="flex cursor-pointer items-center gap-2 px-2 py-1 hover:bg-[#262626]/80">
+              <label key={s.id} className="flex cursor-pointer items-center gap-2 px-2 py-1 hover:bg-canvas">
                     <input type="checkbox" checked={on} onChange={() => setPickedStudents((prev) =>
                       prev.includes(s.id) ? prev.filter((x) => x !== s.id) : [...prev, s.id])
                     }
@@ -271,13 +271,13 @@ export default function CourseSetPage() {
               type="number"
               min={0}
               max={200}
-              className="mt-1 w-full rounded-lg border border-white/[0.12] bg-[#1e1e1e] px-3 py-2 text-zinc-100"
+              className="mt-1 w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-ink"
               value={creditsOnEnroll}
               onChange={(e) => setCreditsOnEnroll(Number(e.target.value))}
             />
           </label>
 
-          <button type="submit" className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500">
+          <button type="submit" className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-ink hover:bg-violet-500">
             建立課程
           </button>
         </form>

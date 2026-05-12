@@ -2,7 +2,8 @@
 
 /** @feature [F04.1][F04.5] */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   type ColumnDef,
   type SortingState,
@@ -43,6 +44,16 @@ function normalizeRows(json: unknown): CourseSaleRow[] {
   if (Array.isArray(o.content)) return o.content;
   if (Array.isArray(o.items)) return o.items;
   return [];
+}
+
+function rowHasInstallmentEnrollment(r: CourseSaleRow): boolean {
+  const inst = String(r.installmentStatus ?? "")
+    .trim()
+    .toUpperCase();
+  if (inst && inst !== "NONE" && inst !== "—" && inst !== "-") return true;
+  const pay = String(r.paymentStatus ?? "").toUpperCase();
+  if (pay.includes("INSTALLMENT")) return true;
+  return false;
 }
 
 function encodeSortParam(sorting: SortingState): string | undefined {
@@ -107,18 +118,18 @@ function visibleSalesColumnIds(table: Table<CourseSaleRow>): SalesReportColumnId
 function statusBadgeClass(status: string) {
   const s = status.toUpperCase();
   if (s.includes("PAID") || s.includes("COMPLETE")) {
-    return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
+    return "border-emerald-500/40 bg-emerald-500/10 text-emerald-800";
   }
   if (s.includes("PEND") || s.includes("PARTIAL")) {
-    return "border-amber-500/40 bg-amber-500/10 text-amber-100";
+    return "border-amber-500/40 bg-amber-500/10 text-amber-900";
   }
   if (s.includes("OVERDUE") || s.includes("FAIL")) {
-    return "border-rose-500/40 bg-rose-500/10 text-rose-100";
+    return "border-rose-500/40 bg-rose-500/10 text-rose-800";
   }
   if (s.includes("REFUND")) {
-    return "border-slate-500/50 bg-slate-500/10 text-slate-200";
+    return "border-slate-500/50 bg-slate-500/10 text-ink/80";
   }
-  return "border-[#3a3a3a] bg-[#222] text-[#d4d4d4]";
+  return "border-ink/15 bg-canvas text-ink/80";
 }
 
 function HeaderButton({
@@ -143,6 +154,21 @@ function HeaderButton({
 }
 
 export default function MonthlySalesReport() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center gap-2 rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] py-16 text-ink/55">
+          <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+          Loading sales…
+        </div>
+      }
+    >
+      <MonthlySalesReportImpl />
+    </Suspense>
+  );
+}
+
+function MonthlySalesReportImpl() {
   const [data, setData] = useState<CourseSaleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -152,6 +178,36 @@ export default function MonthlySalesReport() {
   /** Native <dialog> proved flaky; use fixed overlay so demo always shows on localhost + prod. */
   const [visibleColumnsModalOpen, setVisibleColumnsModalOpen] = useState(false);
   const [columnPickerSource, setColumnPickerSource] = useState<"courseType" | "installmentStatus" | null>(null);
+
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const installmentEnrollmentOnlyActive = useMemo(
+    () =>
+      searchParams.get("installment_enrollment") === "1" || searchParams.get("installment") === "1",
+    [searchParams]
+  );
+
+  const qParam = searchParams.get("q");
+  useEffect(() => {
+    if (qParam !== null) setGlobalFilter(qParam);
+  }, [qParam]);
+
+  useEffect(() => {
+    if (!installmentEnrollmentOnlyActive) return;
+    const t = window.setTimeout(() => searchRef.current?.focus(), 150);
+    return () => window.clearTimeout(t);
+  }, [installmentEnrollmentOnlyActive]);
+
+  const clearInstallmentEnrollmentPreset = useCallback(() => {
+    const sp = new URLSearchParams(searchParams.toString());
+    sp.delete("installment_enrollment");
+    sp.delete("installment");
+    const next = sp.toString();
+    router.push(next ? `${pathname}?${next}` : pathname);
+  }, [pathname, router, searchParams]);
 
   const closeVisibleColumnsModal = useCallback(() => {
     setVisibleColumnsModalOpen(false);
@@ -229,14 +285,14 @@ export default function MonthlySalesReport() {
         header: ({ column }) => (
           <button
             type="button"
-            className="flex w-full items-center gap-1 rounded-md border border-slate-600/80 bg-slate-800 px-2 py-1.5 text-left text-sm font-medium !text-white shadow-none hover:bg-slate-700 hover:!text-white"
+            className="flex w-full items-center gap-1 rounded-md border border-ink/12 bg-surface px-2 py-1.5 text-left text-sm font-medium text-ink shadow-none hover:bg-canvas"
             onClick={() => column.toggleSorting()}
           >
             <HeaderButton label={COLUMN_LABELS.date} sorted={column.getIsSorted()} />
           </button>
         ),
         cell: (info) => (
-          <span className="whitespace-nowrap text-slate-200">{formatSaleDate(String(info.getValue()))}</span>
+          <span className="whitespace-nowrap text-ink/80">{formatSaleDate(String(info.getValue()))}</span>
         ),
         enableSorting: true
       },
@@ -246,13 +302,13 @@ export default function MonthlySalesReport() {
         header: ({ column }) => (
           <button
             type="button"
-            className="flex w-full items-center gap-1 rounded-md border border-slate-600/80 bg-slate-800 px-2 py-1.5 text-left text-sm font-medium !text-white shadow-none hover:bg-slate-700 hover:!text-white"
+            className="flex w-full items-center gap-1 rounded-md border border-ink/12 bg-surface px-2 py-1.5 text-left text-sm font-medium text-ink shadow-none hover:bg-canvas"
             onClick={() => column.toggleSorting()}
           >
             <HeaderButton label={COLUMN_LABELS.clientName} sorted={column.getIsSorted()} />
           </button>
         ),
-        cell: (info) => <span className="text-slate-200">{String(info.getValue() ?? "—")}</span>,
+        cell: (info) => <span className="text-ink/80">{String(info.getValue() ?? "—")}</span>,
         enableSorting: true
       },
       {
@@ -261,13 +317,13 @@ export default function MonthlySalesReport() {
         header: ({ column }) => (
           <button
             type="button"
-            className="flex w-full items-center gap-1 rounded-md border border-slate-600/80 bg-slate-800 px-2 py-1.5 text-left text-sm font-medium !text-white shadow-none hover:bg-slate-700 hover:!text-white"
+            className="flex w-full items-center gap-1 rounded-md border border-ink/12 bg-surface px-2 py-1.5 text-left text-sm font-medium text-ink shadow-none hover:bg-canvas"
             onClick={() => openVisibleColumnsModal("courseType")}
           >
             <HeaderButton label={COLUMN_LABELS.courseType} sorted={column.getIsSorted()} />
           </button>
         ),
-        cell: (info) => <span className="text-slate-200">{String(info.getValue() ?? "—")}</span>,
+        cell: (info) => <span className="text-ink/80">{String(info.getValue() ?? "—")}</span>,
         enableSorting: true
       },
       {
@@ -276,14 +332,14 @@ export default function MonthlySalesReport() {
         header: ({ column }) => (
           <button
             type="button"
-            className="flex w-full items-center gap-1 rounded-md border border-slate-600/80 bg-slate-800 px-2 py-1.5 text-left text-sm font-medium !text-white shadow-none hover:bg-slate-700 hover:!text-white"
+            className="flex w-full items-center gap-1 rounded-md border border-ink/12 bg-surface px-2 py-1.5 text-left text-sm font-medium text-ink shadow-none hover:bg-canvas"
             onClick={() => column.toggleSorting()}
           >
             <HeaderButton label={COLUMN_LABELS.amount} sorted={column.getIsSorted()} />
           </button>
         ),
         cell: (info) => (
-          <span className="tabular-nums text-slate-100">{formatCurrencyHkd(Number(info.getValue()))}</span>
+          <span className="tabular-nums text-ink">{formatCurrencyHkd(Number(info.getValue()))}</span>
         ),
         enableSorting: true
       },
@@ -293,13 +349,13 @@ export default function MonthlySalesReport() {
         header: ({ column }) => (
           <button
             type="button"
-            className="flex w-full items-center gap-1 rounded-md border border-slate-600/80 bg-slate-800 px-2 py-1.5 text-left text-sm font-medium !text-white shadow-none hover:bg-slate-700 hover:!text-white"
+            className="flex w-full items-center gap-1 rounded-md border border-ink/12 bg-surface px-2 py-1.5 text-left text-sm font-medium text-ink shadow-none hover:bg-canvas"
             onClick={() => column.toggleSorting()}
           >
             <HeaderButton label={COLUMN_LABELS.coachName} sorted={column.getIsSorted()} />
           </button>
         ),
-        cell: (info) => <span className="text-slate-200">{String(info.getValue() ?? "—")}</span>,
+        cell: (info) => <span className="text-ink/80">{String(info.getValue() ?? "—")}</span>,
         enableSorting: true
       },
       {
@@ -308,7 +364,7 @@ export default function MonthlySalesReport() {
         header: ({ column }) => (
           <button
             type="button"
-            className="flex w-full items-center gap-1 rounded-md border border-slate-600/80 bg-slate-800 px-2 py-1.5 text-left text-sm font-medium !text-white shadow-none hover:bg-slate-700 hover:!text-white"
+            className="flex w-full items-center gap-1 rounded-md border border-ink/12 bg-surface px-2 py-1.5 text-left text-sm font-medium text-ink shadow-none hover:bg-canvas"
             onClick={() => column.toggleSorting()}
           >
             <HeaderButton label={COLUMN_LABELS.paymentStatus} sorted={column.getIsSorted()} />
@@ -332,14 +388,14 @@ export default function MonthlySalesReport() {
         header: ({ column }) => (
           <button
             type="button"
-            className="flex w-full items-center gap-1 rounded-md border border-slate-600/80 bg-slate-800 px-2 py-1.5 text-left text-sm font-medium !text-white shadow-none hover:bg-slate-700 hover:!text-white"
+            className="flex w-full items-center gap-1 rounded-md border border-ink/12 bg-surface px-2 py-1.5 text-left text-sm font-medium text-ink shadow-none hover:bg-canvas"
             onClick={() => openVisibleColumnsModal("installmentStatus")}
           >
             <HeaderButton label={COLUMN_LABELS.installmentStatus} sorted={column.getIsSorted()} />
           </button>
         ),
         cell: (info) => (
-          <span className="text-slate-300">{String(info.getValue() ?? "—")}</span>
+          <span className="text-ink/70">{String(info.getValue() ?? "—")}</span>
         ),
         enableSorting: true
       }
@@ -349,11 +405,12 @@ export default function MonthlySalesReport() {
 
   const globalFilterFn = useCallback(
     (row: { original: CourseSaleRow }, _columnId: string, filterValue: unknown) => {
+      const r = row.original;
+      if (installmentEnrollmentOnlyActive && !rowHasInstallmentEnrollment(r)) return false;
       const q = String(filterValue ?? "")
         .trim()
         .toLowerCase();
       if (!q) return true;
-      const r = row.original;
       return (
         r.clientName.toLowerCase().includes(q) ||
         r.courseType.toLowerCase().includes(q) ||
@@ -364,7 +421,7 @@ export default function MonthlySalesReport() {
         String(r.amount).includes(q)
       );
     },
-    []
+    [installmentEnrollmentOnlyActive]
   );
 
   const table = useReactTable({
@@ -435,37 +492,66 @@ export default function MonthlySalesReport() {
   }
   return (
     <section className="space-y-4">
-      <div className="flex flex-col gap-3 border-b border-[#2b2b2b] pb-4 md:flex-row md:items-center md:justify-between">
+      {installmentEnrollmentOnlyActive ? (
+        <div
+          className="flex flex-col gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-900 [html.light_&]:border-emerald-600/35 [html.light_&]:bg-emerald-50 [html.light_&]:text-emerald-950"
+          role="status"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold [html.light_&]:text-emerald-900">已套用：</span>
+            <span className="rounded-full border border-emerald-400/50 bg-emerald-500/15 px-2.5 py-0.5 text-xs font-medium [html.light_&]:border-emerald-600/40 [html.light_&]:bg-emerald-100 [html.light_&]:text-emerald-900">
+              有做分期嘅學生／enrolment
+            </span>
+            <button
+              type="button"
+              onClick={clearInstallmentEnrollmentPreset}
+              className="text-xs font-semibold text-emerald-800 underline decoration-emerald-400/60 underline-offset-2 hover:text-ink [html.light_&]:text-emerald-800 [html.light_&]:hover:text-emerald-950"
+            >
+              關閉此篩選（顯示全部銷售列）
+            </button>
+          </div>
+          <p className="text-xs text-emerald-900/85 [html.light_&]:text-emerald-900/80">
+            右側「搜尋」可再輸入客戶名、課堂、教練或分期欄位關鍵字；亦可用網址參數{" "}
+            <code className="rounded bg-canvas px-1 py-0.5 ring-1 ring-ink/10">?q=…</code>{" "}
+            預填搜尋字。
+          </p>
+        </div>
+      ) : null}
+
+      <div className="flex flex-col gap-3 border-b border-ink/10 pb-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-white [html.light_&]:text-slate-900">
+          <h2 className="text-xl font-semibold text-ink [html.light_&]:text-slate-900">
             Monthly sales report{" "}
-            <span className="ml-2 rounded-md border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-sm font-semibold uppercase tracking-wide text-amber-200 [html.light_&]:border-amber-600/50 [html.light_&]:bg-amber-50 [html.light_&]:text-amber-900">
+            <span className="ml-2 rounded-md border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-sm font-semibold uppercase tracking-wide text-amber-900 [html.light_&]:border-amber-600/50 [html.light_&]:bg-amber-50 [html.light_&]:text-amber-900">
               (DEMO)
             </span>
           </h2>
-          <p className="mt-1 text-sm text-slate-400 [html.light_&]:text-slate-600">
-            撳 <strong className="text-slate-300 [html.light_&]:text-slate-800">Visible columns to print out</strong>{" "}
-            或表頭 <strong className="text-slate-300 [html.light_&]:text-slate-800">Course</strong> /{" "}
-            <strong className="text-slate-300 [html.light_&]:text-slate-800">Installment</strong> 可揀欄（後兩者會多顯示該欄 sort）。
+          <p className="mt-1 text-sm text-ink/55 [html.light_&]:text-slate-600">
+            撳 <strong className="text-ink/70 [html.light_&]:text-slate-800">Visible columns to print out</strong>{" "}
+            或表頭 <strong className="text-ink/70 [html.light_&]:text-slate-800">Course</strong> /{" "}
+            <strong className="text-ink/70 [html.light_&]:text-slate-800">Installment</strong> 可揀欄（後兩者會多顯示該欄 sort）。
             Sort / columns sync to{" "}
-            <code className="rounded bg-[#262626] px-1 py-0.5 text-xs text-slate-300">/api/v1/reports/sales</code>.
+            <code className="rounded bg-canvas px-1 py-0.5 text-xs text-ink/70 ring-1 ring-ink/10">/api/v1/reports/sales</code>.
             Excel &amp; CSV 跟住表與 export 所見欄位。
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <button
             type="button"
-            className="inline-flex w-full items-center justify-center rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/15 sm:w-auto"
+            className="inline-flex w-full items-center justify-center rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100 sm:w-auto"
             onClick={() => openVisibleColumnsModal(null)}
           >
             Visible columns to print out
           </button>
           <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink/50" />
             <input
+              ref={searchRef}
               type="search"
-              className="w-full min-w-[220px] rounded-lg border border-[#333] bg-[#141414] py-2 pl-9 pr-3 text-sm text-slate-100 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500 sm:w-64"
-              placeholder="Search clients, courses, coaches…"
+              className="w-full min-w-[220px] rounded-lg border border-ink/15 bg-canvas py-2 pl-9 pr-3 text-sm text-ink shadow-sm ring-1 ring-ink/[0.04] placeholder:text-ink/45 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/35 sm:w-64"
+              placeholder={
+                installmentEnrollmentOnlyActive ? "再配合搜尋：客戶、課種、Coach、分期⋯" : "Search clients, courses, coaches…"
+              }
               value={globalFilter}
               onChange={(e) => setGlobalFilter(e.target.value)}
               aria-label="Filter rows"
@@ -475,7 +561,7 @@ export default function MonthlySalesReport() {
             type="button"
             disabled={rowCount === 0}
             onClick={() => void exportExcel()}
-            className="inline-flex w-full items-center justify-center rounded-lg border border-[#3a3a3a] bg-[#1f1f1f] px-3 py-2 text-sm font-medium text-slate-100 hover:border-slate-500 hover:bg-[#262626] enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+            className="inline-flex w-full items-center justify-center rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm font-medium text-ink shadow-sm ring-1 ring-ink/[0.04] hover:border-primary/40 hover:bg-canvas enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
           >
             Export Excel (WYSIWYG)
           </button>
@@ -483,7 +569,7 @@ export default function MonthlySalesReport() {
             type="button"
             disabled={rowCount === 0}
             onClick={() => exportCsv()}
-            className="inline-flex w-full items-center justify-center rounded-lg border border-[#3a3a3a] bg-[#1f1f1f] px-3 py-2 text-sm font-medium text-slate-100 hover:border-slate-500 hover:bg-[#262626] enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+            className="inline-flex w-full items-center justify-center rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm font-medium text-ink shadow-sm ring-1 ring-ink/[0.04] hover:border-primary/40 hover:bg-canvas enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
           >
             Export CSV (WYSIWYG)
           </button>
@@ -493,7 +579,7 @@ export default function MonthlySalesReport() {
 
       {visibleColumnsModalOpen ? (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/65 p-4"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-ink/45 p-4"
           role="presentation"
           onClick={(e) => {
             if (e.target === e.currentTarget) closeVisibleColumnsModal();
@@ -503,14 +589,14 @@ export default function MonthlySalesReport() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="visible-columns-dialog-title"
-            className="w-[min(92vw,26rem)] max-w-none rounded-xl border border-[#444] bg-[#1a1a1a] p-5 text-left text-sm text-slate-200 shadow-2xl [html.light_&]:border-slate-300 [html.light_&]:bg-white [html.light_&]:text-slate-900"
+            className="w-[min(92vw,26rem)] max-w-none rounded-xl border border-ink/15 bg-surface p-5 text-left text-sm text-ink shadow-lg ring-1 ring-ink/[0.04]"
             onClick={(e) => e.stopPropagation()}
           >
         <header className="space-y-1">
-          <h3 id="visible-columns-dialog-title" className="text-base font-semibold text-white [html.light_&]:text-slate-900">
+          <h3 id="visible-columns-dialog-title" className="text-base font-semibold text-ink [html.light_&]:text-slate-900">
             Visible columns to print out
           </h3>
-          <p className="text-xs text-slate-400 [html.light_&]:text-slate-600">
+          <p className="text-xs text-ink/55 [html.light_&]:text-slate-600">
             勾選會顯示喺表同 Excel / CSV；至少保留一欄。由 Course 或 Installment 表頭開窗時，下面可為該欄排序。
           </p>
         </header>
@@ -519,17 +605,17 @@ export default function MonthlySalesReport() {
           role="group"
           aria-label="Visible columns"
         >
-          <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-slate-500 [html.light_&]:text-slate-600">
+          <span className="shrink-0 text-xs font-semibold uppercase tracking-wide text-ink/50 [html.light_&]:text-slate-600">
             Visible
           </span>
           {SALES_REPORT_COLUMN_IDS.map((id) => (
             <label
               key={id}
-              className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-slate-200 hover:bg-[#222] [html.light_&]:hover:bg-slate-100"
+              className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-ink/80 hover:bg-canvas"
             >
               <input
                 type="checkbox"
-                className="rounded border-[#444] bg-[#111] text-violet-500 focus:ring-violet-500 [html.light_&]:border-slate-300 [html.light_&]:bg-white"
+                className="rounded border-ink/20 bg-canvas text-primary focus:ring-primary/40"
                 checked={columnVisibility[id] !== false}
                 onChange={(e) => setSalesColumnVisible(id, e.target.checked)}
               />
@@ -538,20 +624,20 @@ export default function MonthlySalesReport() {
           ))}
         </div>
         {columnPickerSource ? (
-          <div className="mt-4 flex flex-wrap gap-2 border-t border-white/[0.08] pt-4 [html.light_&]:border-slate-200">
-            <span className="mr-1 shrink-0 self-center text-xs text-slate-500 [html.light_&]:text-slate-600">
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-ink/[0.08] pt-4 [html.light_&]:border-slate-200">
+            <span className="mr-1 shrink-0 self-center text-xs text-ink/50 [html.light_&]:text-slate-600">
               Sort 「{COLUMN_LABELS[columnPickerSource]}」:
             </span>
             <button
               type="button"
-              className="rounded-md border border-slate-600 bg-slate-800 px-2.5 py-1 text-xs font-medium text-white hover:bg-slate-700 [html.light_&]:border-slate-300 [html.light_&]:bg-slate-900 [html.light_&]:text-white"
+              className="rounded-md border border-ink/15 bg-surface px-2.5 py-1 text-xs font-medium text-ink hover:bg-canvas"
               onClick={() => sortPickerSourceColumn(false)}
             >
               A → Z
             </button>
             <button
               type="button"
-              className="rounded-md border border-slate-600 bg-slate-800 px-2.5 py-1 text-xs font-medium text-white hover:bg-slate-700 [html.light_&]:border-slate-300 [html.light_&]:bg-slate-900 [html.light_&]:text-white"
+              className="rounded-md border border-ink/15 bg-surface px-2.5 py-1 text-xs font-medium text-ink hover:bg-canvas"
               onClick={() => sortPickerSourceColumn(true)}
             >
               Z → A
@@ -561,7 +647,7 @@ export default function MonthlySalesReport() {
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
-            className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 [html.light_&]:border-slate-300 [html.light_&]:bg-white [html.light_&]:text-slate-900"
+            className="rounded-lg border border-ink/15 bg-primary/90 px-3 py-1.5 text-xs font-semibold text-ink shadow-sm hover:bg-primary"
             onClick={closeVisibleColumnsModal}
           >
             Close
@@ -578,16 +664,16 @@ export default function MonthlySalesReport() {
         </div>
       ) : null}
 
-      <div className="relative overflow-hidden rounded-xl border border-[#2b2b2b] bg-[#141414]">
+      <div className="relative overflow-hidden rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
         {loading ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-slate-400">
+          <div className="flex items-center justify-center gap-2 py-16 text-ink/55">
             <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
             Loading sales…
           </div>
         ) : totallyEmpty ? (
           <div className="px-6 py-16 text-center">
-            <p className="text-base font-medium text-slate-200">No sales for this period</p>
-            <p className="mt-2 text-sm text-slate-500">Try another month on the backend or adjust filters.</p>
+            <p className="text-base font-medium text-ink/80">No sales for this period</p>
+            <p className="mt-2 text-sm text-ink/50">Try another month on the backend or adjust filters.</p>
           </div>
         ) : (
           <>
@@ -595,9 +681,9 @@ export default function MonthlySalesReport() {
               <table className="min-w-full border-collapse text-left text-sm">
                 <thead>
                   {table.getHeaderGroups().map((hg) => (
-                    <tr key={hg.id} className="border-b border-[#2b2b2b] bg-[#1a1a1a]">
+                    <tr key={hg.id} className="border-b border-ink/10 bg-canvas">
                       {hg.headers.map((header) => (
-                        <th key={header.id} className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                        <th key={header.id} className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-ink/55">
                           {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                         </th>
                       ))}
@@ -609,16 +695,19 @@ export default function MonthlySalesReport() {
                     <tr>
                       <td
                         colSpan={Math.max(1, table.getVisibleLeafColumns().length)}
-                        className="px-4 py-12 text-center text-slate-400"
+                        className="px-4 py-12 text-center text-ink/55"
                       >
-                        No rows match &ldquo;{globalFilter}&rdquo;. Clear the search to see all loaded sales.
+                        No rows match 「{globalFilter}」. Clear the search
+                        {installmentEnrollmentOnlyActive
+                          ? ", or use 「關閉此篩選」 below to show all loaded sales."
+                          : " to see all loaded sales."}
                       </td>
                     </tr>
                   ) : (
                     table.getRowModel().rows.map((row) => (
                       <tr
                         key={row.id}
-                        className="border-b border-[#222] last:border-0 hover:bg-[#1a1a1a]/80"
+                        className="border-b border-ink/[0.08] last:border-0 hover:bg-canvas/80"
                       >
                         {row.getVisibleCells().map((cell) => (
                           <td key={cell.id} className="px-4 py-3 align-middle">
@@ -631,16 +720,16 @@ export default function MonthlySalesReport() {
                 </tbody>
               </table>
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#2b2b2b] px-4 py-3 text-xs text-slate-500">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-ink/10 px-4 py-3 text-xs text-ink/50">
               <span>
                 Showing {filteredEmpty ? 0 : rowCount} of {data.length} loaded row{data.length === 1 ? "" : "s"}
               </span>
               <span className="tabular-nums">
-                Sort: <span className="text-slate-300">{sortQuery ?? "default"}</span>
+                Sort: <span className="text-ink/70">{sortQuery ?? "default"}</span>
                 {columnsQuery ? (
                   <>
                     {" · "}
-                    Columns: <span className="text-slate-300">{columnsQuery}</span>
+                    Columns: <span className="text-ink/70">{columnsQuery}</span>
                   </>
                 ) : null}
               </span>

@@ -68,33 +68,33 @@ export default function AdminQrConsolePage() {
     <BackendShell title="QR 簽到中心">
       <div className="mx-auto max-w-6xl space-y-4">
         <h2 className="text-2xl font-semibold">出勤 / 簽到管理</h2>
-        <p className="text-sm text-slate-400">Demo 導覽頁：可集中管理簽到 QR、JSON QR、出勤核銷流程。</p>
+        <p className="text-sm text-ink/55">Demo 導覽頁：可集中管理簽到 QR、JSON QR、出勤核銷流程。</p>
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="space-y-2 rounded-lg border border-[#333] bg-[#171717] p-3">
-            <p className="text-sm font-medium">Core 1 · Onboarding QR</p>
+          <div className="space-y-2 rounded-xl border border-ink/10 bg-surface p-3 shadow-sm ring-1 ring-ink/[0.04]">
+            <p className="text-sm font-medium text-ink">Core 1 · Onboarding QR</p>
             {onboardQrSrc && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={onboardQrSrc} width={180} height={180} alt="Onboarding QR" className="rounded border border-[#333]" />
+              <img src={onboardQrSrc} width={180} height={180} alt="Onboarding QR" className="rounded border border-ink/10 bg-white p-2" />
             )}
             <button type="button" onClick={() => void downloadQrPdf("onboard")}>
               匯出 onboarding PDF
             </button>
           </div>
-          <div className="space-y-2 rounded-lg border border-[#333] bg-[#171717] p-3">
-            <p className="text-sm font-medium">Core 3 · Check-in URL QR</p>
+          <div className="space-y-2 rounded-xl border border-ink/10 bg-surface p-3 shadow-sm ring-1 ring-ink/[0.04]">
+            <p className="text-sm font-medium text-ink">Core 3 · Check-in URL QR</p>
             {checkinQrSrc && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={checkinQrSrc} width={180} height={180} alt="Check-in URL QR" className="rounded border border-[#333]" />
+              <img src={checkinQrSrc} width={180} height={180} alt="Check-in URL QR" className="rounded border border-ink/10 bg-white p-2" />
             )}
             <button type="button" onClick={() => void downloadQrPdf("checkin")}>
               匯出 checkin PDF
             </button>
           </div>
-          <div className="space-y-2 rounded-lg border border-[#333] bg-[#171717] p-3">
-            <p className="text-sm font-medium">Payload QR（離線牌）</p>
+          <div className="space-y-2 rounded-xl border border-ink/10 bg-surface p-3 shadow-sm ring-1 ring-ink/[0.04]">
+            <p className="text-sm font-medium text-ink">Payload QR（離線牌）</p>
             {payloadQrSrc && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={payloadQrSrc} width={180} height={180} alt="Payload QR" className="rounded border border-[#333]" />
+              <img src={payloadQrSrc} width={180} height={180} alt="Payload QR" className="rounded border border-ink/10 bg-white p-2" />
             )}
             <button type="button" onClick={() => void downloadQrPdf("payload")}>
               匯出 payload PDF
@@ -105,7 +105,7 @@ export default function AdminQrConsolePage() {
           <button type="button" onClick={() => void downloadAttendanceTemplateCsv()}>
             下載 attendance 範本（後端）
           </button>
-          <label className="cursor-pointer rounded-md border border-[#333] px-3 py-2 text-sm text-slate-200">
+          <label className="cursor-pointer rounded-md border border-ink/15 bg-surface px-3 py-2 text-sm text-ink shadow-sm hover:bg-canvas">
             匯入 CSV（Demo 預覽）
             <input
               type="file"
@@ -122,8 +122,8 @@ export default function AdminQrConsolePage() {
             />
           </label>
         </div>
-        {status && <p className="text-sm text-emerald-300">{status}</p>}
-        <Link href="/admin" className="inline-block rounded-md border border-slate-500 px-4 py-2 text-sm text-slate-200">
+        {status && <p className="text-sm text-emerald-800">{status}</p>}
+        <Link href="/admin" className="inline-block rounded-md border border-ink/15 bg-surface px-4 py-2 text-sm text-ink shadow-sm hover:bg-canvas">
           打開完整 QR 與出勤明細
         </Link>
       </div>
