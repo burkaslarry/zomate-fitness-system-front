@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { alertApiError, api } from "../../../lib/api";
 
-type RegisterContext = { hkid: string; full_name: string; pin: string };
+type RegisterContext = { hkid: string; full_name: string; pin?: string };
 
 function getContext(): RegisterContext | null {
   if (typeof window === "undefined") return null;

@@ -313,6 +313,10 @@ export const api = {
   member: (hkid: string) => request(`/api/members/${encodeURIComponent(hkid)}`),
   memberFull: (hkid: string) => request(`/api/members/${encodeURIComponent(hkid)}/full`),
   memberSearch: (q: string) => request(`/api/members/search?q=${encodeURIComponent(q)}`),
+  /** 續會 / 試堂：以香港電話查唯一學員（接受 8 位或 +852） */
+  memberLookupByPhone: (phone: string) =>
+    request(`/api/members/lookup-phone?phone=${encodeURIComponent(phone)}`),
+  trialClassKinds: () => request("/api/trial-class-kinds"),
   uploadMemberPhoto: (hkid: string, file: File) => {
     const form = new FormData();
     form.append("file", file);
@@ -336,7 +340,9 @@ export const api = {
   publicCoaches: () => request("/api/coaches?active=true"),
   publicBranches: () => request("/api/branches?active=true"),
   createRenewal: (payload: {
-    member_hkid: string;
+    student_id?: number;
+    member_hkid?: string;
+    student_phone?: string;
     package_id: number;
     coach_id?: number;
     branch_id?: number;
@@ -346,7 +352,9 @@ export const api = {
     receipt?: File | null;
   }) => {
     const form = new FormData();
-    form.append("member_hkid", payload.member_hkid);
+    if (payload.student_id != null) form.append("student_id", String(payload.student_id));
+    if (payload.member_hkid) form.append("member_hkid", payload.member_hkid);
+    if (payload.student_phone) form.append("student_phone", payload.student_phone);
     form.append("package_id", String(payload.package_id));
     if (payload.coach_id) form.append("coach_id", String(payload.coach_id));
     if (payload.branch_id) form.append("branch_id", String(payload.branch_id));
@@ -404,7 +412,13 @@ export const api = {
   deleteBranch: (branchId: number, hard = false) =>
     request(`/api/admin/branches/${branchId}?hard=${hard ? "true" : "false"}`, { method: "DELETE" }),
 
-  coaches: () => request("/api/admin/coaches"),
+  coaches: (query?: { q?: string; search_by?: "name" | "phone" }) => {
+    const sp = new URLSearchParams();
+    if (query?.q) sp.set("q", query.q);
+    if (query?.search_by) sp.set("search_by", query.search_by);
+    const qs = sp.toString();
+    return request(`/api/admin/coaches${qs ? `?${qs}` : ""}`);
+  },
   createCoach: (payload: { full_name: string; phone: string; branch_id: number | null }) =>
     request("/api/admin/coaches", { method: "POST", body: JSON.stringify(payload) }),
   updateCoach: (

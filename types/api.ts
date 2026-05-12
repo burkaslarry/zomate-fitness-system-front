@@ -30,6 +30,15 @@ export type CoachDto = {
   specialty?: string | null;
   active: boolean;
   branch_id: number | null;
+  branch_name?: string | null;
+};
+
+export type TrialClassKindDto = {
+  id: number;
+  code: string;
+  label_zh: string;
+  sort_order: number;
+  active: boolean;
 };
 
 export type BranchDto = {

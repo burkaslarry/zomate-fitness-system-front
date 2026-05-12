@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-type RegisterContext = { hkid: string; full_name: string; pin: string };
+type RegisterContext = { hkid: string; full_name: string; pin?: string };
 
 export default function RegisterSuccessPage() {
   const [ctx, setCtx] = useState<RegisterContext | null>(null);
@@ -18,12 +18,8 @@ export default function RegisterSuccessPage() {
       <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-6 text-center">
         <p className="text-sm text-emerald-900">完成報名</p>
         <h1 className="mt-2 text-2xl font-semibold">{ctx?.full_name ?? "會員"}</h1>
-        <p className="mt-6 text-sm text-ink/65">簽到 PIN</p>
-        <p className="mt-2 font-mono text-5xl font-bold tracking-widest text-ink">{ctx?.pin ?? "-----"}</p>
+        <p className="mt-4 text-sm text-ink/75">資料已提交，請返回學生入口繼續後續流程。</p>
       </div>
-      <button disabled title="WhatsApp 未接駁 — Coming soon" className="rounded-lg border border-ink/10 bg-white/5 px-4 py-3 text-sm text-ink/45">
-        Send PIN to my WhatsApp · WhatsApp 未接駁 — Coming soon
-      </button>
       <Link href="/student" className="text-center text-sm text-ink/70 underline underline-offset-4">返回學生入口</Link>
     </main>
   );

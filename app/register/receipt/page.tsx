@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { alertApiError, api } from "../../../lib/api";
 import PaymentMethodRadio from "../../../components/forms/payment-method-radio";
 
-type RegisterContext = { hkid: string; full_name: string; pin: string };
+type RegisterContext = { hkid: string; full_name: string; pin?: string };
 
 export default function RegisterReceiptPage() {
   const router = useRouter();

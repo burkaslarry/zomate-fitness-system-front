@@ -4,3 +4,5 @@ node_modules
 .env.local
 npm-debug.log*
 .env*.local
+playwright-report
+test-results

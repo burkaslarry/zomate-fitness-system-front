@@ -17,7 +17,7 @@ export const phoneHkSchema = z
   .string()
   .regex(/^\+852[0-9]{8}$/, { message: "請輸入香港手機號碼 8 位數字（自動帶 +852）" });
 
-/** Standard PAR-Q — seven Yes/No questions. Any "Yes" → medical clearance required. */
+/** Standard PAR-Q — seven Yes/No questions (questionnaire only, no file upload requirement). */
 export const parqQuestionsSchema = z.object({
   q1_heart_condition: z.boolean(),
   q2_chest_pain_activity: z.boolean(),
@@ -29,10 +29,6 @@ export const parqQuestionsSchema = z.object({
 });
 
 export type ParqAnswers = z.infer<typeof parqQuestionsSchema>;
-
-export function parqRequiresClearance(parq: ParqAnswers): boolean {
-  return Object.values(parq).some(Boolean);
-}
 
 /** 10 sessions → 3 months; 30 sessions → 6 months from membership start. */
 export function computeMembershipExpiryIso(packageSessions: 10 | 30, startDate: Date): string {
@@ -58,7 +54,7 @@ export const onboardingStep3Schema = z.object({
   digital_signature: z.string().min(2, "請輸入全名作電子簽署")
 });
 
-/** Full POST body after wizard steps — medical clearance filename set client-side when PAR-Q needs it. */
+/** Full POST body after wizard steps — PAR-Q is questionnaire only. */
 export const studentRegistrationPayloadSchema = z
   .object({
     full_name: z.string().min(1),
@@ -69,7 +65,6 @@ export const studentRegistrationPayloadSchema = z
     emergency_contact_phone: phoneHkSchema,
     form_type: z.enum(["new", "renewal"]),
     parq: parqQuestionsSchema,
-    medical_clearance_file_name: z.string().optional(),
     cooling_off_acknowledged: z.boolean(),
     disclaimer_accepted: z.boolean(),
     digital_signature: z.string().min(2),
@@ -83,15 +78,6 @@ export const studentRegistrationPayloadSchema = z
   .refine((d) => d.disclaimer_accepted, {
     message: "請同意免責聲明",
     path: ["disclaimer_accepted"]
-  })
-  .superRefine((data, ctx) => {
-    if (parqRequiresClearance(data.parq) && !data.medical_clearance_file_name?.trim()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "PAR-Q 任一題為「是」時請上載醫生證明／醫療 clearance。",
-        path: ["medical_clearance_file_name"]
-      });
-    }
   });
 
 export type StudentRegistrationPayload = z.infer<typeof studentRegistrationPayloadSchema>;

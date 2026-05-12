@@ -8,9 +8,10 @@ import { useEffect, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
+  onboardingStep1Schema,
+  parqQuestionsSchema,
   studentRegistrationPayloadSchema,
-  type StudentRegistrationPayload,
-  parqRequiresClearance
+  type StudentRegistrationPayload
 } from "../../lib/schemas/student";
 import { alertApiError, api } from "../../lib/api";
 
@@ -46,7 +47,6 @@ const defaults: Partial<StudentRegistrationPayload> = {
   emergency_contact_phone: "",
   form_type: "new",
   parq: defaultParq,
-  medical_clearance_file_name: "",
   cooling_off_acknowledged: false,
   disclaimer_accepted: false,
   digital_signature: "",
@@ -57,7 +57,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   const [step, setStep] = useState(1);
   const [status, setStatus] = useState("");
   const [dupToastMsg, setDupToastMsg] = useState<string | null>(null);
-  const [assignedPin, setAssignedPin] = useState<string | null>(null);
+  const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
   const router = useRouter();
 
@@ -66,8 +66,6 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     defaultValues: { ...defaults, full_name: quickName ?? "" } as StudentRegistrationPayload,
     mode: "onBlur"
   });
-
-  const parqWatch = form.watch("parq");
 
   useEffect(() => {
     if (quickName) form.setValue("full_name", quickName);
@@ -79,13 +77,11 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     return () => window.clearTimeout(t);
   }, [dupToastMsg]);
 
-  const clearanceNeeded = parqRequiresClearance(parqWatch ?? defaultParq);
-
   async function goNext() {
     setStatus("");
     if (step === 1) {
       setDupToastMsg(null);
-      const ok = await form.trigger([
+      form.clearErrors([
         "full_name",
         "hkid",
         "phone",
@@ -94,13 +90,40 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         "emergency_contact_phone",
         "form_type"
       ]);
-      if (!ok) return;
+      const vals = form.getValues();
+      const step1Payload = {
+        full_name: vals.full_name.trim(),
+        hkid: vals.hkid.trim(),
+        phone: vals.phone.trim(),
+        email: (vals.email ?? "").trim(),
+        emergency_contact_name: vals.emergency_contact_name.trim(),
+        emergency_contact_phone: vals.emergency_contact_phone.trim(),
+        form_type: vals.form_type
+      };
+      const parsed = onboardingStep1Schema.safeParse(step1Payload);
+      if (!parsed.success) {
+        const flat = parsed.error.flatten().fieldErrors;
+        (
+          [
+            "full_name",
+            "hkid",
+            "phone",
+            "email",
+            "emergency_contact_name",
+            "emergency_contact_phone",
+            "form_type"
+          ] as const
+        ).forEach((key) => {
+          const msg = flat[key]?.[0];
+          if (msg) form.setError(key, { message: msg });
+        });
+        return;
+      }
       try {
-        const vals = form.getValues();
         const res = (await api.memberDuplicateCheck({
-          full_name: vals.full_name.trim(),
-          hkid: vals.hkid.trim(),
-          phone: vals.phone.trim()
+          full_name: step1Payload.full_name,
+          hkid: step1Payload.hkid,
+          phone: step1Payload.phone
         })) as { blocked?: boolean; message?: string | null };
         if (res.blocked) {
           setDupToastMsg(res.message ?? "系統已有相同會員紀錄，請改用續會或聯絡櫃台。");
@@ -113,15 +136,13 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
       return;
     }
     if (step === 2) {
-      const okParq = await form.trigger(["parq"]);
-      if (!okParq) return;
-      if (clearanceNeeded) {
-        const name = form.getValues("medical_clearance_file_name");
-        if (!name?.trim()) {
-          setStatus("PAR-Q 任一為「是」時請上載醫生 clearance（選擇檔案後會記錄檔名）。");
-          return;
-        }
+      const parqVals = form.getValues("parq");
+      const parsed = parqQuestionsSchema.safeParse(parqVals);
+      if (!parsed.success) {
+        form.setError("parq", { message: "請完成 PAR-Q 問卷" });
+        return;
       }
+      form.clearErrors("parq");
       setStep(3);
       return;
     }
@@ -129,7 +150,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
 
   async function onFinalSubmit(values: StudentRegistrationPayload) {
     setStatus("提交中…");
-    setAssignedPin(null);
+    setShowSuccessDialog(false);
     try {
       const res = (await api.createMember({
         full_name: values.full_name,
@@ -139,21 +160,20 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         emergency_contact_name: values.emergency_contact_name,
         emergency_contact_phone: values.emergency_contact_phone,
         parq: values.parq,
-        medical_clearance_file_name: values.medical_clearance_file_name,
         cooling_off_acknowledged: values.cooling_off_acknowledged,
         disclaimer_accepted: values.disclaimer_accepted,
         digital_signature: values.digital_signature
       })) as {
-        pin_code: string;
         member?: { hkid?: string; full_name?: string };
       };
-      const pin = res.pin_code ?? "?";
-      setAssignedPin(pin);
+      const createdHkid = res.member?.hkid ?? values.hkid;
+      const createdName = res.member?.full_name ?? values.full_name;
       window.sessionStorage.setItem(
         "zomate_register_context",
-        JSON.stringify({ hkid: values.hkid, full_name: values.full_name, pin })
+        JSON.stringify({ hkid: createdHkid, full_name: createdName })
       );
-      setStatus("登記成功。請按下方按鈕繼續拍攝會員相片。");
+      setStatus("申請成功。");
+      setShowSuccessDialog(true);
     } catch (err) {
       setStatus("");
       alertApiError(err);
@@ -288,7 +308,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         {step === 2 && (
           <div className="space-y-4">
             <p className="text-xs leading-relaxed text-ink/80">
-              PAR-Q：請如實選「是／否」。任一題為「是」須上載醫生 clearance。
+              PAR-Q：請如實選「是／否」，此步驟只需完成問卷。
             </p>
             {PARQ_LABELS.map(({ key, label }) => (
               <Controller
@@ -308,25 +328,6 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                 )}
               />
             ))}
-            {clearanceNeeded ? (
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-amber-900">請上載醫療／醫生 clearance</p>
-                <input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  className="text-xs text-ink/80 file:mr-3 file:rounded-md file:border file:border-ink/15 file:bg-primary/90 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    form.setValue("medical_clearance_file_name", f?.name ?? "");
-                  }}
-                />
-                {form.formState.errors.medical_clearance_file_name && (
-                  <p className="text-xs text-rose-400">{form.formState.errors.medical_clearance_file_name.message}</p>
-                )}
-              </div>
-            ) : (
-              <p className="text-xs text-ink/65">無需額外 clearance。</p>
-            )}
           </div>
         )}
 
@@ -340,14 +341,14 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
             </div>
             <label
               data-cooling-ack
-              className="grid w-full touch-manipulation grid-cols-[1.5rem_1fr] items-start gap-3 rounded-lg border border-ink/[0.08] bg-canvas p-3 text-sm text-ink"
+              className="flex w-full touch-manipulation items-center gap-3 rounded-lg border border-ink/[0.08] bg-canvas p-3 text-sm text-ink"
             >
               <input
                 type="checkbox"
-                className="mt-0.5 h-6 w-6 min-h-[1.5rem] min-w-[1.5rem] shrink-0 cursor-pointer accent-primary"
+                className="h-5 w-5 min-h-[1.25rem] min-w-[1.25rem] shrink-0 cursor-pointer accent-primary"
                 {...form.register("cooling_off_acknowledged")}
               />
-              <span className="block min-w-0 text-left leading-6 [word-break:keep-all]">
+              <span className="min-w-0 text-left leading-6">
                 本人確認已閱讀並理解冷靜期條款。
               </span>
             </label>
@@ -362,14 +363,14 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
             </div>
             <label
               data-disclaimer-ack
-              className="grid w-full touch-manipulation grid-cols-[1.5rem_1fr] items-start gap-3 rounded-lg border border-ink/[0.08] bg-canvas p-3 text-sm text-ink"
+              className="flex w-full touch-manipulation items-center gap-3 rounded-lg border border-ink/[0.08] bg-canvas p-3 text-sm text-ink"
             >
               <input
                 type="checkbox"
-                className="mt-0.5 h-6 w-6 min-h-[1.5rem] min-w-[1.5rem] shrink-0 cursor-pointer accent-primary"
+                className="h-5 w-5 min-h-[1.25rem] min-w-[1.25rem] shrink-0 cursor-pointer accent-primary"
                 {...form.register("disclaimer_accepted")}
               />
-              <span className="block min-w-0 text-left leading-6 [word-break:keep-all]">
+              <span className="min-w-0 text-left leading-6">
                 本人已閱讀並同意健康聲明及免責條款。
               </span>
             </label>
@@ -418,18 +419,19 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         </div>
       </form>
 
-      {assignedPin && (
-        <div className="space-y-3 rounded-xl border border-emerald-200/80 bg-emerald-50/90 p-4 text-sm text-ink shadow-sm ring-1 ring-ink/[0.04]">
-          <p>
-            簽到 PIN：<span className="font-mono text-lg">{assignedPin}</span>
-          </p>
-          <button
-            type="button"
-            className="w-full rounded-md border border-ink/15 bg-primary/90 px-4 py-3 text-sm font-semibold text-ink shadow-sm hover:bg-primary"
-            onClick={() => router.push("/register/photo")}
-          >
-            下一步：影會員相
-          </button>
+      {showSuccessDialog && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/35 px-4">
+          <div className="w-full max-w-sm space-y-4 rounded-xl border border-emerald-200/80 bg-emerald-50 p-5 text-ink shadow-xl ring-1 ring-ink/[0.06]">
+            <h2 className="text-lg font-semibold">申請成功</h2>
+            <p className="text-sm text-ink/80">請立即上傳會員照片，完成新入會流程。</p>
+            <button
+              type="button"
+              className="w-full rounded-md border border-ink/15 bg-primary/90 px-4 py-3 text-sm font-semibold text-ink shadow-sm hover:bg-primary"
+              onClick={() => router.push("/register/photo")}
+            >
+              上傳照片
+            </button>
+          </div>
         </div>
       )}
       {status && <p className="text-sm text-ink/85">{status}</p>}
