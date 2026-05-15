@@ -1,18 +1,17 @@
 "use client";
 
+/**
+ * [F006][S002]
+ * Feature: Shared API client (Next.js to FastAPI)
+ * Step: (see Logic)
+ * Logic: Staff login page; stores Bearer session in localStorage.
+ */
+
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePeriodicHealthPing } from "../../hooks/use-periodic-health-ping";
 import { api } from "../../lib/api";
 import { clearAuthSession, getAuthSession, setAuthSession } from "../../lib/auth";
-
-/*
- * CF05: Login flow.
- * Steps:
- * 01. 檢查既有 session，有則直接轉跳後台
- * 02. 呼叫 /api/auth/login 取得 token
- * 03. localStorage：`ADMIN`、`CLERK` → `/admin`；``COACH``（教練帳號，僅日程）→ `/coach/calendar`（見 CF09）。
- */
 
 export default function LoginPage() {
   usePeriodicHealthPing();

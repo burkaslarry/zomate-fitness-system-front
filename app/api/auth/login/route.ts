@@ -1,4 +1,9 @@
-/** @feature [AUTH] Mock auth for same-origin Next API when FastAPI is not used (`NEXT_PUBLIC_USE_NEXT_MOCK_API=1`). */
+/**
+ * [F006][S002]
+ * Feature: Shared API client (Next.js to FastAPI)
+ * Step: (see Logic)
+ * Logic: Mock API: auth login, logout, me.
+ */
 
 import { NextResponse } from "next/server";
 

@@ -1,3 +1,10 @@
+/**
+ * [F001][S001]
+ * Feature: Student Onboarding
+ * Step: (see Logic)
+ * Logic: Admin student roster, HKID detail, onboarding records.
+ */
+
 /*
  * Next.js Route Handler — GET /api/admin/students/export.csv (mock store).
  *

@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * [F004][S001]
+ * Feature: Admin Reports & Financials
+ * Step: (see Logic)
+ * Logic: Finance and reports UI: sales, expenses, payroll.
+ */
+
 import BackendShell from "../../../../components/backend-shell";
 import MonthlySalesReport from "../../../../components/monthly-sales-report";
 

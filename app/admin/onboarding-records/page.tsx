@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * [F001][S001]
+ * Feature: Student Onboarding
+ * Step: (see Logic)
+ * Logic: Admin student roster, HKID detail, onboarding records.
+ */
+
 /*
  * Admin — onboarding CSV hub. Data：FastAPI（zomate-fitness-system-back）→ PostgreSQL `zomate_fs_*`
  *（DATABASE_URL，例如 Render eventxp）。本地 dev 預設 API：`http://127.0.0.1:8000`。

@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * [F002][S001]
+ * Feature: Course Entry & Automation
+ * Step: (see Logic)
+ * Logic: Trial class purchase and signup UI.
+ */
+
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { alertApiError, api } from "../../../lib/api";

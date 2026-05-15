@@ -1,4 +1,9 @@
-/** @feature [F04.5] */
+/**
+ * [F004][S005]
+ * Feature: Admin Reports & Financials
+ * Step: (see Logic)
+ * Logic: Client-side XLSX export helpers.
+ */
 
 export type ExcelColumn<T extends Record<string, unknown>> = {
   header: string;

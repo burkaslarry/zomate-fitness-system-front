@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * [F001][S003]
+ * Feature: Student Onboarding
+ * Step: (see Logic)
+ * Logic: Membership renewal form for students.
+ */
+
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { alertApiError, api } from "../../../lib/api";

@@ -1,9 +1,17 @@
 "use client";
 
+/**
+ * [F003][S001]
+ * Feature: Attendance & Today-Only QR Check-in
+ * Step: Coach timetable, optional course assign (ADMIN/CLERK), loading/success modals
+ * Logic: ``/api/coach/courses``; staff-only ``/api/admin/courses/by-day`` + assign-coach; coach CRUD.
+ */
+
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import BackendShell from "../../components/backend-shell";
 import { alertApiError, api, downloadCsv, uploadCsv } from "../../lib/api";
+import { getAuthSession } from "../../lib/auth";
 
 type Coach = { id: number; full_name: string; phone: string; branch_id: number | null };
 type BranchLite = { id: number; name: string; code: string };
@@ -13,10 +21,17 @@ type CourseRow = {
   title: string;
   branch_name: string;
   branch_address: string;
+  coach_id: number;
+  coach_name: string;
   scheduled_start: string;
   scheduled_end: string;
   enrollments: Enr[];
 };
+
+type BlockUi =
+  | null
+  | { mode: "loading"; title: string; detail?: string }
+  | { mode: "success"; title: string; detail?: string };
 
 const INPUT =
   "mt-1 block w-full max-w-xl rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink placeholder:text-ink/50";
@@ -29,8 +44,15 @@ export default function CoachPage() {
   const [coachId, setCoachId] = useState<number | "">("");
   const [day, setDay] = useState(() => new Date().toISOString().slice(0, 10));
   const [courses, setCourses] = useState<CourseRow[]>([]);
-  const [status, setStatus] = useState("");
+  const [dayCoursesAll, setDayCoursesAll] = useState<CourseRow[]>([]);
+  const [blockUi, setBlockUi] = useState<BlockUi>(null);
   const [editingCoachId, setEditingCoachId] = useState<number | null>(null);
+  const [canAssignStaff, setCanAssignStaff] = useState(false);
+
+  useEffect(() => {
+    const r = getAuthSession()?.role;
+    setCanAssignStaff(r === "ADMIN" || r === "CLERK");
+  }, []);
 
   const reloadCoaches = useCallback(async () => {
     const list = (await api.coaches()) as Coach[];
@@ -53,12 +75,32 @@ export default function CoachPage() {
   }, [reloadCoaches]);
 
   useEffect(() => {
-    if (coachId === "") return;
-    api
-      .coachCourses(Number(coachId), { day })
-      .then((c) => setCourses(c as CourseRow[]))
-      .catch((e) => setStatus(String(e)));
-  }, [coachId, day]);
+    if (coachId === "") {
+      setCourses([]);
+      setDayCoursesAll([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const mine = (await api.coachCourses(Number(coachId), { day })) as CourseRow[];
+        const all = canAssignStaff ? ((await api.adminCoursesByDay(day)) as CourseRow[]) : [];
+        if (!cancelled) {
+          setCourses(mine);
+          setDayCoursesAll(all);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setCourses([]);
+          setDayCoursesAll([]);
+          alertApiError(e);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [coachId, day, canAssignStaff]);
 
   async function reschedule(e: FormEvent<HTMLFormElement>, courseId: number) {
     e.preventDefault();
@@ -66,17 +108,33 @@ export default function CoachPage() {
     const form = new FormData(e.currentTarget);
     const start = form.get("scheduled_start") as string;
     const end = form.get("scheduled_end") as string;
-    setStatus("更新中…");
+    setBlockUi({ mode: "loading", title: "更新課堂時間…", detail: "請稍候。" });
     try {
       await api.rescheduleCourse(courseId, Number(coachId), {
         scheduled_start: new Date(start).toISOString(),
         scheduled_end: new Date(end).toISOString()
       });
-      setStatus("已更新課堂時間。");
-      const c = (await api.coachCourses(Number(coachId), { day })) as CourseRow[];
-      setCourses(c);
+      setCourses((await api.coachCourses(Number(coachId), { day })) as CourseRow[]);
+      if (canAssignStaff) {
+        setDayCoursesAll((await api.adminCoursesByDay(day)) as CourseRow[]);
+      }
+      setBlockUi({ mode: "success", title: "已更新課堂時間。" });
     } catch (err) {
-      setStatus("");
+      setBlockUi(null);
+      alertApiError(err);
+    }
+  }
+
+  async function assignCourseToSelectedCoach(courseId: number) {
+    if (coachId === "" || !canAssignStaff) return;
+    setBlockUi({ mode: "loading", title: "指派教練中…", detail: "將課程系列歸於目前選擇嘅教練。" });
+    try {
+      await api.assignCourseCoach(courseId, Number(coachId));
+      setCourses((await api.coachCourses(Number(coachId), { day })) as CourseRow[]);
+      setDayCoursesAll((await api.adminCoursesByDay(day)) as CourseRow[]);
+      setBlockUi({ mode: "success", title: "指派成功", detail: "該課程已顯示於上方「此教練嘅課程」。" });
+    } catch (err) {
+      setBlockUi(null);
       alertApiError(err);
     }
   }
@@ -88,14 +146,14 @@ export default function CoachPage() {
     const phone = String(form.get("phone") ?? "").trim();
     const br = String(form.get("branch_id") ?? "");
     const branch_id = br === "" ? null : Number(br);
-    setStatus("新增教練中…");
+    setBlockUi({ mode: "loading", title: "新增教練中…" });
     try {
       await api.createCoach({ full_name, phone, branch_id });
       e.currentTarget.reset();
       await reloadCoaches();
-      setStatus("教練已新增。");
+      setBlockUi({ mode: "success", title: "教練已新增。" });
     } catch (err) {
-      setStatus("");
+      setBlockUi(null);
       alertApiError(err);
     }
   }
@@ -107,7 +165,7 @@ export default function CoachPage() {
     const phone = String(form.get("edit_phone") ?? "").trim();
     const br = String(form.get("edit_branch_id") ?? "");
     const branch_id = br === "" ? null : Number(br);
-    setStatus("更新教練中…");
+    setBlockUi({ mode: "loading", title: "更新教練資料…" });
     try {
       await api.updateCoach(coach.id, {
         full_name,
@@ -116,9 +174,9 @@ export default function CoachPage() {
       });
       setEditingCoachId(null);
       await reloadCoaches();
-      setStatus("教練資料已更新。");
+      setBlockUi({ mode: "success", title: "教練資料已更新。" });
     } catch (err) {
-      setStatus("");
+      setBlockUi(null);
       alertApiError(err);
     }
   }
@@ -128,25 +186,25 @@ export default function CoachPage() {
       ? `確定永久刪除「${coach.full_name}」？（無關連課堂方可）`
       : `確定刪除「${coach.full_name}」？將作軟刪除，列表唔再顯示。`;
     if (!window.confirm(msg)) return;
-    setStatus("處理中…");
+    setBlockUi({ mode: "loading", title: "處理中…" });
     try {
       await api.deleteCoach(coach.id, hard);
       await reloadCoaches();
-      setStatus(hard ? "已永久刪除。" : "已軟刪除。");
+      setBlockUi({ mode: "success", title: hard ? "已永久刪除。" : "已軟刪除。" });
     } catch (err) {
-      setStatus("");
+      setBlockUi(null);
       alertApiError(err);
     }
   }
 
   async function onImportCoachCsv(file: File) {
-    setStatus("匯入教練 CSV…");
+    setBlockUi({ mode: "loading", title: "匯入教練 CSV…" });
     try {
       const r = await uploadCsv("/api/admin/coaches/import", file);
       await reloadCoaches();
-      setStatus(`匯入完成：${r.imported ?? 0} 筆。`);
+      setBlockUi({ mode: "success", title: `匯入完成：${r.imported ?? 0} 筆。` });
     } catch (err) {
-      setStatus("");
+      setBlockUi(null);
       alertApiError(err);
     }
   }
@@ -157,6 +215,10 @@ export default function CoachPage() {
     return b ? `${b.name} (${b.code})` : `#${bid}`;
   }
 
+  const selectedCoach = typeof coachId === "number" ? coaches.find((c) => c.id === coachId) : undefined;
+  const assignableOthers =
+    coachId === "" ? [] : dayCoursesAll.filter((c) => c.coach_id !== Number(coachId));
+
   function toLocalInput(iso: string) {
     const d = new Date(iso);
     const pad = (n: number) => String(n).padStart(2, "0");
@@ -165,7 +227,7 @@ export default function CoachPage() {
 
   return (
     <BackendShell title="教練課表">
-      <main className="mx-auto max-w-4xl space-y-6 p-6">
+      <main className="w-full max-w-[min(100%,88rem)] space-y-6 p-6">
         <section className="rounded-xl border border-ink/10 bg-surface p-5">
           <div className="flex flex-wrap items-start justify-between gap-4 border-b border-ink/[0.08] pb-4">
             <div>
@@ -367,7 +429,46 @@ export default function CoachPage() {
             />
           </label>
         </div>
-        {status && <p className="text-sm text-amber-900">{status}</p>}
+
+        {canAssignStaff && coachId !== "" && (
+          <section className="rounded-xl border border-dashed border-amber-200/80 bg-amber-50/40 p-4">
+            <h3 className="text-sm font-semibold text-ink">
+              同日其他課程 — 指派畀「{selectedCoach?.full_name ?? "此教練"}」
+            </h3>
+            <p className="mt-1 text-xs text-ink/55">
+              以下為所選日期有堂嘅全部課程系列中，尚未歸於此教練嘅項目；按「指派」將整個課程系列改由目前教練負責。
+            </p>
+            {assignableOthers.length === 0 ? (
+              <p className="mt-3 text-sm text-ink/60">目前沒有可指派嘅其他課程。</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {assignableOthers.map((c) => (
+                  <li
+                    key={c.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ink/10 bg-surface px-3 py-2 text-sm"
+                  >
+                    <span className="min-w-0 text-ink">
+                      <span className="font-medium">{c.title}</span>
+                      <span className="text-ink/60">
+                        {" "}
+                        · 現任教練：{c.coach_name} · {c.branch_name}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-lg border border-primary/50 bg-primary/85 px-3 py-1.5 text-xs font-semibold text-ink hover:bg-primary"
+                      onClick={() => void assignCourseToSelectedCoach(c.id)}
+                    >
+                      指派
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        )}
+
+        <h2 className="text-base font-semibold text-ink">此教練於選定日期嘅課程</h2>
         <div className="space-y-4">
           {courses.length === 0 && (
             <p className="text-sm text-ink/70">當日未有課堂，或請先喺後台建立課堂。</p>
@@ -417,6 +518,50 @@ export default function CoachPage() {
             </article>
           ))}
         </div>
+
+        {blockUi?.mode === "loading" && (
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/45 p-4"
+            role="alertdialog"
+            aria-busy="true"
+            aria-live="polite"
+            aria-labelledby="coach-block-loading-title"
+          >
+            <div className="w-full max-w-sm rounded-xl border border-ink/10 bg-surface p-6 shadow-lg ring-1 ring-ink/[0.06]">
+              <p id="coach-block-loading-title" className="text-center text-lg font-semibold text-ink">
+                {blockUi.title}
+              </p>
+              {blockUi.detail ? (
+                <p className="mt-2 text-center text-sm text-ink/60">{blockUi.detail}</p>
+              ) : null}
+            </div>
+          </div>
+        )}
+
+        {blockUi?.mode === "success" && (
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/45 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="coach-block-success-title"
+          >
+            <div className="w-full max-w-sm rounded-xl border border-ink/10 bg-surface p-6 shadow-lg ring-1 ring-ink/[0.06]">
+              <p id="coach-block-success-title" className="text-center text-lg font-semibold text-emerald-900">
+                {blockUi.title}
+              </p>
+              {blockUi.detail ? (
+                <p className="mt-2 text-center text-sm text-ink/70">{blockUi.detail}</p>
+              ) : null}
+              <button
+                type="button"
+                className="mt-5 w-full rounded-lg border border-ink/15 bg-primary/90 px-4 py-2.5 text-sm font-semibold text-ink hover:bg-primary"
+                onClick={() => setBlockUi(null)}
+              >
+                確定
+              </button>
+            </div>
+          </div>
+        )}
       </main>
     </BackendShell>
   );

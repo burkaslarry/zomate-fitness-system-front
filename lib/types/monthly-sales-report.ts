@@ -1,4 +1,11 @@
 /**
+ * [F004][S001]
+ * Feature: Admin Reports & Financials
+ * Step: (see Logic)
+ * Logic: Finance and reports UI: sales, expenses, payroll.
+ */
+
+/**
  * Course sale line item for the monthly sales report.
  * Field names align with a typical Kotlin/Jackson JSON payload (camelCase).
  */

@@ -1,6 +1,11 @@
 "use client";
 
-/** @feature [F04.3][F04.5] monthly coach attendance from student lesson rows */
+/**
+ * [F004][S001]
+ * Feature: Admin Reports & Financials
+ * Step: (see Logic)
+ * Logic: Finance and reports UI: sales, expenses, payroll.
+ */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {

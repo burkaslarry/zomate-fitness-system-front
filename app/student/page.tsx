@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * [F001][S001]
+ * Feature: Student Onboarding
+ * Step: (see Logic)
+ * Logic: Student portal index and navigation.
+ */
+
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import { usePeriodicHealthPing } from "../../hooks/use-periodic-health-ping";

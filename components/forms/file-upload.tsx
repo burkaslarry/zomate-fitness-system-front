@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * [F006][S001]
+ * Feature: Shared API client (Next.js to FastAPI)
+ * Step: (see Logic)
+ * Logic: Reusable form primitives: upload, select, payment radio.
+ */
+
 import { useEffect, useState } from "react";
 
 export default function FileUpload({

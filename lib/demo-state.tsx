@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * [F006][S001]
+ * Feature: Shared API client (Next.js to FastAPI)
+ * Step: (see Logic)
+ * Logic: Demo-only UI state providers.
+ */
+
 import { createContext, ReactNode, useContext, useMemo, useState } from "react";
 
 export type DemoStudent = {

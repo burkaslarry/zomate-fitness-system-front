@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * [F001][S001]
+ * Feature: Student Onboarding
+ * Step: (see Logic)
+ * Logic: Public registration flow pages: photo, receipt, success.
+ */
+
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { alertApiError, api } from "../../../lib/api";

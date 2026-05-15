@@ -1,3 +1,10 @@
+/**
+ * [F007][S004]
+ * Feature: Backend platform (FastAPI & PostgreSQL)
+ * Step: (see Logic)
+ * Logic: Mock API: health probes mirroring FastAPI paths.
+ */
+
 import { NextResponse } from "next/server";
 
 /** Next mock — aligns shape with FastAPI ``GET /api/health/db`` when ``NEXT_PUBLIC_USE_NEXT_MOCK_API=1``. */

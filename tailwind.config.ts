@@ -1,3 +1,10 @@
+/**
+ * [F006][S001]
+ * Feature: Shared API client (Next.js to FastAPI)
+ * Step: (see Logic)
+ * Logic: Tailwind theme and content paths.
+ */
+
 import type { Config } from "tailwindcss";
 
 const config: Config = {

@@ -1,4 +1,9 @@
-/** @feature [F01.1][F01.3] */
+/**
+ * [F001][S001]
+ * Feature: Student Onboarding
+ * Step: (see Logic)
+ * Logic: Client helper posting registration payloads to FastAPI.
+ */
 
 import { computeMembershipExpiryIso, studentRegistrationPayloadSchema } from "./schemas/student";
 import { mockApiStore, type MockStudent } from "./mock-api-store";

@@ -1,4 +1,9 @@
-/** @feature [F03.2][F03.3] */
+/**
+ * [F003][S001]
+ * Feature: Attendance & Today-Only QR Check-in
+ * Step: (see Logic)
+ * Logic: Mock or proxy route: student check-in POST.
+ */
 
 import { NextResponse } from "next/server";
 import { mockApiStore } from "../../../lib/mock-api-store";

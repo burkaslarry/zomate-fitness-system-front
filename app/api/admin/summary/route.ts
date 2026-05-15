@@ -1,3 +1,10 @@
+/**
+ * [F004][S001]
+ * Feature: Admin Reports & Financials
+ * Step: (see Logic)
+ * Logic: Mock API: admin export, import, summary helpers.
+ */
+
 /*
  * Next.js mock — GET /api/admin/summary (same shape as FastAPI admin_summary).
  * Requires mock Bearer (mock-token-dev). Used when NEXT_PUBLIC_API_BASE_URL is empty.

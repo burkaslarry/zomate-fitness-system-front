@@ -1,3 +1,10 @@
+/**
+ * [F001][S001]
+ * Feature: Student Onboarding
+ * Step: (see Logic)
+ * Logic: Mock API: generic students route.
+ */
+
 /*
  * Next.js Route Handler — GET /api/students (mock store).
  * Mirrors FastAPI ``GET /api/students`` (no auth on backend) — used when FastAPI is down.

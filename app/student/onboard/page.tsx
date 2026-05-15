@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * [F001][S001]
+ * Feature: Student Onboarding
+ * Step: (see Logic)
+ * Logic: Onboarding wizard UI: PAR-Q, HKID, policy steps.
+ */
+
 import { useEffect, useState } from "react";
 import StudentOnboardingWizard from "../../../components/onboarding/student-onboarding-wizard";
 import { usePeriodicHealthPing } from "../../../hooks/use-periodic-health-ping";

@@ -1,12 +1,10 @@
 "use client";
 
-/*
- * Coach calendar — monthly grid of courses + realtime check-ins via FastAPI WebSocket `/ws/checkins`.
- *
- * CF09: ``role===COACH`` → 直行「教練入口」版面、 coach 選單用 ``api.publicCoaches``（毋須 ``/api/admin/coaches``）；
- *       ``CLERK``／``ADMIN`` 保持後台側欄 + ``api.coaches()`` 下拉揀任意教練。
- *
- * Mobile coach：底部 Gmail 式雙頁 slider（日程 Calendar | 簽到實時）、簽到 toast、後端 WS 附上之 ``course_id`` 用於已扣堂標色。
+/**
+ * [F003][S001]
+ * Feature: Attendance & Today-Only QR Check-in
+ * Step: (see Logic)
+ * Logic: Coach schedule UI and realtime check-in feed.
  */
 
 import Link from "next/link";

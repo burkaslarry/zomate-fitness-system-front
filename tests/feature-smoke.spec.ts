@@ -1,3 +1,10 @@
+/**
+ * [F006][S005]
+ * Feature: Shared API client (Next.js to FastAPI)
+ * Step: (see Logic)
+ * Logic: Playwright feature specs for smoke paths.
+ */
+
 import { expect, test } from "@playwright/test";
 
 test.describe("Feature route smoke checks", () => {

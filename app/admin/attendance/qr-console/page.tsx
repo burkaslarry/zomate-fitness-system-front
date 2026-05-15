@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * [F002][S004]
+ * Feature: Course Entry & Automation
+ * Step: (see Logic)
+ * Logic: Admin QR console: onboard and attendance PDF previews.
+ */
+
 /*
  * QR console — onboarding / check-in / payload PDFs via FastAPI ``qrcode-pdf``;
  * attendance CSV template via ``downloadCsv`` (authenticated blob download).
@@ -41,7 +48,7 @@ export default function AdminQrConsolePage() {
       const link = document.createElement("a");
       link.href = href;
       link.download =
-        kind === "onboard" ? "onboarding_qrcode.pdf" : kind === "checkin" ? "checkin_qrcode.pdf" : "payload_qrcode.pdf";
+        kind === "onboard" ? "zomate_onboarding_qrcode.pdf" : kind === "checkin" ? "checkin_qrcode.pdf" : "payload_qrcode.pdf";
       document.body.appendChild(link);
       link.click();
       link.remove();

@@ -1,14 +1,19 @@
 "use client";
 
+/**
+ * [F003][S001]
+ * Feature: Attendance & Today-Only QR Check-in
+ * Step: Search, today's lesson picker, class PIN pad
+ * Logic: Check-in PDF/QR opens this page (e.g. `?from=qr`); search → pick student → today's lesson → PIN → POST /api/checkin.
+ */
+
 /*
- * Student check-in — QR gate → name search → PIN pad (mock ``POST /api/checkin``).
- *
  * Advanced block: phone + PIN fallback calls the same API with `{ phone, pin_code }`
  * (no ``student_id``). WhatsApp hooks update demo counters only.
  */
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { alertApiError, api, getCheckinsWebSocketUrl } from "../../../lib/api";
 import { useDemoState } from "../../../lib/demo-state";
@@ -31,41 +36,36 @@ type SearchRow = {
   lesson_balance: number;
 };
 
-function isValidCheckinQrPayload(raw: string): boolean {
-  const t = raw.trim();
-  if (!t) return false;
-  if (t.includes("/student/checkin")) return true;
-  if (t.toUpperCase().startsWith("ZOMATE-CHECKIN")) return true;
-  try {
-    const j = JSON.parse(t) as { type?: string };
-    return j?.type === "zomate_checkin";
-  } catch {
-    return false;
-  }
-}
-
-function isOnboardingQrPayload(raw: string): boolean {
-  const t = raw.trim();
-  if (!t) return false;
-  return t.includes("/student/onboard");
-}
-
-type BarcodeDetectorCtor = new (opts: { formats: string[] }) => {
-  detect: (image: ImageBitmapSource) => Promise<Array<{ rawValue: string }>>;
+/** [F003][S001] One enrolled session on the Hong Kong calendar day (public API; no PIN). */
+type TodayLesson = {
+  course_id: number;
+  title: string;
+  coach_name: string;
+  scheduled_start: string;
+  scheduled_end: string;
 };
+
+function formatLessonWindow(isoStart: string, isoEnd: string): string {
+  const opt: Intl.DateTimeFormatOptions = {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Asia/Hong_Kong"
+  };
+  const s = new Date(isoStart).toLocaleTimeString("zh-HK", opt);
+  const e = new Date(isoEnd).toLocaleTimeString("zh-HK", opt);
+  return `${s} – ${e}`;
+}
 
 export default function StudentCheckinPage() {
   usePeriodicHealthPing();
-  const [gateOk, setGateOk] = useState(false);
-  const [scanMsg, setScanMsg] = useState("");
-  const [cameraOn, setCameraOn] = useState(false);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
 
   const [searchQ, setSearchQ] = useState("");
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<SearchRow[]>([]);
   const [selected, setSelected] = useState<SearchRow | null>(null);
+  const [todayLessons, setTodayLessons] = useState<TodayLesson[]>([]);
+  const [todayLessonsLoading, setTodayLessonsLoading] = useState(false);
+  const [selectedLesson, setSelectedLesson] = useState<TodayLesson | null>(null);
   const [pin, setPin] = useState("");
   const [status, setStatus] = useState("");
   const [acks, setAcks] = useState<Ack[]>([]);
@@ -76,7 +76,6 @@ export default function StudentCheckinPage() {
   const [pinPadError, setPinPadError] = useState(false);
   const { markCheckin } = useDemoState();
   const { logCheckinSuccess } = useWhatsAppLog();
-  const autoCameraRequested = useRef(false);
 
   useEffect(() => {
     const wsUrl = getCheckinsWebSocketUrl();
@@ -112,107 +111,31 @@ export default function StudentCheckinPage() {
   }, []);
 
   useEffect(() => {
-    const h = window.setTimeout(() => runSearch(searchQ), 320);
-    return () => window.clearTimeout(h);
-  }, [searchQ, runSearch]);
-
-  const stopCamera = useCallback(() => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    if (videoRef.current) videoRef.current.srcObject = null;
-    setCameraOn(false);
-  }, []);
-
-  useEffect(() => () => stopCamera(), [stopCamera]);
-
-  const startCamera = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } }
-      });
-      streamRef.current = stream;
-      setCameraOn(true);
-      setScanMsg("");
-      requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          void videoRef.current.play();
-        }
-      });
-    } catch {
-      setScanMsg("無法開啟相機，請改用有相機權限嘅瀏覽器再試。");
-    }
-  }, []);
-
-  /** 進頁自動開後鏡頭；已由 QR／gate 直入簽到步驟嘅連結唔再搶鏡頭。（部分瀏覽器或阻擋非手勢嘅 getUserMedia，此時仍可撳「開啟相機掃描」） */
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const p = new URLSearchParams(window.location.search);
-    const fromQrGate = p.get("from") === "qr" || p.get("gate") === "1";
-    if (fromQrGate) {
-      setGateOk(true);
-      setScanMsg("已從 QR 連結進入，請搜尋姓名並輸入 PIN 扣堂。");
+    if (!selected?.id) {
+      setTodayLessons([]);
+      setSelectedLesson(null);
       return;
     }
-    if (autoCameraRequested.current) return;
-    autoCameraRequested.current = true;
-    setScanMsg("正在開啟相機…");
-    void startCamera();
-
-    return () => {
-      autoCameraRequested.current = false;
-    };
-  }, [startCamera]);
-
-  function handleQrPayload(raw: string) {
-    if (isOnboardingQrPayload(raw)) {
-      stopCamera();
-      window.location.href = raw.startsWith("http") ? raw : "/student/onboard";
-      return;
-    }
-    if (isValidCheckinQrPayload(raw)) {
-      setGateOk(true);
-      setScanMsg("QR 有效，請於下方搜尋自己姓名。");
-      stopCamera();
-    } else {
-      setScanMsg("QR 內容唔係簽到碼，請向職員確認。");
-    }
-  }
-
-  async function captureScan() {
-    const video = videoRef.current;
-    if (!video?.videoWidth) {
-      setScanMsg("相機未準備好");
-      return;
-    }
-    const BD = (window as unknown as { BarcodeDetector?: BarcodeDetectorCtor }).BarcodeDetector;
-    if (!BD) {
-      setScanMsg("此瀏覽器不支援 BarcodeDetector，請用 Chrome / Edge 再試。");
-      return;
-    }
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.drawImage(video, 0, 0);
-    try {
-      const detector = new BD({ formats: ["qr_code"] });
-      const codes = await detector.detect(canvas);
-      if (!codes.length) {
-        setScanMsg("未偵測到 QR，請對準啲再試。");
-        return;
+    let cancelled = false;
+    setTodayLessonsLoading(true);
+    (async () => {
+      try {
+        const rows = (await api.studentTodayLessons(selected.id)) as TodayLesson[];
+        if (!cancelled) setTodayLessons(rows);
+      } catch {
+        if (!cancelled) setTodayLessons([]);
+      } finally {
+        if (!cancelled) setTodayLessonsLoading(false);
       }
-      const raw = codes[0].rawValue;
-      handleQrPayload(raw);
-    } catch {
-      setScanMsg("掃描失敗，請再試。");
-    }
-  }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selected?.id]);
 
   async function redeem(e: FormEvent) {
     e.preventDefault();
-    if (!selected) return;
+    if (!selected || !selectedLesson) return;
     setStatus("扣堂中…");
     setLastBalance(null);
     setPinPadError(false);
@@ -227,6 +150,7 @@ export default function StudentCheckinPage() {
       logCheckinSuccess(selected.full_name, selected.phone, bal);
       setStatus("簽到成功！學生 WhatsApp：上堂通知 + 剩餘堂數；教練 WhatsApp：學生已簽到（示範 log）。");
       setPin("");
+      setSelectedLesson(null);
       setSelected(null);
       setSearchQ("");
       setResults([]);
@@ -261,7 +185,7 @@ export default function StudentCheckinPage() {
   }
 
   function pressPinDigit(digit: string) {
-    setPin((prev) => (prev.length >= 5 ? prev : `${prev}${digit}`));
+    setPin((prev) => (prev.length >= 10 ? prev : `${prev}${digit}`));
   }
 
   function backspacePin() {
@@ -281,69 +205,43 @@ export default function StudentCheckinPage() {
       </div>
 
       <p className="text-sm text-zinc-400">
-        流程：掃門口 QR → 搜尋姓名 → 揀人 → 輸入 PIN 扣一堂。掃到學生 onboarding QR 會直接跳去填表頁。
+        店內簽到 QR／PDF 會連到本頁（可加 <code className="text-zinc-300">?from=qr</code>
+        ）。請輸入<strong>英文全名</strong>或<strong>電話號碼</strong>，按右側搜尋鍵；揀學員 → 確認今日課堂 → 揀一堂 → 輸入課堂 PIN 扣堂。
       </p>
 
-      {!gateOk && (
-        <section className="space-y-3 rounded-lg bg-white p-4 shadow [color-scheme:light] text-slate-900">
-          <h2 className="font-semibold text-slate-900">步驟 1 · 掃描店內簽到 QR</h2>
-          {!cameraOn ? (
-            <button
-              type="button"
-              className="inline-flex rounded-md border border-slate-600 bg-slate-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
-              onClick={() => {
-                setScanMsg("");
-                void startCamera();
-              }}
-            >
-              開啟相機掃描
-            </button>
-          ) : (
-            <div className="space-y-2">
-              <video ref={videoRef} className="w-full rounded-md bg-black" playsInline muted />
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm hover:bg-slate-50"
-                  onClick={captureScan}
-                >
-                  掃描此畫面
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md bg-slate-700 px-4 py-2 text-sm font-medium text-white hover:bg-slate-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700"
-                  onClick={stopCamera}
-                >
-                  關閉相機
-                </button>
-              </div>
-            </div>
-          )}
-          {scanMsg && <p className="text-sm text-slate-700">{scanMsg}</p>}
-        </section>
-      )}
-
-      {gateOk && (
-        <>
-          <section className="space-y-3 rounded-lg bg-white p-4 shadow [color-scheme:light] text-slate-900">
-            <h2 className="font-semibold text-slate-900">步驟 2 · 搜尋姓名</h2>
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg opacity-60">
-                🔍
-              </span>
+      <section className="space-y-3 rounded-lg bg-white p-4 shadow [color-scheme:light] text-slate-900">
+        <h2 className="font-semibold text-slate-900">步驟 2 · 搜尋姓名或電話</h2>
+        <div className="flex gap-2">
               <input
-                className="!pl-10"
-                placeholder="輸入姓名或電話一部份…"
+                className="min-w-0 flex-1"
+                placeholder="英文全名或電話號碼…"
                 value={searchQ}
                 onChange={(e) => setSearchQ(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void runSearch(searchQ);
+                  }
+                }}
                 autoComplete="off"
               />
+              <button
+                type="button"
+                aria-label="搜尋"
+                title="搜尋"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-slate-100 text-lg text-slate-900 hover:bg-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
+                onClick={() => void runSearch(searchQ)}
+              >
+                🔍
+              </button>
             </div>
             {searching && <p className="text-xs text-ink/50">搜尋中…</p>}
             <ul className="max-h-56 space-y-1 overflow-y-auto rounded border border-slate-200 p-1">
               {results.length === 0 && searchQ.trim().length >= 1 && !searching && (
                 <li className="space-y-2 p-2">
-                  <p className="text-sm text-ink/50">沒有符合結果</p>
+                  <p className="text-sm text-ink/50">
+                    請輸入英文全名或電話號碼，然後按搜尋按鈕。
+                  </p>
                   <Link
                     href={`/student/onboard?quickName=${encodeURIComponent(searchQ.trim())}`}
                     className="inline-flex items-center rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-xs font-medium text-slate-900 transition hover:bg-slate-200"
@@ -361,7 +259,10 @@ export default function StudentCheckinPage() {
                     }`}
                     onClick={() => {
                       setSelected(r);
+                      setSelectedLesson(null);
+                      setPin("");
                       setStatus("");
+                      setPinPadError(false);
                     }}
                   >
                     <span className="font-medium">{r.full_name}</span>
@@ -372,68 +273,117 @@ export default function StudentCheckinPage() {
                 </li>
               ))}
             </ul>
+
+            {selected && (
+              <div className="space-y-2 border-t border-slate-200 pt-3">
+                <p className="text-sm font-medium text-sky-900">
+                  已揀學員：<span className="font-semibold text-slate-900">{selected.full_name}</span>
+                </p>
+                <p className="text-sm text-slate-600">請確認今日課堂</p>
+                {todayLessonsLoading && <p className="text-xs text-ink/50">載入今日課堂…</p>}
+                {!todayLessonsLoading && todayLessons.length === 0 && (
+                  <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-800">
+                    {selected.full_name} 今日沒有課堂要上
+                  </p>
+                )}
+                {!todayLessonsLoading && todayLessons.length > 0 && (
+                  <ul className="max-h-48 space-y-1 overflow-y-auto rounded border border-slate-200 p-1">
+                    {todayLessons.map((lesson) => (
+                      <li key={lesson.course_id}>
+                        <button
+                          type="button"
+                          data-testid="checkin-today-lesson"
+                          className={`w-full rounded px-3 py-2 text-left text-sm transition ${
+                            selectedLesson?.course_id === lesson.course_id
+                              ? "bg-sky-100 ring-2 ring-sky-400"
+                              : "hover:bg-slate-100"
+                          }`}
+                          onClick={() => {
+                            setSelectedLesson(lesson);
+                            setPin("");
+                            setStatus("");
+                            setPinPadError(false);
+                          }}
+                        >
+                          <span className="font-medium text-slate-900">{lesson.title}</span>
+                          <span className="block text-xs text-slate-600">
+                            {lesson.coach_name} · {formatLessonWindow(lesson.scheduled_start, lesson.scheduled_end)}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </section>
 
-          <section className="space-y-3 rounded-lg bg-white p-4 shadow [color-scheme:light] text-slate-900">
-            <h2 className="font-semibold text-slate-900">步驟 3 · 輸入 PIN 扣堂</h2>
-            {!selected ? (
-              <p className="text-sm text-ink/50">請先喺上面揀返自己。</p>
-            ) : (
+          {selected && selectedLesson && (
+            <section className="space-y-3 rounded-lg bg-white p-4 shadow [color-scheme:light] text-slate-900">
+              <h2 className="font-semibold text-slate-900">步驟 3 · 輸入 PIN 扣堂</h2>
               <p className="text-sm text-slate-800">
-                已揀：<span className="font-medium">{selected.full_name}</span>
+                扣堂：<span className="font-medium">{selected.full_name}</span> · {selectedLesson.title}（
+                {formatLessonWindow(selectedLesson.scheduled_start, selectedLesson.scheduled_end)}）
               </p>
-            )}
-            <form onSubmit={redeem} className="space-y-3">
-              <input inputMode="numeric" autoComplete="one-time-code" placeholder="PIN（帳戶或課堂專用）" value={pin} readOnly disabled={!selected} />
-              <motion.div
-                className="grid grid-cols-3 gap-2"
-                animate={pinPadError ? { x: [0, -10, 10, -8, 8, -4, 4, 0] } : { x: 0 }}
-                transition={{ duration: 0.42 }}
-                onAnimationComplete={() => setPinPadError(false)}
-              >
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+              <form onSubmit={redeem} className="space-y-3">
+                <input
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="PIN（帳戶或課堂專用）"
+                  value={pin}
+                  readOnly
+                  className="w-full"
+                />
+                <motion.div
+                  className="grid w-full grid-cols-3 gap-2"
+                  animate={pinPadError ? { x: [0, -10, 10, -8, 8, -4, 4, 0] } : { x: 0 }}
+                  transition={{ duration: 0.42 }}
+                  onAnimationComplete={() => setPinPadError(false)}
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      className="h-14 min-h-[3rem] w-full rounded-lg border border-slate-300 bg-slate-100 text-lg font-semibold text-slate-900 hover:bg-slate-200 disabled:opacity-50"
+                      onClick={() => pressPinDigit(String(n))}
+                      disabled={!selected || !selectedLesson}
+                    >
+                      {n}
+                    </button>
+                  ))}
                   <button
-                    key={n}
                     type="button"
-                    className="h-14 w-14 rounded-lg border border-slate-300 bg-slate-100 text-lg font-semibold text-slate-900 hover:bg-slate-200 disabled:opacity-50"
-                    onClick={() => pressPinDigit(String(n))}
-                    disabled={!selected}
+                    className="h-14 min-h-[3rem] w-full rounded-lg border border-slate-300 bg-slate-100 text-sm font-semibold text-slate-900 hover:bg-slate-200 disabled:opacity-50"
+                    onClick={backspacePin}
+                    disabled={!selected || !selectedLesson || pin.length === 0}
                   >
-                    {n}
+                    刪除
                   </button>
-                ))}
-                <button
-                  type="button"
-                  className="h-14 w-14 rounded-lg border border-slate-300 bg-slate-100 text-sm font-semibold text-slate-900 hover:bg-slate-200 disabled:opacity-50"
-                  onClick={backspacePin}
-                  disabled={!selected || pin.length === 0}
-                >
-                  刪除
-                </button>
-                <button
-                  type="button"
-                  className="h-14 w-14 rounded-lg border border-slate-300 bg-slate-100 text-lg font-semibold text-slate-900 hover:bg-slate-200 disabled:opacity-50"
-                  onClick={() => pressPinDigit("0")}
-                  disabled={!selected}
-                >
-                  0
-                </button>
-                <button
-                  type="submit"
-                  className="h-14 w-14 rounded-lg border border-slate-600 bg-slate-900 text-sm font-semibold text-white hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 disabled:opacity-50"
-                  disabled={!selected || pin.trim().length < 5}
-                >
-                  確認
-                </button>
-              </motion.div>
-            </form>
-            {typeof lastBalance === "number" && (
-              <p className="rounded-md bg-emerald-50 p-2 text-sm text-emerald-900">
-                更新後餘額：{lastBalance} 堂（實際會經 WhatsApp 通知）
-              </p>
-            )}
-            {status && <p className="text-sm text-slate-800">{status}</p>}
-          </section>
+                  <button
+                    type="button"
+                    className="h-14 min-h-[3rem] w-full rounded-lg border border-slate-300 bg-slate-100 text-lg font-semibold text-slate-900 hover:bg-slate-200 disabled:opacity-50"
+                    onClick={() => pressPinDigit("0")}
+                    disabled={!selected || !selectedLesson}
+                  >
+                    0
+                  </button>
+                  <button
+                    type="submit"
+                    className="h-14 min-h-[3rem] w-full rounded-lg border border-slate-600 bg-slate-900 text-sm font-semibold text-white hover:bg-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 disabled:opacity-50"
+                    disabled={!selected || !selectedLesson || pin.trim().length < 4}
+                  >
+                    確認
+                  </button>
+                </motion.div>
+              </form>
+              {typeof lastBalance === "number" && (
+                <p className="rounded-md bg-emerald-50 p-2 text-sm text-emerald-900">
+                  更新後餘額：{lastBalance} 堂（實際會經 WhatsApp 通知）
+                </p>
+              )}
+              {status && <p className="text-sm text-slate-800">{status}</p>}
+            </section>
+          )}
 
           <button
             type="button"
@@ -476,9 +426,6 @@ export default function StudentCheckinPage() {
               </button>
             </form>
           )}
-        </>
-      )}
-
       {acks.length > 0 && (
         <div className="rounded-lg bg-white p-4 shadow [color-scheme:light] text-slate-900">
           <h2 className="mb-2 text-sm font-semibold text-slate-900">即時回饋</h2>

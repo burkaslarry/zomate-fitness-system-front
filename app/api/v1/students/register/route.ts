@@ -1,4 +1,9 @@
-/** @feature [F01.1] */
+/**
+ * [F001][S001]
+ * Feature: Student Onboarding
+ * Step: (see Logic)
+ * Logic: Mock API route: registration POST.
+ */
 
 import { NextResponse } from "next/server";
 import { registerStudentFromJson } from "../../../../../lib/register-student";

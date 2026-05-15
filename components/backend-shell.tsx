@@ -1,11 +1,10 @@
 "use client";
 
-/*
- * Features F015:AdminChromeFrontend -- bilingual shell nav, auth teardown, periodic health ping hook.
- * Code: MENU_SECTIONS, pathname highlighting, PERIODIC_HEALTH_INTERVAL_MS handshake with ``lib/api``.
- *
- * CF09: COACH 帳號由 ``CoachScopeGuard`` 鎖定只去 `/coach/calendar`；
- *       該頁會傳 ``layout=\"coach\"`` 以停用左欄、行動版面；ADMIN／CLERK 仍為此處全套後台側欄。
+/**
+ * [F006][S002]
+ * Feature: Shared API client (Next.js to FastAPI)
+ * Step: (see Logic)
+ * Logic: Authenticated admin layout shell and navigation.
  */
 
 import Link from "next/link";

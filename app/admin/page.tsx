@@ -1,7 +1,10 @@
 "use client";
 
-/*
- * Features F015:AdminDashboardSurface -- KPI cards, course hub, QR blocks use canvas/surface/primary tokens (no slate-900 shell).
+/**
+ * [F004][S001]
+ * Feature: Admin Reports & Financials
+ * Step: (see Logic)
+ * Logic: Admin dashboard: KPI summary and shortcuts.
  */
 
 import Link from "next/link";
@@ -120,7 +123,7 @@ export default function AdminPage() {
       const href = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = href;
-      a.download = kind === "onboard" ? "onboarding_qrcode.pdf" : "checkin_qrcode.pdf";
+      a.download = kind === "onboard" ? "zomate_onboarding_qrcode.pdf" : "zomate_checkin_qrcode.pdf";
       a.click();
       URL.revokeObjectURL(href);
     } catch (err) {

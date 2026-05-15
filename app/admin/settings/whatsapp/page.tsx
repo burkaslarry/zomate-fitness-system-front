@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * [F005][S003]
+ * Feature: Balance Sync & Integrations
+ * Step: (see Logic)
+ * Logic: WhatsApp settings and log viewer for admins.
+ */
+
 import { useCallback, useEffect, useState } from "react";
 import BackendShell from "../../../../components/backend-shell";
 import { api } from "../../../../lib/api";

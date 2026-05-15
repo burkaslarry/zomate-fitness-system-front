@@ -1,4 +1,9 @@
-/** @feature [F03.5][F04.2] */
+/**
+ * [F003][S005]
+ * Feature: Attendance & Today-Only QR Check-in
+ * Step: (see Logic)
+ * Logic: Mock API: session ledger GET and POST.
+ */
 
 import { NextResponse } from "next/server";
 import { sessionLedgerEntrySchema, isLateCancellation } from "../../../../lib/schemas/report";

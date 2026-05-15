@@ -1,34 +1,30 @@
-/** @feature [CF07][F04.1][F03] API transport — FastAPI → PostgreSQL (zomate_fs_*) */
+/**
+ * [F006][S001]
+ * Feature: Shared API client (Next.js → FastAPI)
+ * Step: API base & WebSocket origin resolution
+ * Logic: Resolve `NEXT_PUBLIC_API_BASE_URL`, optional same-origin mocks, dev default to FastAPI, WS host for `/ws/checkins`.
+ */
 
 import { clearAuthSession } from "./auth";
-
-/*
- * Client-side fetch helper:
- * - JSON: request() + retries + Bearer from localStorage (zomate_auth_session).
- * - CSV: uploadCsv / downloadCsv / requestBlob hit FastAPI (Bearer).
- *
- * Local dev defaults to FastAPI at http://127.0.0.1:8000 so data comes from DATABASE_URL
- * on the backend (e.g. Render/eventxp PostgreSQL), not Next Route Handler mocks.
- * Opt into same-origin mocks only with NEXT_PUBLIC_USE_NEXT_MOCK_API=1.
- *
- * CF07 implementation notes:
- * 01. Read token from localStorage and attach Authorization (Bearer).
- * 02. request() retries transient 5xx responses with backoff.
- * 03. Blob helpers for authenticated CSV downloads (no bare anchor href).
- */
 
 function normalizeApiBase(url: string): string {
   return url.trim().replace(/\/+$/, "");
 }
 
 /**
- * Fallback when deploying to Vercel with same-origin `/api/* → Render` rewrites (`vercel.json`).
- * Browser HTTP uses relative `/api`; WebSockets cannot use that rewrite path on the Edge CDN,
- * so WS must hit FastAPI host directly (`wss://…/ws/checkins`).
- * Override anytime with NEXT_PUBLIC_BACKEND_ORIGIN.
+ * [F006][S001]
+ * Feature: Shared API client (Next.js → FastAPI)
+ * Step: API base & WebSocket origin resolution
+ * Logic: Same-origin `/api` on Vercel rewrites; WS must target FastAPI host (`NEXT_PUBLIC_BACKEND_ORIGIN` or production default).
  */
 export const DEFAULT_PRODUCTION_BACKEND_ORIGIN = "https://zomate-fitness-system-back.onrender.com";
 
+/**
+ * [F006][S001]
+ * Feature: Shared API client (Next.js → FastAPI)
+ * Step: API base & WebSocket origin resolution
+ * Logic: Explicit base → mock mode → dev `127.0.0.1:8000` → production same-origin.
+ */
 function resolveApiBaseUrl(): string {
   const explicit = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   if (explicit) {
@@ -55,7 +51,10 @@ export function isUsingNextMockApi(): boolean {
 }
 
 /**
- * Origin host for realtime WebSockets (always reaches FastAPI, not the Vercel hostname).
+ * [F006][S001]
+ * Feature: Shared API client (Next.js → FastAPI)
+ * Step: API base & WebSocket origin resolution
+ * Logic: `NEXT_PUBLIC_BACKEND_ORIGIN` → `API_BASE_URL` → dev default → `DEFAULT_PRODUCTION_BACKEND_ORIGIN`.
  */
 function resolveWebSocketBackendOrigin(): string {
   const envOrigin = process.env.NEXT_PUBLIC_BACKEND_ORIGIN?.trim();
@@ -71,7 +70,12 @@ function resolveWebSocketBackendOrigin(): string {
   return normalizeApiBase(DEFAULT_PRODUCTION_BACKEND_ORIGIN);
 }
 
-/** FastAPI `/ws/checkins` — realtime student check-ins (broadcast from POST /api/checkin). */
+/**
+ * [F003][S001]
+ * Feature: Attendance & Today-Only QR Check-in
+ * Step: QR scan / paste — realtime channel for coach calendar
+ * Logic: Build `wss://`/`ws://` URL to FastAPI `/ws/checkins` using resolved backend origin.
+ */
 export function getCheckinsWebSocketUrl(): string {
   const base = resolveWebSocketBackendOrigin();
   const path = "/ws/checkins";
@@ -127,7 +131,12 @@ export function alertApiError(err: unknown): void {
   window.alert(formatApiError(err));
 }
 
-/** Session rows live in Postgres; stale localStorage token → 401. Clear + send user to login. */
+/**
+ * [F006][S002]
+ * Feature: Shared API client (Next.js → FastAPI)
+ * Step: Bearer auth & stale session redirect
+ * Logic: On 401 with expired/invalid token, clear `zomate_auth_session` and send user to `/login`.
+ */
 function redirectOnStaleAuth(path: string, status: number, bodyText: string) {
   if (status !== 401 || typeof window === "undefined") return;
   if (path === "/api/auth/login") return;
@@ -145,6 +154,12 @@ function redirectOnStaleAuth(path: string, status: number, bodyText: string) {
   }
 }
 
+/**
+ * [F006][S002]
+ * Feature: Shared API client (Next.js → FastAPI)
+ * Step: Bearer auth & stale session redirect
+ * Logic: Read JWT from `localStorage` (`zomate_auth_session`) for `Authorization: Bearer`.
+ */
 function authHeaders() {
   if (typeof window === "undefined") return {};
   const raw = window.localStorage.getItem("zomate_auth_session");
@@ -157,6 +172,12 @@ function authHeaders() {
   }
 }
 
+/**
+ * [F006][S003]
+ * Feature: Shared API client (Next.js → FastAPI)
+ * Step: JSON fetch with retries & error shaping
+ * Logic: Attach Bearer headers, retry transient 5xx with backoff, normalize FastAPI `detail` into `Error`.
+ */
 async function request(path: string, options?: RequestInit) {
   let lastError: Error | null = null;
   const headers = new Headers(options?.headers);
@@ -391,6 +412,9 @@ export const api = {
     request("/api/checkin", { method: "POST", body: JSON.stringify(payload) }),
   studentSearch: (q: string) =>
     request(`/api/public/student-search?q=${encodeURIComponent(q)}`),
+  /** [F003][S001] Today's enrolled sessions (HK calendar) for check-in lesson picker. */
+  studentTodayLessons: (studentId: number) =>
+    request(`/api/public/student-today-lessons?student_id=${encodeURIComponent(String(studentId))}`),
   summary: () => request("/api/admin/summary"),
   whatsappLogs: () => request("/api/admin/whatsapp-logs"),
   auditLogs: (limit?: number) =>
@@ -451,6 +475,13 @@ export const api = {
     request(`/api/admin/coaches/${coachId}?hard=${hard ? "true" : "false"}`, { method: "DELETE" }),
 
   adminCourses: () => request("/api/admin/courses"),
+  adminCoursesByDay: (day: string) =>
+    request(`/api/admin/courses/by-day?day=${encodeURIComponent(day)}`),
+  assignCourseCoach: (courseId: number, coachId: number) =>
+    request(`/api/admin/courses/${courseId}/assign-coach`, {
+      method: "PATCH",
+      body: JSON.stringify({ coach_id: coachId })
+    }),
   createCourse: (payload: Record<string, unknown>) =>
     request("/api/admin/courses", { method: "POST", body: JSON.stringify(payload) }),
   deleteCourse: (courseId: number, hard = false) =>

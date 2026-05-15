@@ -1,3 +1,10 @@
+/**
+ * [F006][S001]
+ * Feature: Shared API client (Next.js to FastAPI)
+ * Step: (see Logic)
+ * Logic: Root layout: fonts and global providers shell.
+ */
+
 import "./globals.css";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";

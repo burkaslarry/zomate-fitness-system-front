@@ -1,3 +1,10 @@
+/**
+ * [F006][S005]
+ * Feature: Shared API client (Next.js to FastAPI)
+ * Step: (see Logic)
+ * Logic: Playwright runner configuration.
+ */
+
 import { defineConfig } from "@playwright/test";
 
 const remoteBase = process.env.E2E_BASE_URL?.trim();

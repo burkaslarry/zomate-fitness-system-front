@@ -1,6 +1,11 @@
 "use client";
 
-/** @feature [F01.1][F01.2][F01.3][F01.4] */
+/**
+ * [F001][S001]
+ * Feature: Student Onboarding
+ * Step: (see Logic)
+ * Logic: Onboarding wizard UI: PAR-Q, HKID, policy steps.
+ */
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";

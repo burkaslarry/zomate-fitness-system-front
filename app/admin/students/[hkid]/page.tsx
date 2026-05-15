@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * [F001][S001]
+ * Feature: Student Onboarding
+ * Step: (see Logic)
+ * Logic: Admin student roster, HKID detail, onboarding records.
+ */
+
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import BackendShell from "../../../../components/backend-shell";

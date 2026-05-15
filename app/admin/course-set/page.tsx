@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * [F002][S001]
+ * Feature: Course Entry & Automation
+ * Step: (see Logic)
+ * Logic: Branches, coaches, course-set admin surfaces.
+ */
+
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import BackendShell from "../../../components/backend-shell";

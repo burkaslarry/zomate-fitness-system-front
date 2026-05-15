@@ -1,4 +1,9 @@
-/** @feature [F04.1] */
+/**
+ * [F004][S001]
+ * Feature: Admin Reports & Financials
+ * Step: (see Logic)
+ * Logic: Mock API: sales, expenses, coach-attendance reports.
+ */
 
 import { NextResponse } from "next/server";
 import { mockApiStore } from "../../../../../lib/mock-api-store";

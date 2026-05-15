@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * [F001][S001]
+ * Feature: Student Onboarding
+ * Step: (see Logic)
+ * Logic: Public registration flow pages: photo, receipt, success.
+ */
+
 import Link from "next/link";
 import { useEffect, useState } from "react";
 

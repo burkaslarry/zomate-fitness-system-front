@@ -1,3 +1,10 @@
+/**
+ * [F007][S002]
+ * Feature: Backend platform (FastAPI & PostgreSQL)
+ * Step: (see Logic)
+ * Logic: Frontend typings mirroring API DTOs.
+ */
+
 export type MemberProfile = {
   id: number;
   hkid: string | null;
@@ -13,6 +20,20 @@ export type MemberProfile = {
   photo_url: string | null;
   is_active: boolean;
   created_at: string;
+};
+
+export type CourseCheckinPinRow = {
+  course_id: number;
+  course_title: string;
+  branch_name: string;
+  checkin_pin: string;
+};
+
+/** Response from POST /api/trial-classes */
+export type TrialClassCreateResponse = {
+  id: number;
+  member: MemberProfile;
+  course_checkin_pins?: CourseCheckinPinRow[];
 };
 
 export type PackageDto = {
@@ -51,13 +72,6 @@ export type BranchDto = {
   business_start_time?: string;
   business_end_time?: string;
   remarks?: string | null;
-};
-
-export type CourseCheckinPinRow = {
-  course_id: number;
-  course_title: string;
-  branch_name: string;
-  checkin_pin: string;
 };
 
 export type CategoryEnrollmentRow = {

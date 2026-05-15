@@ -1,5 +1,8 @@
-/*
- * CF09:AuthSessionRoles — Bearer 對應後台 ``/api/auth/login``／``auth_me`` 之 ``ADMIN``／``CLERK``／``COACH``（COACH 僅許可見 ``CoachScopeGuard`` + 教練行事曆 API）。
+/**
+ * [F006][S002]
+ * Feature: Shared API client (Next.js to FastAPI)
+ * Step: (see Logic)
+ * Logic: localStorage auth session read and write for staff roles.
  */
 
 export type AuthSession = {

@@ -1,6 +1,11 @@
 "use client";
 
-/** @feature [F03.5][F04.5] */
+/**
+ * [F003][S005]
+ * Feature: Attendance & Today-Only QR Check-in
+ * Step: (see Logic)
+ * Logic: Session ledger UI: deduct reasons, admin entry.
+ */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {

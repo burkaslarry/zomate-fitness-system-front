@@ -1,5 +1,12 @@
 "use client";
 
+/**
+ * [F006][S001]
+ * Feature: Shared API client (Next.js to FastAPI)
+ * Step: (see Logic)
+ * Logic: React hooks: health ping, WhatsApp log polling.
+ */
+
 import { useEffect } from "react";
 import { api } from "../lib/api";
 

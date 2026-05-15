@@ -1,3 +1,10 @@
+/**
+ * [F006][S004]
+ * Feature: Shared API client (Next.js to FastAPI)
+ * Step: (see Logic)
+ * Logic: RFC4180 CSV parsing and writing utilities.
+ */
+
 /*
  * RFC4180-style CSV helpers for Next.js mock admin routes only (same columns as FastAPI).
  * Production CSV authority: ``zomate-fitness-system-back`` — never duplicate schema drift here.

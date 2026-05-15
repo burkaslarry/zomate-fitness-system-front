@@ -1,8 +1,10 @@
 "use client";
 
-/*
- * CF09:CoachScopeGuard — AppUser.role=COACH 時只許停留在 `/coach/calendar`；
- * Session 存在 localStorage，Edge middleware 讀唔到，故此用 client effect 兜底。
+/**
+ * [F003][S001]
+ * Feature: Attendance & Today-Only QR Check-in
+ * Step: (see Logic)
+ * Logic: Restricts coach-role routes and API scope.
  */
 
 import { ReactNode, useEffect } from "react";

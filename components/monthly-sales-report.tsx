@@ -1,6 +1,11 @@
 "use client";
 
-/** @feature [F04.1][F04.5] */
+/**
+ * [F004][S001]
+ * Feature: Admin Reports & Financials
+ * Step: (see Logic)
+ * Logic: Finance and reports UI: sales, expenses, payroll.
+ */
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";

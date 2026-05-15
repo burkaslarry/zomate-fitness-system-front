@@ -1,7 +1,8 @@
-/** @feature [F02.3][F03.1][F03.2][F03.3][F04.1][F04.2]
- *
- * In-memory mock backing Next Route Handlers when FastAPI / Postgres are offline.
- * Align field names with FastAPI schemas where possible (full_name, lesson_balance, pin_code).
+/**
+ * [F006][S001]
+ * Feature: Shared API client (Next.js to FastAPI)
+ * Step: (see Logic)
+ * Logic: In-memory mock store for Next mock API routes.
  */
 
 import type { CourseSaleRow } from "./types/monthly-sales-report";
@@ -205,6 +206,35 @@ export const mockApiStore = {
         normalizePhone(s.phone).includes(normalizePhone(t)) ||
         s.phone.toLowerCase().includes(t)
     );
+  },
+
+  /**
+   * [F003][S001] Mock today's lessons (Asia/Hong_Kong calendar). Student id 4 has none for empty-state demos.
+   */
+  todayLessonsForStudent(studentId: number): Array<{
+    course_id: number;
+    title: string;
+    coach_name: string;
+    scheduled_start: string;
+    scheduled_end: string;
+  }> {
+    const s = students.find((x) => x.id === studentId);
+    if (!s) return [];
+    if (studentId === 4) return [];
+    const hkNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Hong_Kong" }));
+    const start = new Date(hkNow);
+    start.setHours(10, 0, 0, 0);
+    const end = new Date(hkNow);
+    end.setHours(11, 0, 0, 0);
+    return [
+      {
+        course_id: 9000 + studentId,
+        title: "今日 PT 課堂",
+        coach_name: "Coach Demo",
+        scheduled_start: start.toISOString(),
+        scheduled_end: end.toISOString()
+      }
+    ];
   },
 
   registerStudent(input: Omit<MockStudent, "id" | "pin_code"> & { pin_code?: string }): MockStudent {

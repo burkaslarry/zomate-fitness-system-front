@@ -1,4 +1,9 @@
-/** @feature [F01.1][F01.2][F01.3][F01.4] */
+/**
+ * [F001][S001]
+ * Feature: Student Onboarding
+ * Step: (see Logic)
+ * Logic: Zod schemas shared by onboarding and forms.
+ */
 
 import { z } from "zod";
 
