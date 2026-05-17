@@ -46,6 +46,16 @@ export function getResolvedApiBaseUrl(): string {
   return API_BASE_URL;
 }
 
+/** Build absolute URL for FastAPI-served uploads (``/uploads/...``). */
+export function apiAssetUrl(relativeOrAbsolute: string | null | undefined): string | undefined {
+  if (!relativeOrAbsolute) return undefined;
+  if (/^https?:\/\//i.test(relativeOrAbsolute)) return relativeOrAbsolute;
+  const path = relativeOrAbsolute.startsWith("/") ? relativeOrAbsolute : `/${relativeOrAbsolute}`;
+  const base = API_BASE_URL;
+  if (!base) return path;
+  return `${base}${path}`;
+}
+
 export function isUsingNextMockApi(): boolean {
   return API_BASE_URL === "";
 }
@@ -333,6 +343,7 @@ export const api = {
     request("/api/members/duplicate-check", { method: "POST", body: JSON.stringify(payload) }),
   member: (hkid: string) => request(`/api/members/${encodeURIComponent(hkid)}`),
   memberFull: (hkid: string) => request(`/api/members/${encodeURIComponent(hkid)}/full`),
+  memberFullById: (studentId: number | string) => request(`/api/members/by-id/${encodeURIComponent(String(studentId))}/full`),
   memberSearch: (q: string) => request(`/api/members/search?q=${encodeURIComponent(q)}`),
   /** 續會 / 試堂：以香港電話查唯一學員（接受 8 位或 +852） */
   memberLookupByPhone: (phone: string) =>
@@ -361,6 +372,18 @@ export const api = {
     if (payload.note) form.append("note", payload.note);
     form.append("source", payload.source ?? "REGISTER");
     return request(`/api/members/${encodeURIComponent(hkid)}/receipts`, { method: "POST", body: form });
+  },
+  uploadMemberReceiptById: (
+    studentId: number | string,
+    payload: { file: File; amount?: string; payment_method?: string; note?: string; source?: "REGISTER" | "RENEWAL" }
+  ) => {
+    const form = new FormData();
+    form.append("file", payload.file);
+    if (payload.amount) form.append("amount", payload.amount);
+    if (payload.payment_method) form.append("payment_method", payload.payment_method);
+    if (payload.note) form.append("note", payload.note);
+    form.append("source", payload.source ?? "RENEWAL");
+    return request(`/api/members/by-id/${encodeURIComponent(String(studentId))}/receipts`, { method: "POST", body: form });
   },
   resendPin: (hkid: string) =>
     request(`/api/members/${encodeURIComponent(hkid)}/resend-pin`, { method: "POST" }),

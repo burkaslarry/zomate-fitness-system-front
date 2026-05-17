@@ -13,7 +13,6 @@ export type MemberProfile = {
   email: string | null;
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
-  pin_code: string;
   lesson_balance: number;
   coach_trial_quota_remaining?: number;
   photo_path: string | null;
@@ -26,6 +25,9 @@ export type CourseCheckinPinRow = {
   course_id: number;
   course_title: string;
   branch_name: string;
+  coach_name?: string;
+  scheduled_start?: string;
+  series_end_date?: string | null;
   checkin_pin: string;
 };
 
@@ -52,6 +54,12 @@ export type CourseCategoryDto = {
   is_deleted?: boolean;
 };
 
+export type CoachEnrolledStudentDto = {
+  id: number;
+  full_name: string;
+  phone: string;
+};
+
 export type CoachDto = {
   id: number;
   full_name: string;
@@ -61,6 +69,7 @@ export type CoachDto = {
   branch_id: number | null;
   branch_name?: string | null;
   hire_date?: string | null;
+  enrolled_students?: CoachEnrolledStudentDto[];
 };
 
 export type TrialClassKindDto = {
@@ -82,6 +91,23 @@ export type BranchDto = {
   remarks?: string | null;
 };
 
+export type InstallmentPaymentRow = {
+  id: number;
+  installment_no: number;
+  amount: number;
+  due_date: string;
+  paid_at: string | null;
+  status: string;
+};
+
+export type InstallmentPlanRow = {
+  id: number;
+  total_installments: number;
+  status: string;
+  created_at: string;
+  payments: InstallmentPaymentRow[];
+};
+
 export type CategoryEnrollmentRow = {
   id: number;
   course_category_id: number;
@@ -89,6 +115,7 @@ export type CategoryEnrollmentRow = {
   status: string;
   total_lessons: number;
   started_at: string;
+  installment_plans?: InstallmentPlanRow[];
 };
 
 export type MemberFull = {
@@ -104,16 +131,26 @@ export type MemberFull = {
   }>;
   packages: Array<{
     id: number;
+    package_id?: number | null;
+    coach_id?: number | null;
+    branch_id?: number | null;
     name: string;
+    lessons: number;
     coach: string | null;
     amount: number | null;
     payment_method: string | null;
-    remaining: number;
+    renewal_date?: string;
     created_at: string;
   }>;
   trial_classes: Array<{
     id: number;
     type: string;
+    coach_id?: number | null;
+    coach_name?: string | null;
+    branch_id?: number | null;
+    branch_name?: string | null;
+    trial_kind_id?: number | null;
+    trial_kind_label_zh?: string | null;
     class_date: string;
     note: string | null;
     created_at: string;
@@ -121,7 +158,7 @@ export type MemberFull = {
   activity_log: Array<{
     id: number;
     type: string;
-    detail: string | null;
+    ref_id?: number | null;
     created_at: string;
   }>;
   course_checkin_pins?: CourseCheckinPinRow[];

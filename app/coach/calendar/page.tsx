@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * [F003][S001]
+ * [F003][S002]
  * Feature: Attendance & Today-Only QR Check-in
- * Step: (see Logic)
- * Logic: Coach schedule UI and realtime check-in feed.
+ * Step: Coach calendar + live feed + bottom-tab PIN／流程參考
+ * Logic: Month grid; WS check-ins; third coach tab links student check-in, admin PIN paths, trial PIN.
  */
 
 import Link from "next/link";
@@ -83,12 +83,52 @@ function redeemedPairKey(courseId: number, studentId: number): string {
   return `${courseId}:${studentId}`;
 }
 
+/** [F003][S003] Master admin／教練：簽到與課堂 PIN 途徑一覽。 */
+function PinFlowGuide() {
+  const rows: { who: string; path: string; href: string }[] = [
+    { who: "學生／店內簽到", path: "搜尋 → 揀今日堂 → 課堂 PIN 扣堂", href: "/student/checkin" },
+    {
+      who: "職員 · 該學員所有課堂 PIN",
+      path: "Admin → 學生名單 → 點姓名 → 課程記錄 → 已開課程",
+      href: "/admin/students"
+    },
+    { who: "教練 · 本頁／單日課表", path: "月曆或 /coach 課程卡 enrollment 內之 PIN", href: "/coach" },
+    { who: "試堂成功後", path: "trial-class 成功 modal 顯示課程 PIN（若有）", href: "/trial-class" }
+  ];
+  return (
+    <div className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm ring-1 ring-ink/[0.04]">
+      <h2 className="text-sm font-semibold text-ink">簽到與課堂 PIN · 快速途徑</h2>
+      <p className="mt-2 text-xs leading-relaxed text-ink/55">
+        開課時後台會按<strong>上課星期</strong>同首課時間<strong>自動排一系列堂</strong>；如遇唔得閒，教練請喺{" "}
+        <Link href="/coach" className="font-medium text-primary underline-offset-2 hover:underline">
+          教練課表
+        </Link>{" "}
+        改該系列的具體日期時間。
+      </p>
+      <ul className="mt-3 space-y-2 text-xs">
+        {rows.map((r) => (
+          <li
+            key={r.href + r.who}
+            className="rounded-lg border border-ink/[0.06] bg-canvas/80 px-2.5 py-2 leading-snug"
+          >
+            <div className="font-medium text-ink">{r.who}</div>
+            <div className="mt-0.5 text-ink/65">{r.path}</div>
+            <Link href={r.href} className="mt-1 inline-block font-medium text-primary underline-offset-2 hover:underline">
+              開啟 → {r.href}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default function CoachCalendarPage() {
   /** 須待 client mount 先讀 session；首屏勿用 ``false`` 誤打 ``api.coaches()``（COACH 會 403）。 */
   const [portalResolved, setPortalResolved] = useState(false);
   const [coachPortal, setCoachPortal] = useState(false);
-  /** COACH mobile：底欄 Gmail 式兩 pane（日程 | 簽到實時） */
-  const [mobileCoachTab, setMobileCoachTab] = useState<"calendar" | "live">("calendar");
+  /** COACH mobile：底欄（日程 | 簽到實時 | PIN／途徑） */
+  const [mobileCoachTab, setMobileCoachTab] = useState<"calendar" | "live" | "guide">("calendar");
   const touchStartX = useRef<number | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [courseIdsRedeemed, setCourseIdsRedeemed] = useState<Set<number>>(() => new Set());
@@ -356,8 +396,11 @@ export default function CoachCalendarPage() {
     const end = e.changedTouches[0]?.clientX;
     if (end == null) return;
     const dx = end - start;
-    if (dx < -56) setMobileCoachTab("live");
-    else if (dx > 56) setMobileCoachTab("calendar");
+    if (dx < -56) {
+      setMobileCoachTab((t) => (t === "calendar" ? "live" : t === "live" ? "guide" : "guide"));
+    } else if (dx > 56) {
+      setMobileCoachTab((t) => (t === "guide" ? "live" : t === "live" ? "calendar" : "calendar"));
+    }
   };
 
   return (
@@ -394,11 +437,14 @@ export default function CoachCalendarPage() {
                 <Link href="/coach" className="mt-2 inline-block text-sm text-primary hover:text-ink hover:underline">
                   返回單日課表（改時間）
                 </Link>
+                <div className="mt-4">
+                  <PinFlowGuide />
+                </div>
               </>
             ) : (
               <p className="text-xs text-ink/55">
-                底部滑動選單切換<strong className="text-ink/80"> Calendar／簽到實時</strong>
-                ，亦可左右扫屏。簽到会 toast · 課堂格顯示已扣堂青色。
+                底部選單三格：<strong className="text-ink/80">日程 · 簽到 · PIN／途徑</strong>
+                ；可左右掃屏切換。簽到會 toast · 課堂格顯示已扣堂青色。
               </p>
             )}
           </div>
@@ -607,17 +653,24 @@ export default function CoachCalendarPage() {
           <div className={`${coachPortal && mobileCoachTab !== "live" ? "hidden" : ""}`}>
             {liveAside}
           </div>
+
+          {coachPortal && mobileCoachTab === "guide" ? (
+            <div className="space-y-3 pb-2">
+              <PinFlowGuide />
+              <p className="text-center text-[11px] text-ink/45">提示：Master admin 可於學生詳情「課程記錄」查所有課堂 PIN 及試堂紀錄。</p>
+            </div>
+          ) : null}
         </div>
 
         {coachPortal ?
           <nav
             className="fixed bottom-0 left-0 right-0 z-[100] border-t border-ink/15 bg-surface/98 pb-[env(safe-area-inset-bottom,0)] shadow-[0_-6px_24px_rgba(45,36,34,0.08)] backdrop-blur-md md:mx-auto md:max-w-lg"
-            aria-label="教練日程主選單（Gmail 式雙欄）"
+            aria-label="教練日程主選單（日程 · 簽到 · PIN 參考）"
           >
-            <div className="mx-auto grid max-w-lg grid-cols-2 gap-1.5 p-2">
+            <div className="mx-auto grid max-w-lg grid-cols-3 gap-1 p-2">
               <button
                 type="button"
-                className={`flex flex-col items-center justify-center gap-1 rounded-xl py-2.5 text-[13px] font-semibold transition-colors ${
+                className={`flex flex-col items-center justify-center gap-0.5 rounded-xl py-2 text-[11px] font-semibold transition-colors sm:text-[12px] ${
                   mobileCoachTab === "calendar"
                     ? "!border-transparent !bg-zinc-800 !text-white shadow-md"
                     : "!border-transparent !bg-transparent !text-zinc-700 hover:!bg-black/[0.04] hover:!text-zinc-900"
@@ -626,16 +679,16 @@ export default function CoachCalendarPage() {
                 onClick={() => setMobileCoachTab("calendar")}
               >
                 <span
-                  className={`text-[17px] leading-none ${mobileCoachTab === "calendar" ? "!text-white" : "!text-zinc-700"}`}
+                  className={`text-[16px] leading-none ${mobileCoachTab === "calendar" ? "!text-white" : "!text-zinc-700"}`}
                   aria-hidden
                 >
                   ▣
                 </span>
-                Calendar
+                日程
               </button>
               <button
                 type="button"
-                className={`flex flex-col items-center justify-center gap-1 rounded-xl py-2.5 text-[13px] font-semibold transition-colors ${
+                className={`flex flex-col items-center justify-center gap-0.5 rounded-xl py-2 text-[11px] font-semibold transition-colors sm:text-[12px] ${
                   mobileCoachTab === "live"
                     ? "!border-transparent !bg-zinc-800 !text-white shadow-md"
                     : "!border-transparent !bg-transparent !text-zinc-700 hover:!bg-black/[0.04] hover:!text-zinc-900"
@@ -644,12 +697,30 @@ export default function CoachCalendarPage() {
                 onClick={() => setMobileCoachTab("live")}
               >
                 <span
-                  className={`text-[17px] leading-none ${mobileCoachTab === "live" ? "!text-white" : "!text-zinc-700"}`}
+                  className={`text-[16px] leading-none ${mobileCoachTab === "live" ? "!text-white" : "!text-zinc-700"}`}
                   aria-hidden
                 >
                   ●
                 </span>
-                簽到實時
+                簽到
+              </button>
+              <button
+                type="button"
+                className={`flex flex-col items-center justify-center gap-0.5 rounded-xl py-2 text-[11px] font-semibold transition-colors sm:text-[12px] ${
+                  mobileCoachTab === "guide"
+                    ? "!border-transparent !bg-zinc-800 !text-white shadow-md"
+                    : "!border-transparent !bg-transparent !text-zinc-700 hover:!bg-black/[0.04] hover:!text-zinc-900"
+                }`}
+                aria-current={mobileCoachTab === "guide" ? "page" : undefined}
+                onClick={() => setMobileCoachTab("guide")}
+              >
+                <span
+                  className={`text-[16px] leading-none ${mobileCoachTab === "guide" ? "!text-white" : "!text-zinc-700"}`}
+                  aria-hidden
+                >
+                  ⎘
+                </span>
+                PIN／途徑
               </button>
             </div>
           </nav>

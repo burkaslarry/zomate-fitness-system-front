@@ -30,8 +30,7 @@ const MENU_SECTIONS: { frameClass: string; items: NavItem[] }[] = [
     frameClass: "rounded-xl border-2 border-ink/15 bg-surface/80 p-2.5",
     items: [
       { href: "/admin/students", label: "學生名單" },
-      { href: "/admin/coaches", label: "教練" },
-      { href: "/admin/onboarding-records", label: "入職紀錄 / 健康表單" }
+      { href: "/admin/coaches", label: "教練" }
     ]
   },
   {

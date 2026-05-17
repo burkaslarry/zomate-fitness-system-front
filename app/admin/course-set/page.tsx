@@ -3,8 +3,8 @@
 /**
  * [F002][S001]
  * Feature: Course Entry & Automation
- * Step: (see Logic)
- * Logic: Branches, coaches, course-set admin surfaces.
+ * Step: Open course package — loading overlay, success list (name / phone / 課堂 PIN), coach WhatsApp reminder
+ * Logic: POST ``/api/admin/courses`` with optional first-session fields; modal shows enrollments from response.
  */
 
 import Link from "next/link";
@@ -12,6 +12,13 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import BackendShell from "../../../components/backend-shell";
 import { alertApiError, api } from "../../../lib/api";
 import type { BranchDto, CoachDto, MemberProfile, TrialClassKindDto } from "../../../types/api";
+
+type CourseEnrollmentSummary = {
+  student_id: number;
+  student_name: string;
+  student_phone: string;
+  checkin_pin: string;
+};
 
 /** Python `enumerate_lesson_dates`: 0 = Monday … 6 = Sunday */
 const WEEK_LOOKUP: { day: number; label: string; zh: string }[] = [
@@ -46,6 +53,15 @@ export default function AdminCourseSetPage() {
   const [picked, setPicked] = useState<Record<number, boolean>>({});
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
+  /** Optional: verbally agreed first session with student (notified to coach). */
+  const [agreedFirstDate, setAgreedFirstDate] = useState("");
+  const [agreedFirstTime, setAgreedFirstTime] = useState("");
+  const [coachNote, setCoachNote] = useState("");
+  const [successOpen, setSuccessOpen] = useState(false);
+  const [successCoachName, setSuccessCoachName] = useState("");
+  const [successHadStudents, setSuccessHadStudents] = useState(false);
+  const [successEnrollments, setSuccessEnrollments] = useState<CourseEnrollmentSummary[]>([]);
+  const [submitBusy, setSubmitBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,8 +127,14 @@ export default function AdminCourseSetPage() {
       setStatus("結束時間須晚於開始時間。");
       return;
     }
+    const agreedIso =
+      agreedFirstDate && agreedFirstTime
+        ? new Date(combineLocalDateTime(agreedFirstDate, agreedFirstTime)).toISOString()
+        : undefined;
+    const noteTrim = coachNote.trim();
+    setSubmitBusy(true);
     try {
-      await api.createCourse({
+      const created = (await api.createCourse({
         title: titleKind.label_zh,
         branch_id: branchId,
         coach_id: coachId,
@@ -121,12 +143,22 @@ export default function AdminCourseSetPage() {
         student_ids,
         course_start_date: courseDate,
         lesson_weekdays: weekdays,
-        total_lessons: totalLessons
-      });
-      setStatus("課程已建立。");
+        total_lessons: totalLessons,
+        ...(agreedIso ? { student_first_session_at: agreedIso } : {}),
+        ...(noteTrim ? { coach_schedule_note: noteTrim } : {})
+      })) as { enrollments?: CourseEnrollmentSummary[] };
+      setStatus("");
+      const cname = coaches.find((c) => c.id === coachId)?.full_name ?? "教練";
+      setSuccessCoachName(cname);
+      setSuccessHadStudents(student_ids.length > 0);
+      const enr = Array.isArray(created?.enrollments) ? created.enrollments : [];
+      setSuccessEnrollments(enr);
+      setSuccessOpen(true);
       setPicked({});
     } catch (e) {
       alertApiError(e);
+    } finally {
+      setSubmitBusy(false);
     }
   }
 
@@ -136,7 +168,7 @@ export default function AdminCourseSetPage() {
         <div>
           <h2 className="text-2xl font-semibold text-ink">開課（套餐）</h2>
           <p className="mt-2 text-sm text-ink/65">
-            堂數 1–10；每星期揀一至日（最多 3 個上課日）；用行事曆揀首日。建立後伺服器會計算預計最後一堂日期（系列結束）。編入學員時，餘額會按{" "}
+            堂數 1–120；每星期揀一至日（最多 3 個上課日）；用行事曆揀首日。建立後伺服器會計算預計最後一堂日期（系列結束）。編入學員時，餘額會按{" "}
             <strong className="font-medium text-ink">套餐堂數</strong> 加入。
           </p>
           <p className="mt-1 text-xs text-ink/50">
@@ -208,7 +240,7 @@ export default function AdminCourseSetPage() {
             </label>
 
             <label className="block space-y-1 text-sm">
-              <span className="text-ink/70">教練</span>
+              <span className="text-ink/70">教練（指派）</span>
               <select
                 required
                 value={coachId === "" ? "" : String(coachId)}
@@ -218,10 +250,13 @@ export default function AdminCourseSetPage() {
                 <option value="">請選擇</option>
                 {coaches.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.full_name}
+                    {c.full_name} (#{c.id})
                   </option>
                 ))}
               </select>
+              <span className="text-xs text-amber-900/90">
+                同名可能有多筆教練（不同 id）。請揀<strong className="font-medium">與續會／約定一致</strong>嗰位，否則教練頁唔會對應。
+              </span>
             </label>
 
             <label className="block space-y-1 text-sm">
@@ -283,17 +318,57 @@ export default function AdminCourseSetPage() {
             </div>
 
             <label className="block space-y-1 text-sm">
-              <span className="text-ink/70">套餐堂數（1–10）</span>
+              <span className="text-ink/70">套餐堂數（1–120）</span>
               <input
                 type="number"
                 required
                 min={1}
-                max={10}
+                max={120}
                 value={totalLessons}
-                onChange={(e) => setTotalLessons(Number(e.target.value))}
+                onChange={(e) =>
+                  setTotalLessons(Math.min(120, Math.max(1, Number(e.target.value) || 1)))
+                }
                 className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink sm:max-w-[12rem]"
               />
             </label>
+
+            <div className="rounded-lg border border-sky-200/60 bg-sky-50/80 p-4 space-y-3">
+              <p className="text-xs font-semibold text-ink">與學員約定首課（選填）</p>
+              <p className="text-xs text-ink/60">
+                上面「首日／時間」係<strong>系統排程基準</strong>。若櫃台已同學員約定另一個首堂時間，可填下方；會一併寫入教練通知（WhatsApp 日誌），提醒教練再確認。
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block space-y-1 text-sm">
+                  <span className="text-ink/70">約定日期</span>
+                  <input
+                    type="date"
+                    value={agreedFirstDate}
+                    onChange={(e) => setAgreedFirstDate(e.target.value)}
+                    className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink"
+                  />
+                </label>
+                <label className="block space-y-1 text-sm">
+                  <span className="text-ink/70">約定時間</span>
+                  <input
+                    type="time"
+                    value={agreedFirstTime}
+                    onChange={(e) => setAgreedFirstTime(e.target.value)}
+                    className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink"
+                  />
+                </label>
+              </div>
+              <label className="block space-y-1 text-sm">
+                <span className="text-ink/70">給教練備註（選填）</span>
+                <textarea
+                  value={coachNote}
+                  onChange={(e) => setCoachNote(e.target.value)}
+                  rows={2}
+                  maxLength={500}
+                  placeholder="例如：學員希望週四晚、已留 WhatsApp…"
+                  className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink"
+                />
+              </label>
+            </div>
 
             <div className="space-y-2">
               <div className="flex flex-wrap items-end justify-between gap-2">
@@ -344,16 +419,94 @@ export default function AdminCourseSetPage() {
               </div>
             </div>
 
-            {status ? <p className="text-sm text-emerald-800">{status}</p> : null}
+            {status ? <p className="text-sm text-rose-800">{status}</p> : null}
 
             <button
               type="submit"
-              className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-95 sm:w-auto"
+              disabled={submitBusy}
+              className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-95 disabled:opacity-50 sm:w-auto"
             >
-              建立課程
+              {submitBusy ? "建立中…" : "建立課程"}
             </button>
           </form>
         )}
+        {submitBusy ? (
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/45 p-4"
+            role="alertdialog"
+            aria-busy="true"
+            aria-live="polite"
+            aria-labelledby="course-create-loading-title"
+          >
+            <div className="w-full max-w-sm rounded-xl border border-ink/10 bg-surface p-6 shadow-lg">
+              <p id="course-create-loading-title" className="text-center text-lg font-semibold text-ink">
+                建立課程中…
+              </p>
+              <p className="mt-2 text-center text-sm text-ink/60">請稍候，正在編入學員及派發課堂 PIN。</p>
+            </div>
+          </div>
+        ) : null}
+        {successOpen ? (
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/45 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="course-success-title"
+          >
+            <div className="w-full max-w-md rounded-xl border border-ink/10 bg-surface p-6 shadow-lg">
+              <h3 id="course-success-title" className="text-lg font-semibold text-ink">
+                課程已建立
+              </h3>
+              <p className="mt-3 text-sm leading-relaxed text-ink/80">
+                {successHadStudents ? (
+                  <>
+                    已將學員編入課程；系統已向 <strong className="text-ink">{successCoachName}</strong> 發送 WhatsApp
+                    日誌通知（後台可查）。
+                  </>
+                ) : (
+                  <>課程系列已建立；本次未剔選學員，故<strong className="text-ink">未</strong>向教練發送入班通知。</>
+                )}
+              </p>
+              {successHadStudents ? (
+                <p className="mt-2 rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-sm text-amber-950">
+                  <strong>請提醒教練</strong>：主動約學員確認<strong>第一堂實際時間、地點</strong>
+                  （系統首課時段僅作排程基準；若已填「與學員約定首課」，通知內會一併寫明）。
+                </p>
+              ) : null}
+              {!successHadStudents ? (
+                <p className="mt-2 text-xs text-ink/55">需要教練喺課表見到學員時，請剔選學員後再建立；或之後編輯課程補入學員。</p>
+              ) : null}
+              {successEnrollments.length > 0 ? (
+                <div className="mt-4">
+                  <p className="text-xs font-medium text-ink/55">已編入學員 · 課堂 PIN（請交俾學員簽到）</p>
+                  <ul className="mt-2 max-h-56 space-y-2 overflow-y-auto rounded-lg border border-ink/10 bg-canvas p-3 text-sm">
+                    {successEnrollments.map((e) => (
+                      <li key={`${e.student_id}-${e.checkin_pin}`} className="border-b border-ink/[0.06] pb-2 last:border-0 last:pb-0">
+                        <div className="font-medium text-ink">{e.student_name}</div>
+                        <div className="text-xs text-ink/65">電話 {e.student_phone}</div>
+                        <div className="mt-1 font-mono text-sm font-semibold text-ink">課堂 PIN：{e.checkin_pin}</div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : successHadStudents ? (
+                <p className="mt-3 text-xs text-amber-900/90">
+                  已送開課請求；若列表無顯示學員 PIN，請稍後喺「學生詳情 → 課程記錄」查看。
+                </p>
+              ) : null}
+              <button
+                type="button"
+                className="mt-5 w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-ink hover:bg-primary/90"
+                onClick={() => {
+                  setSuccessOpen(false);
+                  setSuccessEnrollments([]);
+                }}
+              >
+                知道了
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </BackendShell>
   );

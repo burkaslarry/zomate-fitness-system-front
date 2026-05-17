@@ -3,8 +3,8 @@
 /**
  * [F002][S001]
  * Feature: Course Entry & Automation
- * Step: (see Logic)
- * Logic: Branches, coaches, course-set admin surfaces.
+ * Step: Admin coaches grid + enrolled students (courses under this coach)
+ * Logic: GET /api/admin/coaches returns enrolled_students; table column lists names/phones.
  */
 
 import { FormEvent, useEffect, useState } from "react";
@@ -150,7 +150,16 @@ export default function AdminCoachesPage() {
         </form>
         {status && <p className="text-sm text-emerald-800">{status}</p>}
         <div className="max-h-[min(70vh,720px)] overflow-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
-          <table className="min-w-full border-collapse text-left text-sm">
+          <table className="min-w-full border-collapse text-left text-sm table-fixed">
+            <colgroup>
+              <col className="w-[140px]" />
+              <col className="w-[120px]" />
+              <col className="w-[100px]" />
+              <col className="w-[100px]" />
+              <col className="w-[72px]" />
+              <col className="min-w-[200px]" />
+              <col className="w-[140px]" />
+            </colgroup>
             <thead className="sticky top-0 z-10 border-b border-ink/10 bg-surface text-ink/65 shadow-[0_1px_0_rgba(0,0,0,0.06)]">
               <tr>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">姓名</th>
@@ -158,6 +167,7 @@ export default function AdminCoachesPage() {
                 <th className="whitespace-nowrap px-4 py-3 font-medium">分店</th>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">入職日期</th>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">狀態</th>
+                <th className="px-4 py-3 font-medium">學員（已報此教練課程）</th>
                 <th className="whitespace-nowrap px-4 py-3 text-right font-medium">操作</th>
               </tr>
             </thead>
@@ -168,14 +178,33 @@ export default function AdminCoachesPage() {
                   <td className="whitespace-nowrap px-4 py-3">{row.phone}</td>
                   <td className="px-4 py-3">{row.branch_name ?? "—"}</td>
                   <td className="whitespace-nowrap px-4 py-3">{fmtHireDate(row.hire_date)}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 align-top">
                     {row.active !== false ? (
                       <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-xs font-medium text-emerald-800">在職</span>
                     ) : (
                       <span className="rounded-full bg-ink/10 px-2 py-1 text-xs text-ink/60">停用</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 align-top text-xs leading-relaxed text-ink/80">
+                    {row.enrolled_students && row.enrolled_students.length > 0 ? (
+                      <div className="space-y-1">
+                        <div className="text-[11px] font-medium text-ink/50">
+                          共 {row.enrolled_students.length} 位
+                        </div>
+                        <ul className="space-y-1">
+                          {row.enrolled_students.map((s) => (
+                            <li key={s.id}>
+                              <span className="font-medium text-ink">{s.full_name}</span>
+                              <span className="text-ink/50"> · {s.phone}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : (
+                      <span className="text-ink/45">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 align-top text-right">
                     <div className="flex justify-end gap-2">
                       <button
                         type="button"

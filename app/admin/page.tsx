@@ -37,7 +37,7 @@ type DashboardCard =
 export default function AdminPage() {
   const [summary, setSummary] = useState<Summary>({});
   const [status, setStatus] = useState("");
-  const { students, whatsappLogs, checkinsCount, totalExpenses } = useDemoState();
+  const { students, checkinsCount } = useDemoState();
   const [origin, setOrigin] = useState("");
 
   useEffect(() => {
@@ -81,21 +81,6 @@ export default function AdminPage() {
       kind: "number",
       label: "簽到次數",
       value: Math.max(summaryValue(summary, ["checkins_total", "checkins", "checkins_count"]), checkinsCount)
-    },
-    {
-      kind: "number",
-      label: "WhatsApp Logs",
-      value: Math.max(summaryValue(summary, ["whatsapp_logs", "whatsapp_logs_count", "logs"]), whatsappLogs.length)
-    },
-    {
-      kind: "number",
-      label: "總支出 (HKD)",
-      value: totalExpenses
-    },
-    {
-      kind: "number",
-      label: "課程總數",
-      value: summaryValue(summary, ["courses", "courses_total", "total_courses"])
     },
     {
       kind: "ratio",

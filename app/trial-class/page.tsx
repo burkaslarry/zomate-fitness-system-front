@@ -297,15 +297,8 @@ export default function TrialClassPage() {
             </p>
 
             <div className="mt-4 space-y-3 rounded-lg border border-emerald-200/80 bg-emerald-50/90 p-4">
-              <p className="text-sm font-medium text-emerald-950">學生上堂 PIN</p>
-              {successPayload.member.pin_code ? (
-                <p className="font-mono text-2xl font-bold tracking-widest text-emerald-950">
-                  {successPayload.member.pin_code}
-                </p>
-              ) : (
-                <p className="text-sm text-emerald-900/90">帳戶 PIN 已隱藏（已有課程註冊時改用以課堂為單位嘅 PIN）。</p>
-              )}
-              {successPayload.course_checkin_pins && successPayload.course_checkin_pins.length > 0 && (
+              <p className="text-sm font-medium text-emerald-950">簽到 PIN（以課程為單位）</p>
+              {successPayload.course_checkin_pins && successPayload.course_checkin_pins.length > 0 ? (
                 <ul className="space-y-2 text-sm text-emerald-950">
                   {successPayload.course_checkin_pins.map((row) => (
                     <li key={row.course_id} className="border-t border-emerald-200/60 pt-2 first:border-t-0 first:pt-0">
@@ -316,11 +309,11 @@ export default function TrialClassPage() {
                     </li>
                   ))}
                 </ul>
+              ) : (
+                <p className="text-sm text-emerald-900/90">
+                  未有課程 PIN（試堂僅加 ledger 時可能未開課）。請於後台「Course 套餐開課」或職員查閱。
+                </p>
               )}
-              {!successPayload.member.pin_code &&
-                (!successPayload.course_checkin_pins || successPayload.course_checkin_pins.length === 0) && (
-                  <p className="text-sm text-emerald-900/90">請向職員查閱簽到 PIN，或於後台「課程套餐」查看。</p>
-                )}
             </div>
 
             {(() => {

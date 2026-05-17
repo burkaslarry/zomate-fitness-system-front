@@ -3,19 +3,71 @@
 /**
  * [F001][S001]
  * Feature: Student Onboarding
- * Step: (see Logic)
- * Logic: Admin student roster, HKID detail, onboarding records.
+ * Step: Admin student-id detail — profile, course PINs, trials, category ledger, renewals, activity
+ * Logic: Tabs without legacy 帳戶 PIN; installment rows link to receipt upload with期數 context; receipts under 課程記錄.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import BackendShell from "../../../../components/backend-shell";
-import { alertApiError, api } from "../../../../lib/api";
-import type { MemberFull } from "../../../../types/api";
+import { alertApiError, api, apiAssetUrl } from "../../../../lib/api";
+import type { CategoryEnrollmentRow, MemberFull } from "../../../../types/api";
 
-const tabs = ["資料", "課程記錄", "Package", "收據", "活動紀錄"] as const;
+const tabs = ["資料", "課程記錄", "活動紀錄"] as const;
 
 type CatRow = { id: number; name: string; is_deleted?: boolean };
+
+function activityTypeLabel(type: string): string {
+  const map: Record<string, string> = {
+    member_create: "新會員建立",
+    renewal_create: "續會／套餐登記",
+    member_photo_upload: "相片上傳",
+    category_enrollment_upsert: "種類報讀更新",
+    coach_quota_1: "教練試堂"
+  };
+  return map[type] ?? type;
+}
+
+function fmtDateTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString("zh-HK", { dateStyle: "medium", timeStyle: "short" });
+  } catch {
+    return iso;
+  }
+}
+
+function paymentStatusLabel(status: string, paidAt?: string | null): string {
+  if (paidAt) return `已付款 ${fmtDateTime(paidAt)}`;
+  const normalized = status.toLowerCase();
+  if (normalized === "pending") return "未付款";
+  if (normalized === "paid") return "已付款";
+  return status;
+}
+
+function installmentAmountLabel(amount: number): string {
+  return amount > 0 ? `HKD ${amount}` : "未設定金額";
+}
+
+function ReceiptThumb({ fileUrl, label }: { fileUrl: string; label: string }) {
+  const lower = fileUrl.split("?")[0].toLowerCase();
+  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(lower);
+  if (isImage) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={fileUrl} alt={label} className="mt-2 max-h-40 w-full rounded border border-ink/10 object-contain" />
+    );
+  }
+  return (
+    <a
+      href={fileUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="mt-2 inline-block text-sm font-medium text-primary underline"
+    >
+      開啟檔案（PDF／其他）
+    </a>
+  );
+}
 
 export default function AdminStudentDetailPage() {
   const params = useParams<{ hkid: string }>();
@@ -27,11 +79,18 @@ export default function AdminStudentDetailPage() {
   const [lessons, setLessons] = useState(10);
   const [installments, setInstallments] = useState(3);
   const [saving, setSaving] = useState(false);
-  const hkid = decodeURIComponent(params.hkid);
+  const [receiptUploading, setReceiptUploading] = useState(false);
+  /** When staff picks an unpaid installment, scroll to receipt form and label it (分期第 N 期). */
+  const [receiptInstallmentCtx, setReceiptInstallmentCtx] = useState<{
+    installmentNo: number;
+    categoryName: string;
+  } | null>(null);
+  const receiptSectionRef = useRef<HTMLDivElement | null>(null);
+  const studentId = decodeURIComponent(params.hkid);
 
   const reload = useCallback(() => {
-    void api.memberFull(hkid).then((row) => setData(row as MemberFull)).catch(alertApiError);
-  }, [hkid]);
+    void api.memberFullById(studentId).then((row) => setData(row as MemberFull)).catch(alertApiError);
+  }, [studentId]);
 
   useEffect(() => {
     reload();
@@ -77,9 +136,60 @@ export default function AdminStudentDetailPage() {
     }
   }
 
+  async function onUploadReceipt(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!data?.profile.id) return;
+    const form = new FormData(event.currentTarget);
+    const file = form.get("file");
+    if (!(file instanceof File) || file.size === 0) {
+      alertApiError(new Error("請選擇收據圖片或 PDF"));
+      return;
+    }
+    const prefix =
+      receiptInstallmentCtx != null
+        ? `[分期第${receiptInstallmentCtx.installmentNo}期·${receiptInstallmentCtx.categoryName}] `
+        : "";
+    const userNote = String(form.get("note") ?? "").trim();
+    setReceiptUploading(true);
+    try {
+      await api.uploadMemberReceiptById(data.profile.id, {
+        file,
+        amount: String(form.get("amount") ?? "").trim(),
+        payment_method: String(form.get("payment_method") ?? "").trim(),
+        note: prefix + userNote,
+        source: "RENEWAL"
+      });
+      setToast("已上傳收據");
+      event.currentTarget.reset();
+      setReceiptInstallmentCtx(null);
+      reload();
+    } catch (e) {
+      alertApiError(e);
+    } finally {
+      setReceiptUploading(false);
+    }
+  }
+
+  function focusReceiptForInstallment(payload: { installmentNo: number; categoryName: string }) {
+    setReceiptInstallmentCtx(payload);
+    setTab("課程記錄");
+  }
+
+  useEffect(() => {
+    if (tab !== "課程記錄" || !receiptInstallmentCtx) return;
+    const t = window.setTimeout(() => {
+      receiptSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [tab, receiptInstallmentCtx]);
+
   const pins = data?.course_checkin_pins ?? [];
   const catEnr = data?.category_enrollments ?? [];
+  const packages = data?.packages ?? [];
+  const packageLessons = packages.reduce((sum, pkg) => sum + (Number(pkg.lessons) || 0), 0);
+  const categoryLessons = catEnr.reduce((sum, row) => sum + (Number(row.total_lessons) || 0), 0);
   const trialLeft = data?.profile.coach_trial_quota_remaining ?? 0;
+  const photoSrc = apiAssetUrl(data?.profile.photo_url ?? undefined);
 
   return (
     <BackendShell title="學生詳情">
@@ -87,7 +197,7 @@ export default function AdminStudentDetailPage() {
         <div className="rounded-xl border border-ink/15 bg-surface p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-semibold text-ink">{data?.profile.full_name ?? hkid}</h2>
+              <h2 className="text-2xl font-semibold text-ink">{data?.profile.full_name ?? `#${studentId}`}</h2>
               <p className="mt-1 text-sm text-ink/65">
                 {data?.profile.hkid ?? "—"} · {data?.profile.phone}
               </p>
@@ -126,9 +236,9 @@ export default function AdminStudentDetailPage() {
           {tab === "資料" && data && (
             <div className="grid gap-5 md:grid-cols-[220px_1fr]">
               <div className="aspect-square overflow-hidden rounded-xl border border-ink/10 bg-canvas">
-                {data.profile.photo_url ? (
+                {photoSrc ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={data.profile.photo_url} alt={data.profile.full_name} className="h-full w-full object-cover" />
+                  <img src={photoSrc} alt={data.profile.full_name} className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full items-center justify-center text-sm text-ink/45">No photo</div>
                 )}
@@ -139,13 +249,11 @@ export default function AdminStudentDetailPage() {
                   <dd>{data.profile.email ?? "—"}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-ink/50">帳戶 PIN</dt>
-                  <dd className="font-mono text-sm">
-                    {data.profile.pin_code
-                      ? data.profile.pin_code
-                      : pins.length > 0
-                        ? "—（請用下方課堂 PIN 簽到）"
-                        : "—（報讀課程後會獲派課堂 PIN）"}
+                  <dt className="text-xs text-ink/50">簽到</dt>
+                  <dd className="text-sm text-ink/80">
+                    {pins.length > 0
+                      ? "使用「課程記錄」內每個課程嘅課堂 PIN 簽到（唔再用帳戶級 PIN）。"
+                      : "報讀開課後會獲派課堂 PIN；見「課程記錄」。"}
                   </dd>
                 </div>
                 <div>
@@ -155,38 +263,127 @@ export default function AdminStudentDetailPage() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-ink/50">Remaining</dt>
+                  <dt className="text-xs text-ink/50">Remaining（ledger 總餘額）</dt>
                   <dd>{data.profile.lesson_balance} 堂</dd>
                 </div>
               </dl>
             </div>
           )}
           {tab === "課程記錄" && data && (
-            <div className="space-y-6">
+            <div className="space-y-8">
+              <div className="rounded-xl border border-ink/10 bg-canvas p-4">
+                <h3 className="text-sm font-semibold text-ink">堂數來源總覽</h3>
+                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg border border-ink/10 bg-surface p-3">
+                    <p className="text-xs text-ink/55">續會／Package</p>
+                    <p className="mt-1 text-2xl font-semibold text-ink">{packageLessons}</p>
+                  </div>
+                  <div className="rounded-lg border border-ink/10 bg-surface p-3">
+                    <p className="text-xs text-ink/55">種類報讀（帳面）</p>
+                    <p className="mt-1 text-2xl font-semibold text-ink">{categoryLessons}</p>
+                  </div>
+                  <div className="rounded-lg border border-ink/10 bg-surface p-3">
+                    <p className="text-xs text-ink/55">Ledger 總餘額</p>
+                    <p className="mt-1 text-2xl font-semibold text-primary">{data.profile.lesson_balance}</p>
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-ink/55">
+                  例如 Wai Lun：Package 10 + 種類報讀 30 = 總餘額 40。扣堂／補堂會再由 ledger 影響總餘額。
+                </p>
+              </div>
+
               <div>
-                <h3 className="mb-2 text-sm font-semibold text-ink">課堂簽到 PIN（每個已報課程一個）</h3>
-                {pins.length === 0 ? (
-                  <p className="text-sm text-ink/55">尚未加入任何開課／課程，暫無 PIN。</p>
+                <h3 className="mb-3 text-sm font-semibold text-ink">Package／續會紀錄</h3>
+                {packages.length === 0 ? (
+                  <p className="text-sm text-ink/55">暫無續會／套餐登記紀錄。</p>
                 ) : (
-                  <ul className="space-y-2">
-                    {pins.map((p) => (
+                  <ul className="space-y-3">
+                    {packages.map((pkg) => (
                       <li
-                        key={`${p.course_id}-${p.checkin_pin}`}
-                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm"
+                        key={pkg.id}
+                        className="rounded-xl border border-ink/10 bg-canvas px-4 py-3 shadow-sm ring-1 ring-ink/[0.04]"
                       >
-                        <span>
-                          {p.course_title} · {p.branch_name}
-                        </span>
-                        <span className="font-mono font-semibold tracking-wide">{p.checkin_pin}</span>
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <h4 className="font-semibold text-ink">{pkg.name}</h4>
+                            <p className="mt-1 text-xs text-ink/60">
+                              堂數 {pkg.lessons} · 教練 {pkg.coach ?? "—"} · {pkg.payment_method ?? "—"}
+                            </p>
+                            <p className="mt-1 text-xs text-ink/50">
+                              {pkg.renewal_date ? `續會日 ${pkg.renewal_date} · ` : ""}
+                              建立 {fmtDateTime(pkg.created_at)}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg font-semibold tabular-nums text-ink">
+                              {pkg.amount != null ? `HKD ${pkg.amount}` : "—"}
+                            </div>
+                          </div>
+                        </div>
                       </li>
                     ))}
                   </ul>
                 )}
               </div>
+
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-ink">已開課程（有時間表）</h3>
+                {pins.length === 0 ? (
+                  <p className="text-sm text-ink/55">
+                    尚未經「Course 套餐開課」加入任何課程。種類入帳唔會自動出現喺度。
+                  </p>
+                ) : (
+                  <ul className="space-y-3">
+                    {pins.map((p) => (
+                      <li
+                        key={`${p.course_id}-${p.checkin_pin}`}
+                        className="rounded-lg border border-ink/10 bg-canvas px-4 py-3 text-sm"
+                      >
+                        <div className="font-medium text-ink">{p.course_title}</div>
+                        <div className="mt-1 text-xs text-ink/65">
+                          {p.branch_name} · 教練 {p.coach_name ?? "—"}
+                        </div>
+                        <div className="mt-1 text-xs text-ink/55">
+                          首課（基準）{p.scheduled_start ? fmtDateTime(p.scheduled_start) : "—"}
+                          {p.series_end_date ? ` · 預計最後一堂 ${p.series_end_date}` : ""}
+                        </div>
+                        <div className="mt-2 font-mono text-base font-semibold tracking-wide text-ink">
+                          課堂 PIN：{p.checkin_pin}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div>
+                <h3 className="mb-3 text-sm font-semibold text-ink">試堂／加堂紀錄</h3>
+                {(data.trial_classes ?? []).length === 0 ? (
+                  <p className="text-sm text-ink/55">暫無試堂／加堂紀錄。</p>
+                ) : (
+                  <ul className="grid gap-3 sm:grid-cols-2">
+                    {(data.trial_classes ?? []).map((t) => (
+                      <li key={t.id} className="rounded-lg border border-ink/10 bg-canvas p-3 text-sm">
+                        <div className="font-medium text-ink">
+                          {t.type === "TRIAL" ? "試堂" : "加堂"}
+                          {t.trial_kind_label_zh ? ` · ${t.trial_kind_label_zh}` : ""}
+                        </div>
+                        <div className="mt-1 text-xs text-ink/65">
+                          日期 {t.class_date} · 教練 {t.coach_name ?? (t.coach_id ? `#${t.coach_id}` : "—")} ·{" "}
+                          分店 {t.branch_name ?? (t.branch_id ? `#${t.branch_id}` : "—")}
+                        </div>
+                        {t.note ? <p className="mt-2 text-xs text-ink/60">{t.note}</p> : null}
+                        <p className="mt-1 text-[11px] text-ink/45">建立 {fmtDateTime(t.created_at)}</p>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
               <div className="rounded-xl border border-primary/35 bg-primary/5 p-4">
                 <h3 className="mb-3 text-sm font-semibold text-ink">從課程種類入帳堂數（Admin）</h3>
                 <p className="mb-3 text-xs text-ink/60">
-                  選擇種類及總堂數；如該種類已存在會調整堂數差額。會建立分期計劃（預設 3 期）。{" "}
+                  選擇種類及總堂數；如該種類已存在會調整堂數差額。會建立分期計劃（預設 3 期）。
                 </p>
                 <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
                   <label className="block text-xs text-ink/55">
@@ -237,62 +434,198 @@ export default function AdminStudentDetailPage() {
                   </div>
                 </div>
               </div>
+
               <div>
-                <h3 className="mb-2 text-sm font-semibold text-ink">種類報讀紀錄（帳面）</h3>
+                <h3 className="mb-3 text-sm font-semibold text-ink">種類報讀紀錄（帳面）· 分期</h3>
                 {catEnr.length === 0 ? (
                   <p className="text-sm text-ink/55">暫無</p>
                 ) : (
-                  <ul className="space-y-1 text-sm">
+                  <ul className="space-y-4">
                     {catEnr.map((c) => (
-                      <li key={c.id} className="rounded border border-ink/10 bg-canvas px-3 py-2">
-                        {c.category_name} · {c.total_lessons} 堂 · {c.status}
-                      </li>
+                      <CategoryEnrollmentCard key={c.id} row={c} onReceiptForInstallment={focusReceiptForInstallment} />
                     ))}
+                  </ul>
+                )}
+              </div>
+
+              <div ref={receiptSectionRef}>
+                <h3 className="mb-3 text-sm font-semibold text-ink">
+                  收據／上傳憑證
+                  {receiptInstallmentCtx
+                    ? ` — 第 ${receiptInstallmentCtx.installmentNo} 期（${receiptInstallmentCtx.categoryName}）`
+                    : ""}
+                </h3>
+                {receiptInstallmentCtx ? (
+                  <p className="mb-3 text-xs text-ink/55">
+                    上傳後系統會於備註自動加上「分期第{receiptInstallmentCtx.installmentNo}期」標籤，方便對照。
+                    <button
+                      type="button"
+                      className="ml-2 underline decoration-ink/30"
+                      onClick={() => setReceiptInstallmentCtx(null)}
+                    >
+                      清除分期對應
+                    </button>
+                  </p>
+                ) : null}
+                <form
+                  onSubmit={(event) => void onUploadReceipt(event)}
+                  className="mb-4 grid gap-3 rounded-xl border border-ink/10 bg-canvas p-4 text-sm md:grid-cols-2"
+                >
+                  <label className="block text-xs text-ink/55 md:col-span-2">
+                    上傳收據（圖片／PDF）
+                    <input
+                      name="file"
+                      type="file"
+                      accept="image/*,.pdf,application/pdf"
+                      required
+                      className="mt-1 block w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink"
+                    />
+                  </label>
+                  <label className="block text-xs text-ink/55">
+                    金額（選填）
+                    <input
+                      name="amount"
+                      inputMode="decimal"
+                      placeholder="例如 7932"
+                      className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink"
+                    />
+                  </label>
+                  <label className="block text-xs text-ink/55">
+                    付款方式（選填）
+                    <input
+                      name="payment_method"
+                      placeholder="cash / fps / card"
+                      className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink"
+                    />
+                  </label>
+                  <label className="block text-xs text-ink/55 md:col-span-2">
+                    備註（選填）
+                    <input
+                      name="note"
+                      placeholder="例如：補回第一期收據"
+                      className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink"
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={receiptUploading}
+                    className="rounded-lg bg-primary/90 px-4 py-2 text-sm font-medium text-ink disabled:opacity-50 md:justify-self-start"
+                  >
+                    {receiptUploading ? "上傳中…" : "上傳收據"}
+                  </button>
+                </form>
+                {(data.receipts ?? []).length === 0 ? (
+                  <p className="text-sm text-ink/55">暫無收據檔案。</p>
+                ) : (
+                  <ul className="grid gap-3 sm:grid-cols-2">
+                    {(data.receipts ?? []).map((r) => {
+                      const abs = apiAssetUrl(r.file_url ?? undefined) ?? "#";
+                      return (
+                        <li key={r.id} className="rounded-lg border border-ink/10 bg-canvas p-3 text-sm">
+                          <div className="font-medium text-ink">
+                            {r.source} · {r.payment_method ?? "付款方式未填"}
+                          </div>
+                          <div className="mt-1 text-xs text-ink/55">
+                            {r.amount != null ? `HKD ${r.amount}` : "金額 —"} · {fmtDateTime(r.created_at)}
+                          </div>
+                          {r.note ? <p className="mt-1 text-xs text-ink/60">{r.note}</p> : null}
+                          <ReceiptThumb fileUrl={abs} label={`receipt-${r.id}`} />
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </div>
             </div>
           )}
-          {tab === "Package" && <Rows rows={data?.packages ?? []} />}
-          {tab === "收據" && (
-            <div className="grid gap-3 md:grid-cols-3">
-              {(data?.receipts ?? []).map((r) => (
-                <a
-                  key={r.id}
-                  href={r.file_url ?? "#"}
-                  target="_blank"
-                  className="rounded-lg border border-ink/10 bg-canvas p-3 text-sm"
-                  rel="noreferrer"
-                >
-                  <span className="block font-medium">
-                    {r.source} · {r.payment_method ?? "未填"}
-                  </span>
-                  <span className="mt-1 block text-ink/55">
-                    ${r.amount ?? 0} · {new Date(r.created_at).toLocaleDateString()}
-                  </span>
-                </a>
-              ))}
+          {tab === "活動紀錄" && data && (
+            <div className="space-y-2">
+              {(data.activity_log ?? []).length === 0 ? (
+                <p className="text-sm text-ink/55">暫無記錄</p>
+              ) : (
+                <ul className="divide-y divide-ink/10 rounded-xl border border-ink/10 bg-canvas">
+                  {(data.activity_log ?? []).map((a) => (
+                    <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+                      <div>
+                        <span className="font-medium text-ink">{activityTypeLabel(a.type)}</span>
+                        {a.ref_id != null ? (
+                          <span className="ml-2 text-xs text-ink/50">ref #{a.ref_id}</span>
+                        ) : null}
+                      </div>
+                      <time className="text-xs text-ink/55">{fmtDateTime(a.created_at)}</time>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
-          {tab === "活動紀錄" && <Rows rows={data?.activity_log ?? []} />}
         </section>
       </div>
     </BackendShell>
   );
 }
 
-function Rows({ rows }: { rows: Array<Record<string, unknown>> }) {
-  if (!rows.length) return <p className="text-sm text-ink/55">暫無記錄</p>;
+function CategoryEnrollmentCard({
+  row,
+  onReceiptForInstallment
+}: {
+  row: CategoryEnrollmentRow;
+  onReceiptForInstallment: (payload: { installmentNo: number; categoryName: string }) => void;
+}) {
+  const plans = row.installment_plans ?? [];
+  const categoryName = row.category_name;
   return (
-    <div className="space-y-2">
-      {rows.map((row, index) => (
-        <pre
-          key={index}
-          className="overflow-x-auto rounded-lg border border-ink/10 bg-canvas p-3 text-xs text-ink/85"
-        >
-          {JSON.stringify(row, null, 2)}
-        </pre>
-      ))}
-    </div>
+    <li className="rounded-xl border border-ink/10 bg-canvas p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="font-medium text-ink">{row.category_name}</span>
+        <span className="text-xs text-ink/50">{row.status}</span>
+      </div>
+      <p className="mt-1 text-xs text-ink/60">
+        總堂 {row.total_lessons} · 開始 {row.started_at}
+      </p>
+      {plans.length === 0 ? (
+        <p className="mt-2 text-xs text-ink/50">未有分期計劃</p>
+      ) : (
+        <ul className="mt-3 space-y-3 border-t border-ink/10 pt-3">
+          {plans.map((pl) => (
+            <li key={pl.id} className="text-xs">
+              <div className="font-medium text-ink/80">
+                分期方案 · 共 {pl.total_installments} 期 · {pl.status}
+              </div>
+              <ul className="mt-2 space-y-1 pl-2">
+                {pl.payments.map((pay) => (
+                  <li key={pay.id} className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 text-ink/70">
+                    <span>
+                      第 {pay.installment_no} 期 · {installmentAmountLabel(pay.amount)} · 到期 {pay.due_date}
+                    </span>
+                    <span className={pay.paid_at ? "text-emerald-700" : "text-amber-800"}>
+                      {pay.paid_at ? (
+                        paymentStatusLabel(pay.status, pay.paid_at)
+                      ) : (
+                        <>
+                          {paymentStatusLabel(pay.status, pay.paid_at)}{" "}
+                          <button
+                            type="button"
+                            className="text-primary underline decoration-primary/40 underline-offset-2 hover:opacity-90"
+                            onClick={() =>
+                              onReceiptForInstallment({
+                                installmentNo: pay.installment_no,
+                                categoryName
+                              })
+                            }
+                          >
+                            （收據／上傳憑證）
+                          </button>
+                        </>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
   );
 }

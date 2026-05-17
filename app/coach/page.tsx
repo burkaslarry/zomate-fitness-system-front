@@ -31,7 +31,7 @@ type CourseRow = {
 type BlockUi =
   | null
   | { mode: "loading"; title: string; detail?: string }
-  | { mode: "success"; title: string; detail?: string };
+  | { mode: "success"; title: string; detail?: string; enrollments?: Enr[] };
 
 const INPUT =
   "mt-1 block w-full max-w-xl rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink placeholder:text-ink/50";
@@ -129,10 +129,19 @@ export default function CoachPage() {
     if (coachId === "" || !canAssignStaff) return;
     setBlockUi({ mode: "loading", title: "指派教練中…", detail: "將課程系列歸於目前選擇嘅教練。" });
     try {
-      await api.assignCourseCoach(courseId, Number(coachId));
+      const updated = (await api.assignCourseCoach(courseId, Number(coachId))) as CourseRow;
       setCourses((await api.coachCourses(Number(coachId), { day })) as CourseRow[]);
       setDayCoursesAll((await api.adminCoursesByDay(day)) as CourseRow[]);
-      setBlockUi({ mode: "success", title: "指派成功", detail: "該課程已顯示於上方「此教練嘅課程」。" });
+      const enr = Array.isArray(updated?.enrollments) ? updated.enrollments : [];
+      setBlockUi({
+        mode: "success",
+        title: "指派成功",
+        detail:
+          enr.length > 0
+            ? "以下學員已跟此課程；請將課堂 PIN 交俾學員簽到。"
+            : "該課程已顯示於上方「此教練嘅課程」。本課程暫未有編入學員。",
+        enrollments: enr
+      });
     } catch (err) {
       setBlockUi(null);
       alertApiError(err);
@@ -429,6 +438,13 @@ export default function CoachPage() {
             />
           </label>
         </div>
+        <p className="text-xs leading-relaxed text-ink/55">
+          <strong>每週上課日</strong>由後台{" "}
+          <Link href="/admin/course-set" className="font-medium text-primary underline underline-offset-2">
+            Course 套餐開課
+          </Link>{" "}
+          揀定星期按鈕（例：只揀「一」＝每週一上一堂）。堂數可設 1–120；例如學員共 40 堂就填 40，系統會排到第 40 個上課日，簽到頁至嗰日先會顯示課堂。
+        </p>
 
         {canAssignStaff && coachId !== "" && (
           <section className="rounded-xl border border-dashed border-amber-200/80 bg-amber-50/40 p-4">
@@ -545,12 +561,25 @@ export default function CoachPage() {
             aria-modal="true"
             aria-labelledby="coach-block-success-title"
           >
-            <div className="w-full max-w-sm rounded-xl border border-ink/10 bg-surface p-6 shadow-lg ring-1 ring-ink/[0.06]">
+            <div className="w-full max-w-md rounded-xl border border-ink/10 bg-surface p-6 shadow-lg ring-1 ring-ink/[0.06]">
               <p id="coach-block-success-title" className="text-center text-lg font-semibold text-emerald-900">
                 {blockUi.title}
               </p>
               {blockUi.detail ? (
                 <p className="mt-2 text-center text-sm text-ink/70">{blockUi.detail}</p>
+              ) : null}
+              {blockUi.enrollments && blockUi.enrollments.length > 0 ? (
+                <ul className="mt-4 max-h-64 space-y-3 overflow-y-auto rounded-lg border border-ink/10 bg-canvas p-3 text-left text-sm">
+                  {blockUi.enrollments.map((e) => (
+                    <li key={`${e.student_id}-${e.checkin_pin}`} className="border-b border-ink/[0.06] pb-3 last:border-0 last:pb-0">
+                      <div className="font-medium text-ink">{e.student_name}</div>
+                      <div className="mt-0.5 text-xs text-ink/65">電話 {e.student_phone}</div>
+                      <div className="mt-1 font-mono text-sm font-semibold tracking-wide text-ink">
+                        課堂 PIN：{e.checkin_pin}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
               ) : null}
               <button
                 type="button"
