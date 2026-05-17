@@ -517,13 +517,13 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/35 px-4">
           <div className="w-full max-w-sm space-y-4 rounded-xl border border-emerald-200/80 bg-emerald-50 p-5 text-ink shadow-xl ring-1 ring-ink/[0.06]">
             <h2 className="text-lg font-semibold">申請成功</h2>
-            <p className="text-sm text-ink/80">請立即上傳會員照片，完成新入會流程。</p>
+            <p className="text-sm text-ink/80"></p>
             <button
               type="button"
               className="w-full rounded-md border border-ink/15 bg-primary/90 px-4 py-3 text-sm font-semibold text-ink shadow-sm hover:bg-primary"
-              onClick={() => router.push("/register/photo")}
+              onClick={() => router.push("/")}
             >
-              上傳照片
+              回到主頁
             </button>
           </div>
         </div>
