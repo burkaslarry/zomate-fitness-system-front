@@ -371,6 +371,8 @@ export const api = {
     student_id?: number;
     member_hkid?: string;
     student_phone?: string;
+    /** Ties renewal to a course category when FastAPI accepts this field (category enrollment / lesson ledger). */
+    course_category_id?: number;
     package_id: number;
     coach_id?: number;
     branch_id?: number;
@@ -383,6 +385,9 @@ export const api = {
     if (payload.student_id != null) form.append("student_id", String(payload.student_id));
     if (payload.member_hkid) form.append("member_hkid", payload.member_hkid);
     if (payload.student_phone) form.append("student_phone", payload.student_phone);
+    if (payload.course_category_id != null && payload.course_category_id > 0) {
+      form.append("course_category_id", String(payload.course_category_id));
+    }
     form.append("package_id", String(payload.package_id));
     if (payload.coach_id) form.append("coach_id", String(payload.coach_id));
     if (payload.branch_id) form.append("branch_id", String(payload.branch_id));

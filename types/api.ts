@@ -44,6 +44,14 @@ export type PackageDto = {
   active: boolean;
 };
 
+/** Mirrors GET /api/admin/course-categories rows (soft-delete flags vary by backend). */
+export type CourseCategoryDto = {
+  id: number;
+  name: string;
+  deleted_at?: string | null;
+  is_deleted?: boolean;
+};
+
 export type CoachDto = {
   id: number;
   full_name: string;

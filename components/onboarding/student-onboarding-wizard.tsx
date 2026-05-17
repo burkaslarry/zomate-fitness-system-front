@@ -3,8 +3,8 @@
 /**
  * [F001][S001]
  * Feature: Student Onboarding
- * Step: (see Logic)
- * Logic: Onboarding wizard: PAR-Q with conditional medical file (≤3MB PDF/image), HKID, policy steps.
+ * Step: Multi-step wizard shell and step 1 (identity / emergency contacts).
+ * Logic: RHF + Zod; `/api/members/duplicate-check` before PAR-Q; quickName prefill.
  */
 
 import Link from "next/link";
@@ -21,6 +21,12 @@ import {
 } from "../../lib/schemas/student";
 import { alertApiError, api } from "../../lib/api";
 
+/**
+ * [F001][S002]
+ * Feature: Student Onboarding
+ * Step: PAR-Q question labels (seven items; RHF keys under `parq`).
+ * Logic: Checkbox copy only; defaults in `defaultParq`.
+ */
 const PARQ_LABELS: { key: keyof StudentRegistrationPayload["parq"]; label: string }[] = [
   { key: "q1_heart_condition", label: "醫生曾說你有心臟問題，只宜於醫生建議下運動？" },
   { key: "q2_chest_pain_activity", label: "你是否於進行體能活動時胸會痛？" },
@@ -31,6 +37,12 @@ const PARQ_LABELS: { key: keyof StudentRegistrationPayload["parq"]; label: strin
   { key: "q7_other_reason", label: "是否有其他醫生未建議運動的原因？" }
 ];
 
+/**
+ * [F001][S002]
+ * Feature: Student Onboarding
+ * Step: PAR-Q default answers (all “否”) before user interaction.
+ * Logic: Merged into `defaults.parq` for RHF.
+ */
 const defaultParq: StudentRegistrationPayload["parq"] = {
   q1_heart_condition: false,
   q2_chest_pain_activity: false,
@@ -41,9 +53,21 @@ const defaultParq: StudentRegistrationPayload["parq"] = {
   q7_other_reason: false
 };
 
+/**
+ * [F001][S001]
+ * Feature: Student Onboarding
+ * Step: Shared Tailwind class for step 1 & 3 text fields.
+ * Logic: Single token string to keep inputs visually consistent.
+ */
 const fieldClass =
   "w-full rounded-lg border border-ink/15 bg-canvas px-3 py-2 text-sm text-ink shadow-sm placeholder:text-ink/45 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40";
 
+/**
+ * [F001][S001]
+ * Feature: Student Onboarding
+ * Step: RHF `defaultValues` seed for entire wizard payload.
+ * Logic: `full_name` overridden by `quickName` prop when present.
+ */
 const defaults: Partial<StudentRegistrationPayload> = {
   full_name: "",
   hkid: "",
@@ -60,6 +84,12 @@ const defaults: Partial<StudentRegistrationPayload> = {
   medical_clearance_file_name: ""
 };
 
+/**
+ * [F001][S001]
+ * Feature: Student Onboarding
+ * Step: Wizard component — wires steps 1–3, duplicate toast, success modal.
+ * Logic: Client-only navigation between steps; server calls in `goNext` / `onFinalSubmit`.
+ */
 export default function StudentOnboardingWizard({ quickName }: { quickName?: string }) {
   const [step, setStep] = useState(1);
   const [status, setStatus] = useState("");
@@ -70,18 +100,36 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   const router = useRouter();
   const [parqUploadError, setParqUploadError] = useState("");
 
+  /**
+   * [F001][S001]
+   * Feature: Student Onboarding
+   * Step: React Hook Form + Zod resolver for final submit validation.
+   * Logic: `studentRegistrationPayloadSchema` enforces step 3 attestations and PAR-Q file rule.
+   */
   const form = useForm<StudentRegistrationPayload>({
     resolver: zodResolver(studentRegistrationPayloadSchema),
     defaultValues: { ...defaults, full_name: quickName ?? "" } as StudentRegistrationPayload,
     mode: "onBlur"
   });
 
+  /**
+   * [F001][S002]
+   * Feature: Student Onboarding
+   * Step: PAR-Q reactive state — drives medical upload visibility and step-2 “下一步” enablement.
+   * Logic: `step2NextEnabled` when no “yes” OR (filename set and no client upload error).
+   */
   const parqWatch = form.watch("parq");
   const clearanceNameWatch = form.watch("medical_clearance_file_name");
   const anyParqYesVal = parqAnyYes(parqWatch);
   const step2NextEnabled =
     !anyParqYesVal || (String(clearanceNameWatch || "").trim().length > 0 && !parqUploadError);
 
+  /**
+   * [F001][S002]
+   * Feature: Student Onboarding
+   * Step: Reset medical clearance when user clears all PAR-Q “是” answers.
+   * Logic: Clears RHF field, error text, and native file input.
+   */
   useEffect(() => {
     if (!anyParqYesVal) {
       form.setValue("medical_clearance_file_name", "");
@@ -89,16 +137,33 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
       if (parqFileRef.current) parqFileRef.current.value = "";
     }
   }, [anyParqYesVal, form]);
+  /**
+   * [F001][S001]
+   * Feature: Student Onboarding
+   * Step: `quickName` query / prop sync into `full_name`.
+   * Logic: Used by `/student/onboard?quickName=…` shortcut.
+   */
   useEffect(() => {
     if (quickName) form.setValue("full_name", quickName);
   }, [quickName, form]);
 
+  /**
+   * [F001][S001]
+   * Feature: Student Onboarding
+   * Step: Duplicate-member toast lifecycle.
+   * Logic: Auto-hide after 6.5s so user can retry step 1.
+   */
   useEffect(() => {
     if (!dupToastMsg) return;
     const t = window.setTimeout(() => setDupToastMsg(null), 6500);
     return () => window.clearTimeout(t);
   }, [dupToastMsg]);
 
+  /**
+   * [F001][S002]
+   * Feature: Student Onboarding
+   * Step: Medical clearance file — PDF or image, max 3MB; stores filename for API `medical_clearance_file_name`.
+   */
   function onParqClearanceFileChange(e: ChangeEvent<HTMLInputElement>) {
     const input = e.target;
     const file = input.files?.[0];
@@ -125,6 +190,11 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     form.setValue("medical_clearance_file_name", file.name);
   }
 
+  /**
+   * [F001][S001]
+   * Feature: Student Onboarding
+   * Step: Step advance — validate step 1 (dup check), step 2 (PAR-Q + upload gate), then step 3.
+   */
   async function goNext() {
     setStatus("");
     if (step === 1) {
@@ -206,6 +276,11 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     }
   }
 
+  /**
+   * [F001][S004]
+   * Feature: Student Onboarding
+   * Step: Final submit — `POST /api/members`; sessionStorage context + success dialog.
+   */
   async function onFinalSubmit(values: StudentRegistrationPayload) {
     setStatus("提交中…");
     setShowSuccessDialog(false);
@@ -241,6 +316,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
 
   return (
     <main className="mx-auto min-h-screen max-w-lg space-y-6 bg-canvas p-6 text-ink">
+      {/* [F001][S001] Page chrome — title + step indicator */}
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-xl font-semibold tracking-tight text-ink">新人入會 · F01</h1>
         <Link href="/student" className="text-sm text-ink/70 underline underline-offset-4 hover:text-ink">
@@ -254,6 +330,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         <li className={step >= 3 ? "font-medium text-primary" : ""}>③ 冷靜期／簽署</li>
       </ol>
 
+      {/* [F001][S001] Duplicate member pre-check feedback (API `memberDuplicateCheck`) */}
       {dupToastMsg ? (
         <div
           className="fixed left-4 right-4 top-4 z-[140] mx-auto max-w-lg rounded-xl border border-amber-300/90 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950 shadow-lg ring-1 ring-amber-500/30"
@@ -263,11 +340,13 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         </div>
       ) : null}
 
+      {/* [F001][S001–S004] Wizard form — one RHF form; step-specific field groups above footer actions */}
       <form
         ref={formRef}
         className="space-y-5 rounded-xl border border-ink/10 bg-surface p-5 shadow-sm ring-1 ring-ink/[0.04]"
         onSubmit={form.handleSubmit(onFinalSubmit)}
       >
+        {/* [F001][S001] Step 1 — personal + emergency + HK phones as +852 eight digits */}
         {step === 1 && (
           <div className="space-y-3">
             <p className="text-sm leading-relaxed text-ink [text-wrap:pretty]">
@@ -365,6 +444,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
           </div>
         )}
 
+        {/* [F001][S002] Step 2 — PAR-Q checkboxes + conditional medical file (≤3MB) */}
         {step === 2 && (
           <div className="space-y-4">
             <p className="text-xs leading-relaxed text-ink/80">
@@ -419,6 +499,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
           </div>
         )}
 
+        {/* [F001][S004] Step 3 — cooling-off + disclaimer + e-signature + optional renewal notes */}
         {step === 3 && (
           <div className="space-y-4">
             <div data-cooling-copy className="rounded-lg border border-ink/10 bg-canvas p-4 text-xs leading-relaxed text-ink/85">
@@ -483,6 +564,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
           </div>
         )}
 
+        {/* [F001][S001] Step navigation — `下一步` gated on step 2 upload when PAR-Q any-yes */}
         <div className="flex flex-wrap gap-2 border-t border-ink/[0.08] pt-4">
           {step > 1 && (
             <button
@@ -513,6 +595,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         </div>
       </form>
 
+      {/* [F001][S004] Post-submit success — optional redirect to photo flow via session context */}
       {showSuccessDialog && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/35 px-4">
           <div className="w-full max-w-sm space-y-4 rounded-xl border border-emerald-200/80 bg-emerald-50 p-5 text-ink shadow-xl ring-1 ring-ink/[0.06]">

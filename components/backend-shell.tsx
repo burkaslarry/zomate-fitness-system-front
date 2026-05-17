@@ -22,7 +22,7 @@ const MENU_SECTIONS: { frameClass: string; items: NavItem[] }[] = [
     items: [
       { href: "/admin", label: "後台面板" },
       { href: "/register", label: "+ 新會員" },
-      { href: "/renewal", label: "+ 續會" },
+      { href: "/renewal", label: "+ 會員報堂" },
       { href: "/trial-class", label: "+ 試堂/加堂" }
     ]
   },
@@ -211,7 +211,7 @@ export default function BackendShell({
                   {apiStatus === "online"
                     ? isUsingNextMockApi()
                       ? "API：Next mock"
-                      : "API：FastAPI"
+                      : "API：Working"
                     : apiStatus === "offline"
                       ? "API：離線"
                       : "API：檢查中…"}

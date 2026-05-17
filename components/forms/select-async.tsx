@@ -16,7 +16,8 @@ export default function SelectAsync({
   label,
   load,
   required = false,
-  defaultBranchCode
+  defaultBranchCode,
+  defaultFirst = false
 }: {
   name: string;
   label: string;
@@ -24,6 +25,8 @@ export default function SelectAsync({
   required?: boolean;
   /** 分店 API 回傳 `code` 時可預選（例如種子資料尖沙咀為 TST）。 */
   defaultBranchCode?: string;
+  /** 若為 true 且無 `defaultBranchCode` 命中，載入後預選第一筆（例如續會分店）。 */
+  defaultFirst?: boolean;
 }) {
   const [rows, setRows] = useState<Option[]>([]);
   const [value, setValue] = useState("");
@@ -38,6 +41,8 @@ export default function SelectAsync({
         if (defaultBranchCode) {
           const match = arr.find((r) => String(r.code ?? "") === defaultBranchCode);
           if (match) setValue(String(match.id));
+        } else if (defaultFirst && arr.length > 0) {
+          setValue(String(arr[0].id));
         }
       })
       .catch(() => {
@@ -46,7 +51,7 @@ export default function SelectAsync({
     return () => {
       cancelled = true;
     };
-  }, [load, defaultBranchCode]);
+  }, [load, defaultBranchCode, defaultFirst]);
 
   return (
     <label className="block space-y-1 text-sm">
