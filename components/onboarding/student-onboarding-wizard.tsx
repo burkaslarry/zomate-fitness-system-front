@@ -4,16 +4,17 @@
  * [F001][S001]
  * Feature: Student Onboarding
  * Step: (see Logic)
- * Logic: Onboarding wizard UI: PAR-Q, HKID, policy steps.
+ * Logic: Onboarding wizard: PAR-Q with conditional medical file (≤3MB PDF/image), HKID, policy steps.
  */
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   onboardingStep1Schema,
+  parqAnyYes,
   parqQuestionsSchema,
   studentRegistrationPayloadSchema,
   type StudentRegistrationPayload
@@ -55,7 +56,8 @@ const defaults: Partial<StudentRegistrationPayload> = {
   cooling_off_acknowledged: false,
   disclaimer_accepted: false,
   digital_signature: "",
-  renewal_notes: ""
+  renewal_notes: "",
+  medical_clearance_file_name: ""
 };
 
 export default function StudentOnboardingWizard({ quickName }: { quickName?: string }) {
@@ -64,7 +66,9 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   const [dupToastMsg, setDupToastMsg] = useState<string | null>(null);
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
+  const parqFileRef = useRef<HTMLInputElement | null>(null);
   const router = useRouter();
+  const [parqUploadError, setParqUploadError] = useState("");
 
   const form = useForm<StudentRegistrationPayload>({
     resolver: zodResolver(studentRegistrationPayloadSchema),
@@ -72,6 +76,19 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     mode: "onBlur"
   });
 
+  const parqWatch = form.watch("parq");
+  const clearanceNameWatch = form.watch("medical_clearance_file_name");
+  const anyParqYesVal = parqAnyYes(parqWatch);
+  const step2NextEnabled =
+    !anyParqYesVal || (String(clearanceNameWatch || "").trim().length > 0 && !parqUploadError);
+
+  useEffect(() => {
+    if (!anyParqYesVal) {
+      form.setValue("medical_clearance_file_name", "");
+      setParqUploadError("");
+      if (parqFileRef.current) parqFileRef.current.value = "";
+    }
+  }, [anyParqYesVal, form]);
   useEffect(() => {
     if (quickName) form.setValue("full_name", quickName);
   }, [quickName, form]);
@@ -81,6 +98,32 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     const t = window.setTimeout(() => setDupToastMsg(null), 6500);
     return () => window.clearTimeout(t);
   }, [dupToastMsg]);
+
+  function onParqClearanceFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const input = e.target;
+    const file = input.files?.[0];
+    form.clearErrors("medical_clearance_file_name");
+    setParqUploadError("");
+    if (!file) {
+      form.setValue("medical_clearance_file_name", "");
+      return;
+    }
+    const maxBytes = 3 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      setParqUploadError("檔案不可超過 3MB");
+      input.value = "";
+      form.setValue("medical_clearance_file_name", "");
+      return;
+    }
+    const okType = file.type.startsWith("image/") || file.type === "application/pdf";
+    if (!okType) {
+      setParqUploadError("請上傳 PDF 或圖片（JPEG、PNG、WebP、GIF）");
+      input.value = "";
+      form.setValue("medical_clearance_file_name", "");
+      return;
+    }
+    form.setValue("medical_clearance_file_name", file.name);
+  }
 
   async function goNext() {
     setStatus("");
@@ -147,7 +190,17 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         form.setError("parq", { message: "請完成 PAR-Q 問卷" });
         return;
       }
+      if (parqAnyYes(parqVals)) {
+        const fn = (form.getValues("medical_clearance_file_name") || "").trim();
+        if (!fn) {
+          form.setError("medical_clearance_file_name", {
+            message: "請上傳醫生證明（PDF 或圖片，上限 3MB）"
+          });
+          return;
+        }
+      }
       form.clearErrors("parq");
+      form.clearErrors("medical_clearance_file_name");
       setStep(3);
       return;
     }
@@ -165,6 +218,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         emergency_contact_name: values.emergency_contact_name,
         emergency_contact_phone: values.emergency_contact_phone,
         parq: values.parq,
+        medical_clearance_file_name: (values.medical_clearance_file_name || "").trim(),
         cooling_off_acknowledged: values.cooling_off_acknowledged,
         disclaimer_accepted: values.disclaimer_accepted,
         digital_signature: values.digital_signature
@@ -228,6 +282,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                 className={fieldClass}
                 placeholder="證件號碼／HKID（簡填 · 例：英文字 + 頭幾個數字 · A123）"
                 autoCapitalize="characters"
+                maxLength={4}
                 {...form.register("hkid")}
               />
               <p className="mt-1 text-[11px] leading-relaxed text-ink/50">
@@ -313,7 +368,8 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         {step === 2 && (
           <div className="space-y-4">
             <p className="text-xs leading-relaxed text-ink/80">
-              PAR-Q：請如實選「是／否」，此步驟只需完成問卷。
+              PAR-Q：請如實勾選；任一項答「是」須上傳醫生證明（PDF 或圖片，<strong>上限 3MB</strong>
+              ），上傳成功後方可按「下一步」。
             </p>
             {PARQ_LABELS.map(({ key, label }) => (
               <Controller
@@ -333,6 +389,33 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                 )}
               />
             ))}
+            {anyParqYesVal ? (
+              <div className="space-y-2 rounded-lg border border-ink/10 bg-canvas/90 p-3">
+                <p className="text-xs font-medium text-ink">醫療／醫生證明上傳（必填）</p>
+                <input
+                  ref={parqFileRef}
+                  data-testid="parq-medical-upload"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+                  className="block w-full text-xs text-ink/80 file:mr-3 file:rounded-md file:border file:border-ink/15 file:bg-primary/90 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink"
+                  onChange={onParqClearanceFileChange}
+                />
+                {parqUploadError ? (
+                  <p className="text-xs text-rose-600">{parqUploadError}</p>
+                ) : null}
+                {clearanceNameWatch && !parqUploadError ? (
+                  <p className="text-xs font-medium text-emerald-800">已接收檔案：{clearanceNameWatch}</p>
+                ) : null}
+                {form.formState.errors.medical_clearance_file_name ? (
+                  <p className="text-xs text-rose-600">
+                    {String(form.formState.errors.medical_clearance_file_name.message)}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+            {form.formState.errors.parq && (
+              <p className="text-xs text-rose-400">{String(form.formState.errors.parq.message)}</p>
+            )}
           </div>
         )}
 
@@ -344,19 +427,19 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                 會員可在簽署後 7 個曆日內書面通知中心終止合約（扣除合理行政費用之條款以實際合約為準）
               </p>
             </div>
-            <label
-              data-cooling-ack
-              className="flex w-full touch-manipulation items-center gap-3 rounded-lg border border-ink/[0.08] bg-canvas p-3 text-sm text-ink"
-            >
-              <input
-                type="checkbox"
-                className="h-5 w-5 min-h-[1.25rem] min-w-[1.25rem] shrink-0 cursor-pointer accent-primary"
-                {...form.register("cooling_off_acknowledged")}
-              />
-              <span className="min-w-0 text-left leading-6">
-                本人確認已閱讀並理解冷靜期條款。
-              </span>
-            </label>
+            <label 
+  data-cooling-ack
+  className="relative flex items-start touch-manipulation gap-3 rounded-lg border border-ink/[0.08] bg-canvas p-3 text-sm text-ink cursor-pointer"
+>
+  <input
+    type="checkbox"
+    className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-primary" 
+    {...form.register("cooling_off_acknowledged")}
+  />
+  <p className="text-xs leading-relaxed text-ink/85">
+    本人確認已閱讀並理解冷靜期條款。
+  </p>
+</label>
             {form.formState.errors.cooling_off_acknowledged && (
               <p className="text-xs text-rose-400">{String(form.formState.errors.cooling_off_acknowledged.message)}</p>
             )}
@@ -366,19 +449,24 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                 參加本中心訓練前，請確認已理解運動風險；如有長期病患請先諮詢醫生
               </p>
             </div>
-            <label
+            
+              <div>
+
+              <label
               data-disclaimer-ack
-              className="flex w-full touch-manipulation items-center gap-3 rounded-lg border border-ink/[0.08] bg-canvas p-3 text-sm text-ink"
+      className="relative flex items-start touch-manipulation gap-3 rounded-lg border border-ink/[0.08] bg-canvas p-3 text-sm text-ink cursor-pointer"
             >
               <input
                 type="checkbox"
-                className="h-5 w-5 min-h-[1.25rem] min-w-[1.25rem] shrink-0 cursor-pointer accent-primary"
+    className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-primary" 
                 {...form.register("disclaimer_accepted")}
               />
-              <span className="min-w-0 text-left leading-6">
+  <p className="text-xs leading-relaxed text-ink/85">
                 本人已閱讀並同意健康聲明及免責條款。
-              </span>
+             </p>
             </label>
+              </div>
+            
             {form.formState.errors.disclaimer_accepted && (
               <p className="text-xs text-rose-400">{String(form.formState.errors.disclaimer_accepted.message)}</p>
             )}
@@ -408,7 +496,8 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
           {step < 3 ? (
             <button
               type="button"
-              className="rounded-md border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-medium text-ink shadow-sm hover:bg-primary"
+              disabled={step === 2 && !step2NextEnabled}
+              className="rounded-md border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-medium text-ink shadow-sm hover:bg-primary disabled:cursor-not-allowed disabled:opacity-50"
               onClick={() => void goNext()}
             >
               下一步

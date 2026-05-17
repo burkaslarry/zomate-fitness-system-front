@@ -27,7 +27,7 @@ export default function RegisterSuccessPage() {
         <h1 className="mt-2 text-2xl font-semibold">{ctx?.full_name ?? "會員"}</h1>
         <p className="mt-4 text-sm text-ink/75">資料已提交，請返回學生入口繼續後續流程。</p>
       </div>
-      <Link href="/student" className="text-center text-sm text-ink/70 underline underline-offset-4">返回學生入口</Link>
+      <Link href="/" className="text-center text-sm text-ink/70 underline underline-offset-4">返回學生入口</Link>
     </main>
   );
 }

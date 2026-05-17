@@ -1,7 +1,7 @@
 /**
  * [F001][S001]
  * Feature: Student Onboarding
- * Step: (see Logic)
+ * Step: Zod schemas — PAR-Q with medical file name when any answer is yes (≤3MB enforced in UI).
  * Logic: Zod schemas shared by onboarding and forms.
  */
 
@@ -12,7 +12,7 @@ export const hkidSchema = z
   .string()
   .trim()
   .min(4, "請至少輸入 4 個字元（例：英文字 + 頭幾個數字 · A123）")
-  .max(12)
+  .max(4)
   .regex(/^[A-Z]{1,2}[0-9]+$/i, {
     message: "格式須為英文前置 + 數字（例如 A123）"
   });
@@ -22,7 +22,7 @@ export const phoneHkSchema = z
   .string()
   .regex(/^\+852[0-9]{8}$/, { message: "請輸入香港手機號碼 8 位數字（自動帶 +852）" });
 
-/** Standard PAR-Q — seven Yes/No questions (questionnaire only, no file upload requirement). */
+/** Standard PAR-Q — seven Yes/No questions. */
 export const parqQuestionsSchema = z.object({
   q1_heart_condition: z.boolean(),
   q2_chest_pain_activity: z.boolean(),
@@ -34,6 +34,10 @@ export const parqQuestionsSchema = z.object({
 });
 
 export type ParqAnswers = z.infer<typeof parqQuestionsSchema>;
+
+export function parqAnyYes(parq: ParqAnswers): boolean {
+  return Object.values(parq).some(Boolean);
+}
 
 /** 10 sessions → 3 months; 30 sessions → 6 months from membership start. */
 export function computeMembershipExpiryIso(packageSessions: 10 | 30, startDate: Date): string {
@@ -59,7 +63,7 @@ export const onboardingStep3Schema = z.object({
   digital_signature: z.string().min(2, "請輸入全名作電子簽署")
 });
 
-/** Full POST body after wizard steps — PAR-Q is questionnaire only. */
+/** Full POST body after wizard steps — PAR-Q「是」須附醫療證明檔名（後端寫入 health_notes）。 */
 export const studentRegistrationPayloadSchema = z
   .object({
     full_name: z.string().min(1),
@@ -70,6 +74,7 @@ export const studentRegistrationPayloadSchema = z
     emergency_contact_phone: phoneHkSchema,
     form_type: z.enum(["new", "renewal"]),
     parq: parqQuestionsSchema,
+    medical_clearance_file_name: z.string(),
     cooling_off_acknowledged: z.boolean(),
     disclaimer_accepted: z.boolean(),
     digital_signature: z.string().min(2),
@@ -83,6 +88,16 @@ export const studentRegistrationPayloadSchema = z
   .refine((d) => d.disclaimer_accepted, {
     message: "請同意免責聲明",
     path: ["disclaimer_accepted"]
-  });
+  })
+  .refine(
+    (d) => {
+      if (!parqAnyYes(d.parq)) return true;
+      return (d.medical_clearance_file_name ?? "").trim().length > 0;
+    },
+    {
+      message: "PAR-Q 任一項答「是」時請上傳醫生證明（PDF 或圖片）",
+      path: ["medical_clearance_file_name"]
+    }
+  );
 
 export type StudentRegistrationPayload = z.infer<typeof studentRegistrationPayloadSchema>;
