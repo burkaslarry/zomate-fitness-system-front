@@ -512,6 +512,11 @@ export const api = {
     }),
   createCourse: (payload: Record<string, unknown>) =>
     request("/api/admin/courses", { method: "POST", body: JSON.stringify(payload) }),
+  markCourseInstallmentPaid: (courseId: number, payload: { student_id: number; installment_no: number }) =>
+    request(`/api/admin/courses/${courseId}/installment-paid`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    }),
   deleteCourse: (courseId: number, hard = false) =>
     request(`/api/admin/courses/${courseId}?hard=${hard ? "true" : "false"}`, { method: "DELETE" }),
 

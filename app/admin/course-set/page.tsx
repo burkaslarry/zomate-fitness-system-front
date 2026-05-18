@@ -3,21 +3,28 @@
 /**
  * [F002][S001]
  * Feature: Course Entry & Automation
- * Step: Open course package — loading overlay, success list (name / phone / 課堂 PIN), coach WhatsApp reminder
- * Logic: POST ``/api/admin/courses`` with optional first-session fields; modal shows enrollments from response.
+ * Step: POST ``/api/admin/courses`` (`total_lessons` ≤30, optional `total_installments` PIN tranches); success modal + WhatsApp deeplink.
+ * Logic: Optional first-session fields + weekly series; response enrollments include `installment_segments` when installments > 1.
  */
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import BackendShell from "../../../components/backend-shell";
 import { alertApiError, api } from "../../../lib/api";
-import type { BranchDto, CoachDto, MemberProfile, TrialClassKindDto } from "../../../types/api";
+import type {
+  BranchDto,
+  CoachDto,
+  InstallmentSegmentPinDto,
+  MemberProfile,
+  TrialClassKindDto
+} from "../../../types/api";
 
 type CourseEnrollmentSummary = {
   student_id: number;
   student_name: string;
   student_phone: string;
   checkin_pin: string;
+  installment_segments?: InstallmentSegmentPinDto[];
 };
 
 /** Python `enumerate_lesson_dates`: 0 = Monday … 6 = Sunday */
@@ -36,6 +43,29 @@ function combineLocalDateTime(dateStr: string, timeStr: string): string {
   return `${dateStr}T${t}`;
 }
 
+function buildEnrollmentWhatsAppText(courseTitle: string, rows: CourseEnrollmentSummary[]): string {
+  const lines = rows.map((e) => {
+    if (e.installment_segments && e.installment_segments.length > 0) {
+      const segs = e.installment_segments
+        .map((s) => {
+          const unpaid = s.paid === false;
+          const suffix = unpaid ? "（待標記已付後先可用於簽到）" : "（可簽到）";
+          return `第${s.installment_no}個分期（第${s.lesson_from}–${s.lesson_to}堂）PIN：${s.pin}${suffix}`;
+        })
+        .join("\n");
+      return `${e.student_name}（${e.student_phone}）\n${segs}`;
+    }
+    return `${e.student_name}（${e.student_phone}）\n課堂 PIN：${e.checkin_pin}`;
+  });
+  return `【Zomate 開課】${courseTitle}\n請交俾學員簽到用：\n\n${lines.join("\n\n")}`;
+}
+
+function whatsappMeUrl(phone: string, body: string): string {
+  const digits = phone.replace(/\D/g, "");
+  const n = digits.length === 8 ? `852${digits}` : digits;
+  return `https://wa.me/${n}?text=${encodeURIComponent(body)}`;
+}
+
 export default function AdminCourseSetPage() {
   const [kinds, setKinds] = useState<TrialClassKindDto[]>([]);
   const [branches, setBranches] = useState<BranchDto[]>([]);
@@ -50,6 +80,7 @@ export default function AdminCourseSetPage() {
   const [endTime, setEndTime] = useState("11:00");
   const [weekdays, setWeekdays] = useState<number[]>([]);
   const [totalLessons, setTotalLessons] = useState(10);
+  const [totalInstallments, setTotalInstallments] = useState(1);
   const [picked, setPicked] = useState<Record<number, boolean>>({});
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
@@ -59,8 +90,11 @@ export default function AdminCourseSetPage() {
   const [coachNote, setCoachNote] = useState("");
   const [successOpen, setSuccessOpen] = useState(false);
   const [successCoachName, setSuccessCoachName] = useState("");
+  const [successCourseTitle, setSuccessCourseTitle] = useState("");
   const [successHadStudents, setSuccessHadStudents] = useState(false);
   const [successEnrollments, setSuccessEnrollments] = useState<CourseEnrollmentSummary[]>([]);
+  /** Course id returned by POST — used to PATCH installment-paid from success modal */
+  const [successCourseId, setSuccessCourseId] = useState<number | null>(null);
   const [submitBusy, setSubmitBusy] = useState(false);
 
   useEffect(() => {
@@ -106,6 +140,31 @@ export default function AdminCourseSetPage() {
     return students.filter((s) => `${s.full_name} ${s.phone}`.toLowerCase().includes(q));
   }, [studentFilter, students]);
 
+  async function markSegmentPaid(studentId: number, installmentNo: number) {
+    if (successCourseId == null) return;
+    try {
+      await api.markCourseInstallmentPaid(successCourseId, {
+        student_id: studentId,
+        installment_no: installmentNo
+      });
+      setSuccessEnrollments((prev) =>
+        prev.map((row) => {
+          if (row.student_id !== studentId || !row.installment_segments?.length) {
+            return row;
+          }
+          return {
+            ...row,
+            installment_segments: row.installment_segments.map((s) =>
+              s.installment_no === installmentNo ? { ...s, paid: true } : s
+            )
+          };
+        })
+      );
+    } catch (e) {
+      alertApiError(e);
+    }
+  }
+
   async function onSubmit(ev: FormEvent<HTMLFormElement>) {
     ev.preventDefault();
     setStatus("");
@@ -116,6 +175,10 @@ export default function AdminCourseSetPage() {
     }
     if (weekdays.length < 1) {
       setStatus("請選擇至少一個上課日（最多三個）。");
+      return;
+    }
+    if (totalInstallments > totalLessons) {
+      setStatus("分期數唔可以大於套餐堂數；請調整分期或堂數。");
       return;
     }
     const student_ids = Object.entries(picked)
@@ -144,13 +207,16 @@ export default function AdminCourseSetPage() {
         course_start_date: courseDate,
         lesson_weekdays: weekdays,
         total_lessons: totalLessons,
+        total_installments: totalInstallments,
         ...(agreedIso ? { student_first_session_at: agreedIso } : {}),
         ...(noteTrim ? { coach_schedule_note: noteTrim } : {})
-      })) as { enrollments?: CourseEnrollmentSummary[] };
+      })) as { id?: number; enrollments?: CourseEnrollmentSummary[] };
       setStatus("");
       const cname = coaches.find((c) => c.id === coachId)?.full_name ?? "教練";
+      setSuccessCourseTitle(titleKind.label_zh);
       setSuccessCoachName(cname);
       setSuccessHadStudents(student_ids.length > 0);
+      setSuccessCourseId(typeof created?.id === "number" ? created.id : null);
       const enr = Array.isArray(created?.enrollments) ? created.enrollments : [];
       setSuccessEnrollments(enr);
       setSuccessOpen(true);
@@ -168,8 +234,12 @@ export default function AdminCourseSetPage() {
         <div>
           <h2 className="text-2xl font-semibold text-ink">開課（套餐）</h2>
           <p className="mt-2 text-sm text-ink/65">
-            堂數 1–120；每星期揀一至日（最多 3 個上課日）；用行事曆揀首日。建立後伺服器會計算預計最後一堂日期（系列結束）。編入學員時，餘額會按{" "}
-            <strong className="font-medium text-ink">套餐堂數</strong> 加入。
+            套餐堂數<strong className="text-ink"> 1–30</strong>
+            ，一次付款對應一個簽到 PIN；若<strong className="font-medium text-ink">分批／分期過數</strong>
+            ，可揀「分期數」，系統會按堂數自動拆區間並派<strong className="font-medium text-ink">每個分期一個 PIN</strong>
+            （例：30 堂 3 期 → 第 1 期 PIN 對應第 1–10 堂）。
+            每星期揀一至日（最多 3 個）；由<strong className="text-ink">首日</strong>
+            起按每個上課日<strong className="text-ink">遞推到滿套餐堂數</strong>預約（例：只得星期一會 gen 星期一連續排到夠數）。編入學員後餘額會按套餐堂數入帳。
           </p>
           <p className="mt-1 text-xs text-ink/50">
             課程種類請先到{" "}
@@ -314,22 +384,50 @@ export default function AdminCourseSetPage() {
                   );
                 })}
               </div>
-              <p className="text-xs text-ink/50">已選：{weekdays.length}/3</p>
+              <p className="text-xs text-ink/50">
+                已選：{weekdays.length}/3。揀某日（例如星期一）即由「首日」起<strong className="text-ink/70">每逢該星期</strong>
+                排到滿「套餐堂數」（系統用堂數＋上課日決定最後一堂）。
+              </p>
             </div>
 
             <label className="block space-y-1 text-sm">
-              <span className="text-ink/70">套餐堂數（1–120）</span>
+              <span className="text-ink/70">套餐堂數</span>
               <input
+                id="total-lessons-field"
                 type="number"
                 required
                 min={1}
-                max={120}
+                max={30}
+                placeholder="請填上堂數"
                 value={totalLessons}
                 onChange={(e) =>
-                  setTotalLessons(Math.min(120, Math.max(1, Number(e.target.value) || 1)))
+                  setTotalLessons(Math.min(30, Math.max(1, Number(e.target.value) || 1)))
                 }
-                className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink sm:max-w-[12rem]"
+                aria-describedby="total-lessons-hint"
+                className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink placeholder:text-ink/35 sm:max-w-[12rem]"
               />
+              <p id="total-lessons-hint" className="text-xs text-ink/55">
+                最多 <span className="tabular-nums font-medium text-ink/70">30</span> 堂
+              </p>
+            </label>
+
+            <label className="block space-y-1 text-sm">
+              <span className="text-ink/70">分期數（一次過數一個 PIN）</span>
+              <select
+                value={totalInstallments}
+                onChange={(e) => setTotalInstallments(Number(e.target.value))}
+                className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink sm:max-w-[16rem]"
+              >
+                <option value={1}>唔分期（全套 1 個 PIN）</option>
+                <option value={2}>2 期（2 個 PIN，堂數會拆成兩段）</option>
+                <option value={3}>3 期（3 個 PIN）</option>
+                <option value={4}>4 期</option>
+                <option value={5}>5 期</option>
+              </select>
+              <span className="text-xs text-ink/50">
+                揀 2 或以上即「分期」：每期一個 PIN；<strong className="text-ink">首期預設已可簽到</strong>，第 2 期起要
+                <strong className="text-ink">標記已付／已找數</strong>先有得用嗰個 PIN 簽到（成功 popup 內可即時按「標記已付」）。
+              </span>
             </label>
 
             <div className="rounded-lg border border-sky-200/60 bg-sky-50/80 p-4 space-y-3">
@@ -477,14 +575,59 @@ export default function AdminCourseSetPage() {
                 <p className="mt-2 text-xs text-ink/55">需要教練喺課表見到學員時，請剔選學員後再建立；或之後編輯課程補入學員。</p>
               ) : null}
               {successEnrollments.length > 0 ? (
-                <div className="mt-4">
-                  <p className="text-xs font-medium text-ink/55">已編入學員 · 課堂 PIN（請交俾學員簽到）</p>
-                  <ul className="mt-2 max-h-56 space-y-2 overflow-y-auto rounded-lg border border-ink/10 bg-canvas p-3 text-sm">
+                <div className="mt-4 space-y-2">
+                  <p className="text-xs font-medium text-ink/55">
+                    {successEnrollments.some((e) => (e.installment_segments?.length ?? 0) > 0)
+                      ? "已編入學員 · 分期 PIN（對應堂數區間）"
+                      : "已編入學員 · 課堂 PIN（請交俾學員簽到）"}
+                  </p>
+                  <ul className="max-h-60 space-y-3 overflow-y-auto rounded-lg border border-ink/10 bg-canvas p-3 text-sm">
                     {successEnrollments.map((e) => (
-                      <li key={`${e.student_id}-${e.checkin_pin}`} className="border-b border-ink/[0.06] pb-2 last:border-0 last:pb-0">
+                      <li key={e.student_id} className="border-b border-ink/[0.06] pb-3 last:border-0 last:pb-0">
                         <div className="font-medium text-ink">{e.student_name}</div>
-                        <div className="text-xs text-ink/65">電話 {e.student_phone}</div>
-                        <div className="mt-1 font-mono text-sm font-semibold text-ink">課堂 PIN：{e.checkin_pin}</div>
+                        <div className="text-xs text-ink/70">電話 {e.student_phone}</div>
+                        {(e.installment_segments?.length ?? 0) > 0 ? (
+                          <ul className="mt-2 space-y-1.5 rounded-md bg-surface px-2 py-2 font-mono text-xs text-ink sm:text-sm">
+                            {e.installment_segments!.map((s) => {
+                              const unpaid = s.paid === false;
+                              return (
+                                <li key={`${e.student_id}-seg-${s.installment_no}`} className="border-b border-ink/[0.06] pb-1.5 last:border-0 last:pb-0">
+                                  <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                                    <span>
+                                      <span className="text-ink/70">
+                                        第{s.installment_no}個分期：第{s.lesson_from}–{s.lesson_to} 堂 PIN：
+                                      </span>{" "}
+                                      <span className="font-semibold">{s.pin}</span>
+                                      {unpaid ? (
+                                        <span className="ml-1 text-amber-900/90">（待付／未開通簽到）</span>
+                                      ) : (
+                                        <span className="ml-1 text-emerald-800">（可簽到）</span>
+                                      )}
+                                    </span>
+                                    {unpaid ? (
+                                      <button
+                                        type="button"
+                                        disabled={successCourseId == null}
+                                        onClick={() => void markSegmentPaid(e.student_id, s.installment_no)}
+                                        className="shrink-0 rounded-md border border-ink/15 bg-surface px-2 py-1 text-[11px] font-semibold text-ink hover:bg-ink/[0.04] disabled:cursor-not-allowed disabled:opacity-40"
+                                      >
+                                        標記此期已付 → 開通簽到
+                                      </button>
+                                    ) : null}
+                                    {/* TODO [F005][S003]
+                                        Feature: Balance Sync & Integrations
+                                        Step: Manual WhatsApp reminder action
+                                        Logic: Add a separate reminder button for unpaid installments:
+                                        "第 X 期未找數，請付款後開通第 Y-Z 堂 PIN".
+                                        This must not mark the installment `paid`; only payment confirmation should unlock check-in. */}
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : (
+                          <div className="mt-2 font-mono font-semibold text-ink">課堂 PIN：{e.checkin_pin}</div>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -494,16 +637,38 @@ export default function AdminCourseSetPage() {
                   已送開課請求；若列表無顯示學員 PIN，請稍後喺「學生詳情 → 課程記錄」查看。
                 </p>
               ) : null}
-              <button
-                type="button"
-                className="mt-5 w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-ink hover:bg-primary/90"
-                onClick={() => {
-                  setSuccessOpen(false);
-                  setSuccessEnrollments([]);
-                }}
-              >
-                知道了
-              </button>
+              <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse sm:justify-end">
+                <button
+                  type="button"
+                  className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-ink hover:bg-primary/90 sm:w-auto sm:min-w-[8rem]"
+                  onClick={() => {
+                    setSuccessOpen(false);
+                    setSuccessEnrollments([]);
+                    setSuccessCourseTitle("");
+                    setSuccessCourseId(null);
+                  }}
+                >
+                  知道了
+                </button>
+                <button
+                  type="button"
+                  disabled={successEnrollments.length === 0}
+                  className="w-full rounded-lg border border-ink/15 bg-canvas px-4 py-2.5 text-sm font-semibold text-ink hover:bg-ink/[0.04] disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto sm:min-w-[10rem]"
+                  onClick={() => {
+                    const title = successCourseTitle || "開課";
+                    const msg = buildEnrollmentWhatsAppText(title, successEnrollments);
+                    const phone = successEnrollments[0].student_phone;
+                    window.open(whatsappMeUrl(phone, msg), "_blank", "noopener,noreferrer");
+                  }}
+                >
+                  Send WhatsApp 通知
+                </button>
+              </div>
+              {successEnrollments.length > 1 ? (
+                <p className="mt-2 text-center text-xs text-ink/50 sm:text-left">
+                  多位學員時按鈕會用<strong className="text-ink/70">首位</strong>電話開 WhatsApp；可複製訊息再發俾其他學員。
+                </p>
+              ) : null}
             </div>
           </div>
         ) : null}

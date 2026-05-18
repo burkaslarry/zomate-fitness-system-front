@@ -21,6 +21,15 @@ export type MemberProfile = {
   created_at: string;
 };
 
+export type InstallmentSegmentPinDto = {
+  installment_no: number;
+  lesson_from: number;
+  lesson_to: number;
+  pin: string;
+  /** False until staff marks installment paid (scheduled package PIN gating). */
+  paid?: boolean;
+};
+
 export type CourseCheckinPinRow = {
   course_id: number;
   course_title: string;
@@ -29,6 +38,7 @@ export type CourseCheckinPinRow = {
   scheduled_start?: string;
   series_end_date?: string | null;
   checkin_pin: string;
+  installment_segments?: InstallmentSegmentPinDto[];
 };
 
 /** Response from POST /api/trial-classes */
