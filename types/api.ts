@@ -11,6 +11,7 @@ export type MemberProfile = {
   full_name: string;
   phone: string;
   email: string | null;
+  date_of_birth?: string | null;
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
   lesson_balance: number;
@@ -18,6 +19,8 @@ export type MemberProfile = {
   photo_path: string | null;
   photo_url: string | null;
   is_active: boolean;
+  current_course_package_status?: string;
+  last_checkin_at?: string | null;
   created_at: string;
 };
 

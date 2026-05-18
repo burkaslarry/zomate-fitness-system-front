@@ -73,6 +73,7 @@ const defaults: Partial<StudentRegistrationPayload> = {
   hkid: "",
   phone: "",
   email: "",
+  date_of_birth: "",
   emergency_contact_name: "",
   emergency_contact_phone: "",
   form_type: "new",
@@ -204,6 +205,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         "hkid",
         "phone",
         "email",
+        "date_of_birth",
         "emergency_contact_name",
         "emergency_contact_phone",
         "form_type"
@@ -214,6 +216,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         hkid: vals.hkid.trim(),
         phone: vals.phone.trim(),
         email: (vals.email ?? "").trim(),
+        date_of_birth: vals.date_of_birth,
         emergency_contact_name: vals.emergency_contact_name.trim(),
         emergency_contact_phone: vals.emergency_contact_phone.trim(),
         form_type: vals.form_type
@@ -227,6 +230,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
             "hkid",
             "phone",
             "email",
+            "date_of_birth",
             "emergency_contact_name",
             "emergency_contact_phone",
             "form_type"
@@ -290,6 +294,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         hkid: values.hkid,
         phone: values.phone,
         email: values.email,
+        date_of_birth: values.date_of_birth,
         emergency_contact_name: values.emergency_contact_name,
         emergency_contact_phone: values.emergency_contact_phone,
         parq: values.parq,
@@ -406,6 +411,18 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
               )}
             </div>
             <input className={fieldClass} placeholder="電郵（可選）" {...form.register("email")} />
+            <label className="block space-y-1 text-sm">
+              <span className="text-ink/70">出生日期 Date of Birth *</span>
+              <input
+                className={fieldClass}
+                type="date"
+                max={new Date().toISOString().slice(0, 10)}
+                {...form.register("date_of_birth")}
+              />
+            </label>
+            {form.formState.errors.date_of_birth && (
+              <p className="text-xs text-rose-400">{form.formState.errors.date_of_birth.message}</p>
+            )}
             <input className={fieldClass} placeholder="緊急聯絡人姓名 *" {...form.register("emergency_contact_name")} />
             <div className="space-y-1">
               <p className="text-[11px] font-medium text-ink/70">緊急聯絡人電話 · +852 八位數</p>

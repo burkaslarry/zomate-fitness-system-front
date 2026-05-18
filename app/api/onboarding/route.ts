@@ -34,12 +34,13 @@ export async function POST(req: Request) {
     full_name,
     phone,
     hkid: "Z999999A",
+    date_of_birth: String(b.date_of_birth ?? ""),
     lesson_balance: plan,
     membership_expiry_iso: computeMembershipExpiryIso(plan as 10 | 30, new Date()),
     package_sessions: plan as 10 | 30,
     email: b.email ? String(b.email) : undefined
   });
   // eslint-disable-next-line no-console
-  console.log(`[mock WhatsApp welcome] → ${phone}: Congrats! You have ${plan} sessions. PIN ${row.pin_code}`);
+  console.log(`[F005][S001] Mock WhatsApp welcome → ${phone}: Congrats! You have ${plan} sessions. PIN ${row.pin_code}`);
   return NextResponse.json({ pin_code: row.pin_code, student: row });
 }

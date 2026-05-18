@@ -13,6 +13,7 @@ export type MockStudent = {
   full_name: string;
   phone: string;
   hkid: string;
+  date_of_birth?: string;
   lesson_balance: number;
   pin_code: string;
   membership_expiry_iso: string;
@@ -63,6 +64,7 @@ let students: MockStudent[] = [
     full_name: "Larry Lo",
     phone: "+85291234567",
     hkid: "A1234563",
+    date_of_birth: "1995-12-04",
     lesson_balance: 10,
     pin_code: "12345",
     membership_expiry_iso: exp.toISOString(),
@@ -73,6 +75,7 @@ let students: MockStudent[] = [
     full_name: "Mandy Chan",
     phone: "+85292345678",
     hkid: "B2345672",
+    date_of_birth: "1992-05-18",
     lesson_balance: 8,
     pin_code: "12345",
     membership_expiry_iso: exp.toISOString(),
@@ -83,6 +86,7 @@ let students: MockStudent[] = [
     full_name: "Jason Wong",
     phone: "+85293456789",
     hkid: "C3456781",
+    date_of_birth: "1990-08-20",
     lesson_balance: 11,
     pin_code: "12345",
     membership_expiry_iso: exp.toISOString(),
@@ -93,6 +97,7 @@ let students: MockStudent[] = [
     full_name: "Demo Student",
     phone: "+85290000001",
     hkid: "D4567890",
+    date_of_birth: "1998-01-15",
     lesson_balance: 8,
     pin_code: "90210",
     membership_expiry_iso: exp.toISOString(),

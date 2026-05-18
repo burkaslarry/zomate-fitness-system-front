@@ -52,6 +52,7 @@ export const onboardingStep1Schema = z.object({
   hkid: hkidSchema,
   phone: phoneHkSchema,
   email: z.union([z.literal(""), z.string().email()]),
+  date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: "請選擇出生日期" }),
   emergency_contact_name: z.string().min(1, "請填寫緊急聯絡人姓名"),
   emergency_contact_phone: phoneHkSchema,
   form_type: z.enum(["new", "renewal"])
@@ -70,6 +71,7 @@ export const studentRegistrationPayloadSchema = z
     hkid: hkidSchema,
     phone: phoneHkSchema,
     email: z.union([z.literal(""), z.string().email()]).optional(),
+    date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     emergency_contact_name: z.string().min(1),
     emergency_contact_phone: phoneHkSchema,
     form_type: z.enum(["new", "renewal"]),

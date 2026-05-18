@@ -59,7 +59,7 @@ export default function StudentHome() {
         </Link>
       </div>
       <p className="text-sm text-slate-600">
-        入職：掃描後台「登記 QR」填表。續會：填 Membership Renewal Form 加堂。簽到：掃「簽到 QR」→ 搜尋自己姓名 → 輸入 PIN 扣堂。
+        入職：掃描後台「登記 QR」填表。買堂／試堂／續堂：統一進入 Payment / Receipt Entry。簽到：掃「簽到 QR」→ 搜尋自己姓名 → 輸入 PIN 扣堂。
       </p>
       <nav className="flex flex-col gap-3">
         <Link
@@ -81,10 +81,10 @@ export default function StudentHome() {
           智能 QR 簽到（掃碼 → 揀名 → PIN）
         </Link>
         <Link
-          href="/trial-class"
+          href="/renewal?type=trial"
           className="rounded-lg border border-slate-200 bg-white px-4 py-3 font-medium text-slate-950 shadow-sm hover:bg-slate-100"
         >
-          試堂／加堂（示範）
+          + Purchase / 買堂 · Unified Payment
         </Link>
       </nav>
     </main>

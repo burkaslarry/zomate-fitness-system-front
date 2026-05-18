@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * [F001][S002]
+ * [F001][S003]
  * Feature: Student Onboarding
  * Step: Admin student roster — detail links, full CSV export, 5-row template, batch import
  * Logic: Template mirrors FastAPI export / import columns; no 入職紀錄 hub (removed).
@@ -17,10 +17,13 @@ const STUDENT_CSV_HEADERS = [
   "full_name",
   "phone",
   "hkid",
+  "date_of_birth",
   "email",
   "health_notes",
   "disclaimer_accepted",
   "lesson_balance",
+  "current_course_package_status",
+  "last_checkin_at",
   "face_id_external",
   "created_at"
 ] as const;
@@ -32,6 +35,17 @@ function formatCreatedAt(iso: string | undefined): string {
     return Number.isNaN(d.getTime())
       ? iso
       : d.toLocaleString("zh-HK", { dateStyle: "medium", timeStyle: "short" });
+  } catch {
+    return iso;
+  }
+}
+
+/** [F001][S003] Compact date display for DOB and last check-in in the enriched member list. */
+function formatDateOnly(iso: string | null | undefined): string {
+  if (!iso) return "未填";
+  try {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("zh-HK");
   } catch {
     return iso;
   }
@@ -53,10 +67,13 @@ function downloadImportTemplateSample(students: MemberProfile[]) {
         csvEscape(s.full_name),
         csvEscape(s.phone),
         csvEscape(s.hkid ?? ""),
+        csvEscape(s.date_of_birth ?? ""),
         csvEscape(s.email ?? ""),
         csvEscape(""),
         csvEscape(1),
         csvEscape(s.lesson_balance),
+        csvEscape(s.current_course_package_status ?? ""),
+        csvEscape(s.last_checkin_at ?? ""),
         csvEscape(""),
         csvEscape(s.created_at)
       ].join(",")
@@ -140,7 +157,8 @@ export default function AdminStudentsPage() {
           <div className="max-w-3xl">
             <h2 className="text-2xl font-semibold text-ink">學生名單</h2>
             <p className="mt-1 text-sm text-ink/70">
-              點姓名可用學生 ID 開啟會員詳情（毋須 HKID）。<strong className="font-medium text-ink">匯出 CSV 範本（首 5 筆）</strong>
+              點姓名可用學生 ID 開啟會員詳情（毋須 HKID）。名單加入 DOB、剩餘堂數、套餐狀態、註冊日及最後簽到時間，方便即場核對。
+              <strong className="font-medium text-ink">匯出 CSV 範本（首 5 筆）</strong>
               方便對照批次匯入欄位；完整名單請用「匯出 CSV」。
             </p>
             <div className="mt-3 rounded-lg border border-ink/12 bg-canvas/80 p-3 text-xs leading-relaxed text-ink/75">
@@ -210,16 +228,19 @@ export default function AdminStudentsPage() {
           className="w-full max-w-md rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink shadow-sm"
         />
         {status && <p className="text-sm text-amber-800">{status}</p>}
-        <div className="overflow-x-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
+        {/* [F001][S003] Desktop roster — content-rich but horizontal-scroll only when needed. */}
+        <div className="hidden overflow-x-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] md:block">
           <table className="min-w-full text-left text-sm">
             <thead className="border-b border-ink/10 text-ink/65">
               <tr>
                 <th className="px-3 py-2">姓名</th>
                 <th className="px-3 py-2">HKID</th>
+                <th className="px-3 py-2">DOB</th>
                 <th className="px-3 py-2">電話</th>
-                <th className="px-3 py-2">註冊時間</th>
-                <th className="px-3 py-2">餘額</th>
-                <th className="px-3 py-2">狀態</th>
+                <th className="px-3 py-2">剩餘堂數</th>
+                <th className="px-3 py-2">套餐狀態</th>
+                <th className="px-3 py-2">註冊日</th>
+                <th className="px-3 py-2">最後簽到</th>
               </tr>
             </thead>
             <tbody>
@@ -238,20 +259,44 @@ export default function AdminStudentsPage() {
                     )}
                   </td>
                   <td className="px-3 py-2">{student.hkid ?? "未填"}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{formatDateOnly(student.date_of_birth)}</td>
                   <td className="px-3 py-2">{student.phone}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{formatCreatedAt(student.created_at)}</td>
                   <td className="px-3 py-2">{student.lesson_balance}</td>
-                  <td className="px-3 py-2">
-                    {student.is_active ? (
-                      <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-xs font-medium text-emerald-800">活躍</span>
-                    ) : (
-                      "—"
-                    )}
+                  <td className="px-3 py-2 min-w-44">
+                    <span className="rounded-full bg-purple-500/15 px-2 py-1 text-xs font-medium text-purple-900">
+                      {student.current_course_package_status ?? (student.is_active ? "Active" : "No active package")}
+                    </span>
                   </td>
+                  <td className="px-3 py-2 whitespace-nowrap">{formatDateOnly(student.created_at)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{formatDateOnly(student.last_checkin_at)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+        {/* [F001][S003] Mobile roster — card grouping keeps DOB/status/check-in readable without table squeeze. */}
+        <div className="space-y-3 md:hidden">
+          {filtered.map((student) => (
+            <article key={student.id} className="rounded-xl border border-ink/10 bg-surface p-4 text-sm shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <Link href={`/admin/students/${student.id}`} className="font-semibold text-ink underline underline-offset-4">
+                    {student.full_name}
+                  </Link>
+                  <p className="mt-1 text-xs text-ink/60">{student.phone} · HKID {student.hkid ?? "未填"}</p>
+                </div>
+                <span className="rounded-full bg-purple-500/15 px-2 py-1 text-xs font-medium text-purple-900">
+                  {student.lesson_balance} 堂
+                </span>
+              </div>
+              <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-ink/70">
+                <div><dt className="font-medium text-ink">DOB</dt><dd>{formatDateOnly(student.date_of_birth)}</dd></div>
+                <div><dt className="font-medium text-ink">註冊日</dt><dd>{formatDateOnly(student.created_at)}</dd></div>
+                <div><dt className="font-medium text-ink">套餐狀態</dt><dd>{student.current_course_package_status ?? "No active package"}</dd></div>
+                <div><dt className="font-medium text-ink">最後簽到</dt><dd>{formatDateOnly(student.last_checkin_at)}</dd></div>
+              </dl>
+            </article>
+          ))}
         </div>
       </div>
     </BackendShell>

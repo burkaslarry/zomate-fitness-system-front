@@ -6,6 +6,7 @@
  * Logic: Reusable form primitives: upload, select, payment radio.
  */
 
+/** [F002][S001] Unified payment module methods shown inside purchase / receipt entry. */
 const METHODS = [
   ["cash", "Cash"],
   ["fps", "FPS"],
@@ -14,6 +15,7 @@ const METHODS = [
   ["bank_transfer", "Bank transfer"],
   ["mastercard", "Mastercard"],
   ["visa", "Visa"],
+  ["credit_card_installment", "Credit Card (Installment)"],
   ["amex", "Amex"],
   ["unionpay", "UnionPay"]
 ] as const;

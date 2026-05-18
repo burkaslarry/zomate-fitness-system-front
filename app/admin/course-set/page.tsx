@@ -234,8 +234,9 @@ export default function AdminCourseSetPage() {
         <div>
           <h2 className="text-2xl font-semibold text-ink">開課（套餐）</h2>
           <p className="mt-2 text-sm text-ink/65">
+            付款／收據先於 Unified Payment 完成；本頁負責安排第一堂時間、課程種類、教練與學生，並產生跟 course 的簽到 PIN。
             套餐堂數<strong className="text-ink"> 1–30</strong>
-            ，一次付款對應一個簽到 PIN；若<strong className="font-medium text-ink">分批／分期過數</strong>
+            ，一次付款對應一個 course PIN；若<strong className="font-medium text-ink">分批／分期過數</strong>
             ，可揀「分期數」，系統會按堂數自動拆區間並派<strong className="font-medium text-ink">每個分期一個 PIN</strong>
             （例：30 堂 3 期 → 第 1 期 PIN 對應第 1–10 堂）。
             每星期揀一至日（最多 3 個）；由<strong className="text-ink">首日</strong>

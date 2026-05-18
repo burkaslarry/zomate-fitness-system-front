@@ -25,6 +25,7 @@ export function registerStudentFromJson(body: unknown): RegisterResult {
     full_name: data.full_name,
     phone: data.phone,
     hkid: data.hkid.toUpperCase(),
+    date_of_birth: data.date_of_birth,
     lesson_balance: packageSessions,
     membership_expiry_iso,
     package_sessions: packageSessions,
@@ -32,7 +33,7 @@ export function registerStudentFromJson(body: unknown): RegisterResult {
   });
   const whatsapp_preview = `Congrats! You have ${packageSessions} sessions. PIN: ${row.pin_code}. Expires: ${membership_expiry_iso}`;
   // eslint-disable-next-line no-console
-  console.log(`[mock WhatsApp] → ${data.phone}: ${whatsapp_preview}`);
+  console.log(`[F005][S001] Mock WhatsApp → ${data.phone}: ${whatsapp_preview}`);
   return {
     ok: true,
     student: row,

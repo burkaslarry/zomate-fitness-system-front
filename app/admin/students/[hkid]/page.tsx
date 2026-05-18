@@ -9,6 +9,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import BackendShell from "../../../../components/backend-shell";
 import { alertApiError, api, apiAssetUrl } from "../../../../lib/api";
 import type { CategoryEnrollmentRow, MemberFull } from "../../../../types/api";
@@ -124,18 +125,6 @@ export default function AdminStudentDetailPage() {
     }
   }
 
-  async function onGrantTrial() {
-    if (!data?.profile.id) return;
-    if (!window.confirm("確認使用此學生唯一一次「教練試堂」額度？（+1 堂）")) return;
-    try {
-      await api.grantCoachTrial(data.profile.id, {});
-      setToast("已發放試堂 1 堂");
-      reload();
-    } catch (e) {
-      alertApiError(e);
-    }
-  }
-
   async function onUploadReceipt(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!data?.profile.id) return;
@@ -188,7 +177,6 @@ export default function AdminStudentDetailPage() {
   const packages = data?.packages ?? [];
   const packageLessons = packages.reduce((sum, pkg) => sum + (Number(pkg.lessons) || 0), 0);
   const categoryLessons = catEnr.reduce((sum, row) => sum + (Number(row.total_lessons) || 0), 0);
-  const trialLeft = data?.profile.coach_trial_quota_remaining ?? 0;
   const photoSrc = apiAssetUrl(data?.profile.photo_url ?? undefined);
 
   return (
@@ -206,14 +194,13 @@ export default function AdminStudentDetailPage() {
               {data?.profile.is_active && (
                 <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-sm text-emerald-800">活躍</span>
               )}
-              <button
-                type="button"
-                disabled={trialLeft < 1}
-                onClick={() => void onGrantTrial()}
-                className="rounded-lg border border-ink/15 bg-primary/80 px-4 py-2 text-sm font-medium text-ink disabled:opacity-40"
+              {/* [F002][S001] Deprecated direct trial grant; all purchases now start at unified payment. */}
+              <Link
+                href={`/renewal?type=renewal&student=${encodeURIComponent(String(data?.profile.phone ?? ""))}`}
+                className="rounded-lg border border-purple-300 bg-purple-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-purple-700"
               >
-                教練試堂額度（剩 {trialLeft}）
-              </button>
+                + Purchase / 買堂
+              </Link>
             </div>
           </div>
           {toast && <p className="mt-3 rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink/85">{toast}</p>}

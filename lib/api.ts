@@ -394,13 +394,15 @@ export const api = {
     student_id?: number;
     member_hkid?: string;
     student_phone?: string;
-    /** Ties renewal to a course category when FastAPI accepts this field (category enrollment / lesson ledger). */
-    course_category_id?: number;
-    package_id: number;
+    /** [F002][S001] Admin-entered lesson count; PIN remains package/payment based, not per lesson. */
+    total_lessons: number;
     coach_id?: number;
     branch_id?: number;
     amount: string;
     payment_method: string;
+    transaction_type?: "trial" | "new_package" | "renewal";
+    course_package_type_code?: string;
+    course_package_type_label?: string;
     note?: string;
     receipt?: File | null;
   }) => {
@@ -408,14 +410,14 @@ export const api = {
     if (payload.student_id != null) form.append("student_id", String(payload.student_id));
     if (payload.member_hkid) form.append("member_hkid", payload.member_hkid);
     if (payload.student_phone) form.append("student_phone", payload.student_phone);
-    if (payload.course_category_id != null && payload.course_category_id > 0) {
-      form.append("course_category_id", String(payload.course_category_id));
-    }
-    form.append("package_id", String(payload.package_id));
+    form.append("total_lessons", String(payload.total_lessons));
     if (payload.coach_id) form.append("coach_id", String(payload.coach_id));
     if (payload.branch_id) form.append("branch_id", String(payload.branch_id));
     form.append("amount", payload.amount);
     form.append("payment_method", payload.payment_method);
+    if (payload.transaction_type) form.append("transaction_type", payload.transaction_type);
+    if (payload.course_package_type_code) form.append("course_package_type_code", payload.course_package_type_code);
+    if (payload.course_package_type_label) form.append("course_package_type_label", payload.course_package_type_label);
     if (payload.note) form.append("note", payload.note);
     if (payload.receipt) form.append("receipt", payload.receipt);
     return request("/api/renewals", { method: "POST", body: form });

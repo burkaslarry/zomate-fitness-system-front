@@ -15,7 +15,7 @@ test.describe("Feature route smoke checks", () => {
     await expect(page.getByRole("link", { name: "新學生登記 · 健康聲明" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Membership Renewal Form · 續會加堂" })).toBeVisible();
     await expect(page.getByRole("link", { name: "智能 QR 簽到（掃碼 → 揀名 → PIN）" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "試堂／加堂（示範）" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "+ Purchase / 買堂 · Unified Payment" })).toBeVisible();
   });
 
   test("admin route requires auth and redirects to login", async ({ page }) => {
