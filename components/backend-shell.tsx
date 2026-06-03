@@ -37,6 +37,7 @@ const MENU_SECTIONS: { frameClass: string; items: NavItem[] }[] = [
     frameClass: "rounded-xl border-2 border-primary/25 bg-canvas p-2.5",
     items: [
       { href: "/admin/branches", label: "分店管理" },
+      { href: "/admin/course-categories", label: "Course Categories" },
       { href: "/admin/course-set", label: "Course 套餐開課" },
       { href: "/coach/calendar", label: "教練日程 · 簽到" },
       { href: "/coach", label: "教練課表" },

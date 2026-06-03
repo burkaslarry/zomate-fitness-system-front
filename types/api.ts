@@ -67,6 +67,9 @@ export type CourseCategoryDto = {
   name: string;
   deleted_at?: string | null;
   is_deleted?: boolean;
+  is_active?: boolean;
+  created_by_role?: string;
+  created_at?: string;
 };
 
 export type CoachEnrolledStudentDto = {
