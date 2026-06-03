@@ -50,12 +50,24 @@ function installmentAmountLabel(amount: number): string {
 }
 
 function ReceiptThumb({ fileUrl, label }: { fileUrl: string; label: string }) {
+  const [failed, setFailed] = useState(false);
   const lower = fileUrl.split("?")[0].toLowerCase();
   const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(lower);
+  if (failed) {
+    return <p className="mt-2 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">檔案預覽失敗，請按連結開啟。</p>;
+  }
   if (isImage) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={fileUrl} alt={label} className="mt-2 max-h-40 w-full rounded border border-ink/10 object-contain" />
+      <img
+        src={fileUrl}
+        alt={label}
+        className="mt-2 max-h-40 w-full rounded border border-ink/10 object-contain"
+        onError={() => {
+          console.warn("[F007][S004] Receipt image failed to load", { fileUrl });
+          setFailed(true);
+        }}
+      />
     );
   }
   return (
@@ -80,7 +92,9 @@ export default function AdminStudentDetailPage() {
   const [lessons, setLessons] = useState(10);
   const [installments, setInstallments] = useState(3);
   const [saving, setSaving] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
   const [receiptUploading, setReceiptUploading] = useState(false);
+  const [photoFailed, setPhotoFailed] = useState(false);
   /** When staff picks an unpaid installment, scroll to receipt form and label it (分期第 N 期). */
   const [receiptInstallmentCtx, setReceiptInstallmentCtx] = useState<{
     installmentNo: number;
@@ -96,6 +110,10 @@ export default function AdminStudentDetailPage() {
   useEffect(() => {
     reload();
   }, [reload]);
+
+  useEffect(() => {
+    setPhotoFailed(false);
+  }, [data?.profile.photo_url]);
 
   useEffect(() => {
     void api
@@ -134,10 +152,10 @@ export default function AdminStudentDetailPage() {
       alertApiError(new Error("請選擇收據圖片或 PDF"));
       return;
     }
-    const prefix =
+    const context =
       receiptInstallmentCtx != null
-        ? `[分期第${receiptInstallmentCtx.installmentNo}期·${receiptInstallmentCtx.categoryName}] `
-        : "";
+        ? `分期第${receiptInstallmentCtx.installmentNo}期·${receiptInstallmentCtx.categoryName}`
+        : String(form.get("context") ?? "").trim();
     const userNote = String(form.get("note") ?? "").trim();
     setReceiptUploading(true);
     try {
@@ -145,7 +163,8 @@ export default function AdminStudentDetailPage() {
         file,
         amount: String(form.get("amount") ?? "").trim(),
         payment_method: String(form.get("payment_method") ?? "").trim(),
-        note: prefix + userNote,
+        note: userNote,
+        context,
         source: "RENEWAL"
       });
       setToast("已上傳收據");
@@ -164,6 +183,32 @@ export default function AdminStudentDetailPage() {
     setTab("課程記錄");
   }
 
+  async function onSaveProfile(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!data?.profile.id) return;
+    const form = new FormData(event.currentTarget);
+    setProfileSaving(true);
+    try {
+      const res = (await api.updateMemberById(data.profile.id, {
+        full_name: String(form.get("full_name") ?? "").trim(),
+        phone: String(form.get("phone") ?? "").trim(),
+        email: String(form.get("email") ?? "").trim() || null,
+        date_of_birth: String(form.get("date_of_birth") ?? "").trim() || null,
+        emergency_contact_name: String(form.get("emergency_contact_name") ?? "").trim() || null,
+        emergency_contact_phone: String(form.get("emergency_contact_phone") ?? "").trim() || null
+      })) as { member?: MemberFull["profile"] };
+      if (res.member) {
+        setData((current) => (current ? { ...current, profile: res.member as MemberFull["profile"] } : current));
+      }
+      setToast("已更新學生資料");
+      reload();
+    } catch (e) {
+      alertApiError(e);
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
   useEffect(() => {
     if (tab !== "課程記錄" || !receiptInstallmentCtx) return;
     const t = window.setTimeout(() => {
@@ -178,6 +223,11 @@ export default function AdminStudentDetailPage() {
   const packageLessons = packages.reduce((sum, pkg) => sum + (Number(pkg.lessons) || 0), 0);
   const categoryLessons = catEnr.reduce((sum, row) => sum + (Number(row.total_lessons) || 0), 0);
   const photoSrc = apiAssetUrl(data?.profile.photo_url ?? undefined);
+  const receiptContexts = [
+    ...pins.map((p) => `Course：${p.course_title}`),
+    ...catEnr.map((c) => `Category：${c.category_name}`),
+    ...packages.map((p) => `Package：${p.name}`)
+  ];
 
   return (
     <BackendShell title="學生詳情">
@@ -196,7 +246,7 @@ export default function AdminStudentDetailPage() {
               )}
               {/* [F002][S001] Deprecated direct trial grant; all purchases now start at unified payment. */}
               <Link
-                href={`/renewal?type=renewal&student=${encodeURIComponent(String(data?.profile.phone ?? ""))}`}
+                href={`/regCourse?type=renewal&student=${encodeURIComponent(String(data?.profile.phone ?? ""))}`}
                 className="rounded-lg border border-purple-300 bg-purple-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-purple-700"
               >
                 + Purchase / 買堂
@@ -223,17 +273,35 @@ export default function AdminStudentDetailPage() {
           {tab === "資料" && data && (
             <div className="grid gap-5 md:grid-cols-[220px_1fr]">
               <div className="aspect-square overflow-hidden rounded-xl border border-ink/10 bg-canvas">
-                {photoSrc ? (
+                {photoSrc && !photoFailed ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={photoSrc} alt={data.profile.full_name} className="h-full w-full object-cover" />
+                  <img
+                    src={photoSrc}
+                    alt={data.profile.full_name}
+                    className="h-full w-full object-cover"
+                    onError={() => {
+                      console.warn("[F007][S004] Student photo failed to load", { photoSrc, profile: data.profile.id });
+                      setPhotoFailed(true);
+                    }}
+                  />
                 ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-ink/45">No photo</div>
+                  <div className="flex h-full items-center justify-center px-4 text-center text-sm text-ink/45">
+                    {photoFailed ? "Photo failed to load" : "No photo"}
+                  </div>
                 )}
               </div>
               <dl className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <dt className="text-xs text-ink/50">Email</dt>
                   <dd>{data.profile.email ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-ink/50">出生日期</dt>
+                  <dd>{data.profile.date_of_birth ?? "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-ink/50">曾用電話</dt>
+                  <dd>{data.profile.used_mobile_number ?? "—"}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-ink/50">簽到</dt>
@@ -254,6 +322,51 @@ export default function AdminStudentDetailPage() {
                   <dd>{data.profile.lesson_balance} 堂</dd>
                 </div>
               </dl>
+              <form
+                key={`profile-${data.profile.id}-${data.profile.phone}`}
+                onSubmit={(event) => void onSaveProfile(event)}
+                className="space-y-3 rounded-xl border border-ink/10 bg-canvas p-4 md:col-span-2"
+              >
+                <div>
+                  <h3 className="text-sm font-semibold text-ink">編輯學生資料</h3>
+                  <p className="mt-1 text-xs text-ink/55">
+                    改電話時，舊號會保存到曾用電話，用作追蹤。
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block text-xs text-ink/55">
+                    姓名
+                    <input name="full_name" required defaultValue={data.profile.full_name} className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink" />
+                  </label>
+                  <label className="block text-xs text-ink/55">
+                    手機號碼
+                    <input name="phone" required inputMode="numeric" defaultValue={data.profile.phone} className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink" />
+                  </label>
+                  <label className="block text-xs text-ink/55">
+                    出生日期
+                    <input name="date_of_birth" type="date" defaultValue={data.profile.date_of_birth ?? ""} className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink" />
+                  </label>
+                  <label className="block text-xs text-ink/55">
+                    Email
+                    <input name="email" type="email" defaultValue={data.profile.email ?? ""} className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink" />
+                  </label>
+                  <label className="block text-xs text-ink/55">
+                    緊急聯絡人
+                    <input name="emergency_contact_name" defaultValue={data.profile.emergency_contact_name ?? ""} className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink" />
+                  </label>
+                  <label className="block text-xs text-ink/55">
+                    緊急聯絡電話
+                    <input name="emergency_contact_phone" inputMode="numeric" defaultValue={data.profile.emergency_contact_phone ?? ""} className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink" />
+                  </label>
+                </div>
+                <button
+                  type="submit"
+                  disabled={profileSaving}
+                  className="rounded-lg bg-primary/90 px-4 py-2 text-sm font-medium text-ink disabled:opacity-50"
+                >
+                  {profileSaving ? "儲存中…" : "儲存學生資料"}
+                </button>
+              </form>
             </div>
           )}
           {tab === "課程記錄" && data && (
@@ -484,6 +597,21 @@ export default function AdminStudentDetailPage() {
                       placeholder="cash / fps / card"
                       className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink"
                     />
+                  </label>
+                  <label className="block text-xs text-ink/55 md:col-span-2">
+                    對應 Course / Category（選填）
+                    <select
+                      name="context"
+                      disabled={receiptInstallmentCtx != null}
+                      className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink disabled:opacity-60"
+                    >
+                      <option value="">不指定</option>
+                      {receiptContexts.map((ctx) => (
+                        <option key={ctx} value={ctx}>
+                          {ctx}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label className="block text-xs text-ink/55 md:col-span-2">
                     備註（選填）

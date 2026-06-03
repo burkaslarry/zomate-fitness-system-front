@@ -10,7 +10,7 @@
 import Link from "next/link";
 import { ReactNode, useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { clearAuthSession, getAuthSession, type AuthSession } from "../lib/auth";
+import { clearAuthSession, getAuthSession, waitForSessionReplacement, type AuthSession } from "../lib/auth";
 import { api, getResolvedApiBaseUrl, isUsingNextMockApi } from "../lib/api";
 import { PERIODIC_HEALTH_INTERVAL_MS } from "../hooks/use-periodic-health-ping";
 
@@ -22,7 +22,7 @@ const MENU_SECTIONS: { frameClass: string; items: NavItem[] }[] = [
     items: [
       { href: "/admin", label: "後台面板" },
       { href: "/register", label: "+ 新會員" },
-      { href: "/renewal", label: "+ 會員報堂" },
+      { href: "/regCourse", label: "+ 報 Course / 收費" },
       { href: "/trial-class", label: "+ 試堂/加堂" }
     ]
   },
@@ -103,19 +103,33 @@ export default function BackendShell({
       setRejected(true);
       return;
     }
-    void api
-      .me()
-      .then(() => {
+    void (async () => {
+      try {
+        await api.me();
         if (!cancelled) setVerifiedSession(s);
-      })
-      .catch(() => {
+        return;
+      } catch {
+        const replacement = await waitForSessionReplacement(s.token);
+        if (replacement) {
+          try {
+            await api.me();
+            if (!cancelled) {
+              setStoredSession(replacement);
+              setVerifiedSession(replacement);
+            }
+            return;
+          } catch {
+            /* fall through to logout */
+          }
+        }
         clearAuthSession();
         setStoredSession(null);
         if (!cancelled) {
           setRejected(true);
           router.replace("/login");
         }
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };

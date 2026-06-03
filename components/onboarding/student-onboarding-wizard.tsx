@@ -11,6 +11,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useForm, Controller } from "react-hook-form";
+import SignatureCanvas from "react-signature-canvas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   onboardingStep1Schema,
@@ -98,6 +99,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
   const parqFileRef = useRef<HTMLInputElement | null>(null);
+  const signatureRef = useRef<SignatureCanvas | null>(null);
   const router = useRouter();
   const [parqUploadError, setParqUploadError] = useState("");
 
@@ -286,6 +288,13 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
    * Step: Final submit — `POST /api/members`; sessionStorage context + success dialog.
    */
   async function onFinalSubmit(values: StudentRegistrationPayload) {
+    const signatureData = signatureRef.current?.isEmpty()
+      ? ""
+      : signatureRef.current?.getTrimmedCanvas().toDataURL("image/png") ?? "";
+    if (!signatureData) {
+      form.setError("digital_signature", { message: "請在簽名框手寫簽署" });
+      return;
+    }
     setStatus("提交中…");
     setShowSuccessDialog(false);
     try {
@@ -301,7 +310,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         medical_clearance_file_name: (values.medical_clearance_file_name || "").trim(),
         cooling_off_acknowledged: values.cooling_off_acknowledged,
         disclaimer_accepted: values.disclaimer_accepted,
-        digital_signature: values.digital_signature
+        digital_signature: signatureData
       })) as {
         member?: { hkid?: string; full_name?: string };
       };
@@ -568,7 +577,38 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
             {form.formState.errors.disclaimer_accepted && (
               <p className="text-xs text-rose-400">{String(form.formState.errors.disclaimer_accepted.message)}</p>
             )}
-            <input className={fieldClass} placeholder="電子簽署：輸入全名 *" {...form.register("digital_signature")} />
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium text-ink">電子簽署 Signature *</p>
+                <button
+                  type="button"
+                  className="rounded-md border border-ink/15 bg-surface px-3 py-1.5 text-xs font-medium text-ink hover:bg-canvas"
+                  onClick={() => {
+                    signatureRef.current?.clear();
+                    form.setValue("digital_signature", "");
+                  }}
+                >
+                  清除
+                </button>
+              </div>
+              <div className="overflow-hidden rounded-xl border border-ink/15 bg-white shadow-inner">
+                <SignatureCanvas
+                  ref={signatureRef}
+                  penColor="#2d2422"
+                  canvasProps={{
+                    className: "h-40 w-full touch-none",
+                    "aria-label": "電子簽署手寫區"
+                  }}
+                  onEnd={() => {
+                    const data = signatureRef.current?.isEmpty()
+                      ? ""
+                      : signatureRef.current?.getTrimmedCanvas().toDataURL("image/png") ?? "";
+                    form.setValue("digital_signature", data, { shouldDirty: true, shouldValidate: true });
+                  }}
+                />
+              </div>
+              <p className="text-xs text-ink/55">請用手指或滑鼠簽署；系統只儲存簽名圖片 URL。</p>
+            </div>
             {form.formState.errors.digital_signature && (
               <p className="text-xs text-rose-400">{form.formState.errors.digital_signature.message}</p>
             )}

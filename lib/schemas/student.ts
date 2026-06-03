@@ -61,7 +61,7 @@ export const onboardingStep1Schema = z.object({
 export const onboardingStep3Schema = z.object({
   cooling_off_acknowledged: z.boolean().refine((v) => v === true, { message: "請確認已閱讀 7 天冷靜期條款" }),
   disclaimer_accepted: z.boolean().refine((v) => v === true, { message: "請同意免責聲明" }),
-  digital_signature: z.string().min(2, "請輸入全名作電子簽署")
+  digital_signature: z.string()
 });
 
 /** Full POST body after wizard steps — PAR-Q「是」須附醫療證明檔名（後端寫入 health_notes）。 */
@@ -79,7 +79,7 @@ export const studentRegistrationPayloadSchema = z
     medical_clearance_file_name: z.string(),
     cooling_off_acknowledged: z.boolean(),
     disclaimer_accepted: z.boolean(),
-    digital_signature: z.string().min(2),
+    digital_signature: z.string(),
     package_sessions: z.union([z.literal(10), z.literal(30)]).optional(),
     renewal_notes: z.string().optional()
   })

@@ -5,8 +5,6 @@
  * Logic: Resolve `NEXT_PUBLIC_API_BASE_URL`, optional same-origin mocks, dev default to FastAPI, WS host for `/ws/checkins`.
  */
 
-import { clearAuthSession } from "./auth";
-
 function normalizeApiBase(url: string): string {
   return url.trim().replace(/\/+$/, "");
 }
@@ -129,6 +127,21 @@ function errorFromApiBody(bodyText: string, fallback: string): Error {
   return new Error(raw);
 }
 
+function authErrorMessage(bodyText: string): string {
+  try {
+    const parsed = JSON.parse(bodyText) as { detail?: unknown; message?: unknown };
+    const detail = typeof parsed.detail === "string" ? parsed.detail : "";
+    const message = typeof parsed.message === "string" ? parsed.message : "";
+    return message || detail;
+  } catch {
+    return bodyText.trim();
+  }
+}
+
+export function isStaleAuthMessage(message: string): boolean {
+  return message === "Invalid auth token." || message === "Session expired." || message === "Missing auth token.";
+}
+
 /** Normalized message from API throws (already parsed by `errorFromApiBody` where applicable). */
 export function formatApiError(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -145,22 +158,14 @@ export function alertApiError(err: unknown): void {
  * [F006][S002]
  * Feature: Shared API client (Next.js → FastAPI)
  * Step: Bearer auth & stale session redirect
- * Logic: On 401 with expired/invalid token, clear `zomate_auth_session` and send user to `/login`.
+ * Logic: On 401 with expired/invalid token, notify the shell; it gets one chance to heal before logout.
  */
 function redirectOnStaleAuth(path: string, status: number, bodyText: string) {
   if (status !== 401 || typeof window === "undefined") return;
   if (path === "/api/auth/login") return;
-  try {
-    const detail = (JSON.parse(bodyText) as { detail?: unknown }).detail;
-    const d = typeof detail === "string" ? detail : "";
-    if (d === "Invalid auth token." || d === "Session expired.") {
-      clearAuthSession();
-      if (!window.location.pathname.startsWith("/login")) {
-        window.location.assign("/login");
-      }
-    }
-  } catch {
-    /* ignore */
+  const message = authErrorMessage(bodyText);
+  if (isStaleAuthMessage(message)) {
+    window.dispatchEvent(new CustomEvent("zomate_stale_auth", { detail: { path, message } }));
   }
 }
 
@@ -205,55 +210,9 @@ async function request(path: string, options?: RequestInit) {
         headers
       });
 
-      // #region agent log
-      if (path.includes("/api/renewal")) {
-        fetch("http://127.0.0.1:7480/ingest/881a8b8b-14fd-4480-bb21-056e0c22cd5b", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "195967" },
-          body: JSON.stringify({
-            sessionId: "195967",
-            runId: "pre-fix",
-            hypothesisId: "H1",
-            location: "lib/api.ts:request",
-            message: "renewal_request_response_meta",
-            data: {
-              apiBaseUrlLength: API_BASE_URL.length,
-              apiBaseEmpty: API_BASE_URL === "",
-              nodeEnv: process.env.NODE_ENV,
-              path,
-              status: res.status,
-              ok: res.ok,
-              attempt
-            },
-            timestamp: Date.now()
-          })
-        }).catch(() => {});
-      }
-      // #endregion
-
       if (!res.ok) {
         const text = await res.text();
         redirectOnStaleAuth(path, res.status, text);
-        // #region agent log
-        if (path.includes("/api/renewal")) {
-          fetch("http://127.0.0.1:7480/ingest/881a8b8b-14fd-4480-bb21-056e0c22cd5b", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "195967" },
-            body: JSON.stringify({
-              sessionId: "195967",
-              runId: "pre-fix",
-              hypothesisId: "H2",
-              location: "lib/api.ts:request",
-              message: "renewal_error_body",
-              data: {
-                status: res.status,
-                bodyPreview: text.slice(0, 200)
-              },
-              timestamp: Date.now()
-            })
-          }).catch(() => {});
-        }
-        // #endregion
         const err = errorFromApiBody(text, "Request failed");
         if (res.status < 500) {
           throw err;
@@ -344,6 +303,21 @@ export const api = {
   member: (hkid: string) => request(`/api/members/${encodeURIComponent(hkid)}`),
   memberFull: (hkid: string) => request(`/api/members/${encodeURIComponent(hkid)}/full`),
   memberFullById: (studentId: number | string) => request(`/api/members/by-id/${encodeURIComponent(String(studentId))}/full`),
+  updateMemberById: (
+    studentId: number | string,
+    payload: {
+      full_name?: string;
+      phone?: string;
+      email?: string | null;
+      date_of_birth?: string | null;
+      emergency_contact_name?: string | null;
+      emergency_contact_phone?: string | null;
+    }
+  ) =>
+    request(`/api/members/by-id/${encodeURIComponent(String(studentId))}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    }),
   memberSearch: (q: string) => request(`/api/members/search?q=${encodeURIComponent(q)}`),
   /** 續會 / 試堂：以香港電話查唯一學員（接受 8 位或 +852） */
   memberLookupByPhone: (phone: string) =>
@@ -363,25 +337,27 @@ export const api = {
   },
   uploadMemberReceipt: (
     hkid: string,
-    payload: { file: File; amount?: string; payment_method?: string; note?: string; source?: "REGISTER" | "RENEWAL" }
+    payload: { file: File; amount?: string; payment_method?: string; note?: string; source?: "REGISTER" | "RENEWAL"; context?: string }
   ) => {
     const form = new FormData();
     form.append("file", payload.file);
     if (payload.amount) form.append("amount", payload.amount);
     if (payload.payment_method) form.append("payment_method", payload.payment_method);
     if (payload.note) form.append("note", payload.note);
+    if (payload.context) form.append("context", payload.context);
     form.append("source", payload.source ?? "REGISTER");
     return request(`/api/members/${encodeURIComponent(hkid)}/receipts`, { method: "POST", body: form });
   },
   uploadMemberReceiptById: (
     studentId: number | string,
-    payload: { file: File; amount?: string; payment_method?: string; note?: string; source?: "REGISTER" | "RENEWAL" }
+    payload: { file: File; amount?: string; payment_method?: string; note?: string; source?: "REGISTER" | "RENEWAL"; context?: string }
   ) => {
     const form = new FormData();
     form.append("file", payload.file);
     if (payload.amount) form.append("amount", payload.amount);
     if (payload.payment_method) form.append("payment_method", payload.payment_method);
     if (payload.note) form.append("note", payload.note);
+    if (payload.context) form.append("context", payload.context);
     form.append("source", payload.source ?? "RENEWAL");
     return request(`/api/members/by-id/${encodeURIComponent(String(studentId))}/receipts`, { method: "POST", body: form });
   },

@@ -10,6 +10,7 @@ export type MemberProfile = {
   hkid: string | null;
   full_name: string;
   phone: string;
+  used_mobile_number?: string | null;
   email: string | null;
   date_of_birth?: string | null;
   emergency_contact_name: string | null;
@@ -18,6 +19,7 @@ export type MemberProfile = {
   coach_trial_quota_remaining?: number;
   photo_path: string | null;
   photo_url: string | null;
+  signature_image_url?: string | null;
   is_active: boolean;
   current_course_package_status?: string;
   last_checkin_at?: string | null;

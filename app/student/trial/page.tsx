@@ -4,7 +4,7 @@
  * [F002][S001]
  * Feature: Course Entry & Automation
  * Step: Unified payment redirect
- * Logic: Trial / add-class split is deprecated; staff enter all receipts via `/renewal` and select Payment Type inside.
+ * Logic: Trial / add-class split is deprecated; staff enter all receipts via `/regCourse` and select Payment Type inside.
  */
 
 import Link from "next/link";
@@ -29,10 +29,10 @@ export default function StudentTrialPage() {
           試堂／加堂獨立入口已停用。請先進入統一收錢／收據流程，再於付款形式選擇 Trial（試堂）、New Package（報堂）或 Renewal（續堂）。
         </p>
         <Link
-          href="/renewal?type=trial"
+          href="/regCourse?type=trial"
           className="block rounded-md bg-purple-600 px-4 py-3 text-center text-sm font-semibold text-white shadow-sm hover:bg-purple-700"
         >
-          前往 Unified Payment
+          前往 Reg Course / Payment First
         </Link>
       </section>
     </main>

@@ -178,9 +178,9 @@ export default function RenewalPage() {
 
   return (
     <main className="mx-auto min-h-screen max-w-2xl space-y-5 bg-canvas p-6 text-ink">
-      <h1 className="text-2xl font-semibold">Unified Payment / Receipt Entry</h1>
+      <h1 className="text-2xl font-semibold">Reg Course / Payment First</h1>
       <p className="text-sm text-ink/65">
-        先由 admin／文書手動輸入收費與付款方式；付款後再安排學生課堂種類與第一堂時間。Course PIN 會喺「Course 套餐開課」按課程產生。
+        先由 admin／文書提交收費、付款方式與分期備註；之後再揀課堂種類與堂數。Course PIN 會喺「Course 套餐開課」按課程產生。
       </p>
       <section className="rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-5">
         <p className="mb-3 text-sm text-ink/65">Step 1 · 電話查找（預設香港 +852，可只填八位數字）</p>
@@ -206,9 +206,24 @@ export default function RenewalPage() {
       {member && (
         <form onSubmit={submit} className="space-y-4 rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-5">
           <p className="text-sm text-ink/65">
-            Step 2 · Payment details: <strong className="text-ink">{member.full_name}</strong> · {displayHongKongPhone(member.phone)}
+            Step 2 · Payment first: <strong className="text-ink">{member.full_name}</strong> · {displayHongKongPhone(member.phone)}
             {member.hkid ? ` · HKID ${member.hkid}` : ""}
           </p>
+          <input
+            name="amount"
+            required
+            inputMode="decimal"
+            placeholder="收費 (HKD)"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2"
+          />
+          <PaymentMethodRadio />
+          <input
+            name="first_session_hint"
+            placeholder="第一堂時間（例如 2026-05-20 19:00，可稍後 Course 套餐開課正式安排）"
+            className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2"
+          />
           {/* [F002][S001] Client-approved 6/4 package type selector; repeat purchase hides `新學生*`. */}
           <label className="block space-y-1 text-sm">
             <span className="text-ink/70">課堂套餐種類 Course Package Type</span>
@@ -250,21 +265,6 @@ export default function RenewalPage() {
           </label>
           <SelectAsync name="coach_id" label="教練" load={api.publicCoaches} />
           <SelectAsync name="branch_id" label="分店" load={api.publicBranches} defaultFirst />
-          <input
-            name="first_session_hint"
-            placeholder="第一堂時間（例如 2026-05-20 19:00，可稍後 Course 套餐開課正式安排）"
-            className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2"
-          />
-          <input
-            name="amount"
-            required
-            inputMode="decimal"
-            placeholder="收費 (HKD)"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2"
-          />
-          <PaymentMethodRadio />
           <FileUpload name="receipt" label="收據 upload（選填）" />
           <textarea name="note" rows={3} placeholder="備註" className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2" />
           <button
