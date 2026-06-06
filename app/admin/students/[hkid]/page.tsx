@@ -18,15 +18,22 @@ const tabs = ["資料", "課程記錄", "活動紀錄"] as const;
 
 type CatRow = { id: number; name: string; is_deleted?: boolean };
 
+/** [F001][S001] Map backend activity_log.type codes to admin-facing 繁中 labels. */
 function activityTypeLabel(type: string): string {
   const map: Record<string, string> = {
-    member_create: "新會員建立",
-    renewal_create: "續會／套餐登記",
-    member_photo_upload: "相片上傳",
-    category_enrollment_upsert: "種類報讀更新",
-    coach_quota_1: "教練試堂"
+    member_create: "新會員登記",
+    member_profile_update: "更新學生資料",
+    member_photo_upload: "上傳學生相片",
+    receipt_upload: "上傳收據／付款憑證",
+    renewal_create: "報 Course／續會收費",
+    trial_class_create: "試堂／加堂登記",
+    category_enrollment_upsert: "課程種類入帳（堂數／分期）",
+    coach_quota_1: "使用教練試堂名額",
+    coach_trial_quota: "使用教練試堂名額",
+    checkin: "課堂簽到扣堂",
+    trial_purchase: "試堂購買（舊紀錄）"
   };
-  return map[type] ?? type;
+  return map[type] ?? "其他活動紀錄";
 }
 
 function fmtDateTime(iso: string): string {
@@ -95,6 +102,7 @@ export default function AdminStudentDetailPage() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [receiptUploading, setReceiptUploading] = useState(false);
   const [photoFailed, setPhotoFailed] = useState(false);
+  const [signatureFailed, setSignatureFailed] = useState(false);
   /** When staff picks an unpaid installment, scroll to receipt form and label it (分期第 N 期). */
   const [receiptInstallmentCtx, setReceiptInstallmentCtx] = useState<{
     installmentNo: number;
@@ -114,6 +122,10 @@ export default function AdminStudentDetailPage() {
   useEffect(() => {
     setPhotoFailed(false);
   }, [data?.profile.photo_url]);
+
+  useEffect(() => {
+    setSignatureFailed(false);
+  }, [data?.profile.signature_image_url]);
 
   useEffect(() => {
     void api
@@ -223,6 +235,7 @@ export default function AdminStudentDetailPage() {
   const packageLessons = packages.reduce((sum, pkg) => sum + (Number(pkg.lessons) || 0), 0);
   const categoryLessons = catEnr.reduce((sum, row) => sum + (Number(row.total_lessons) || 0), 0);
   const photoSrc = apiAssetUrl(data?.profile.photo_url ?? undefined);
+  const signatureSrc = apiAssetUrl(data?.profile.signature_image_url ?? undefined);
   const receiptContexts = [
     ...pins.map((p) => `Course：${p.course_title}`),
     ...catEnr.map((c) => `Category：${c.category_name}`),
@@ -367,6 +380,43 @@ export default function AdminStudentDetailPage() {
                   {profileSaving ? "儲存中…" : "儲存學生資料"}
                 </button>
               </form>
+              <div className="space-y-3 rounded-xl border border-ink/10 bg-canvas p-4 md:col-span-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-ink">簽名圖</h3>
+                  <p className="mt-1 text-xs text-ink/55">入職／登記流程 Step 3 數碼簽名（canvas PNG）。</p>
+                </div>
+                <div className="overflow-hidden rounded-xl border border-ink/10 bg-white">
+                  {signatureSrc && !signatureFailed ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={signatureSrc}
+                      alt={`${data.profile.full_name} 簽名`}
+                      className="mx-auto max-h-48 w-full object-contain p-4"
+                      onError={() => {
+                        console.warn("[F001][S004] Signature image failed to load", {
+                          signatureSrc,
+                          profile: data.profile.id
+                        });
+                        setSignatureFailed(true);
+                      }}
+                    />
+                  ) : (
+                    <div className="flex min-h-[8rem] items-center justify-center px-4 py-8 text-center text-sm text-ink/45">
+                      {signatureFailed ? "簽名圖載入失敗" : "尚未上傳簽名"}
+                    </div>
+                  )}
+                </div>
+                {signatureSrc && !signatureFailed ? (
+                  <a
+                    href={signatureSrc}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-block text-xs font-medium text-primary underline"
+                  >
+                    開啟原圖
+                  </a>
+                ) : null}
+              </div>
             </div>
           )}
           {tab === "課程記錄" && data && (
@@ -661,12 +711,7 @@ export default function AdminStudentDetailPage() {
                 <ul className="divide-y divide-ink/10 rounded-xl border border-ink/10 bg-canvas">
                   {(data.activity_log ?? []).map((a) => (
                     <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
-                      <div>
-                        <span className="font-medium text-ink">{activityTypeLabel(a.type)}</span>
-                        {a.ref_id != null ? (
-                          <span className="ml-2 text-xs text-ink/50">ref #{a.ref_id}</span>
-                        ) : null}
-                      </div>
+                      <span className="font-medium text-ink">{activityTypeLabel(a.type)}</span>
                       <time className="text-xs text-ink/55">{fmtDateTime(a.created_at)}</time>
                     </li>
                   ))}
