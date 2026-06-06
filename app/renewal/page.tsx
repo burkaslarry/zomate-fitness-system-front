@@ -10,7 +10,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { alertApiError, api } from "../../lib/api";
-import type { MemberProfile, TrialClassKindDto } from "../../types/api";
+import type { MemberProfile, CourseCategoryDto } from "../../types/api";
 import FileUpload from "../../components/forms/file-upload";
 import PaymentMethodRadio from "../../components/forms/payment-method-radio";
 import SelectAsync from "../../components/forms/select-async";
@@ -48,18 +48,18 @@ type PurchaseSummary = {
   firstSessionHint: string;
 };
 
-/** [F002][S001] Six client-approved course package types; repeat purchases hide the two `new_*` types. */
-const NEW_STUDENT_KIND_CODES = new Set(["new_1to1", "new_1to2"]);
+/** [F002][S001] Repeat purchases hide the two `新學生*` category names. */
+const NEW_STUDENT_CATEGORY_PREFIX = "新學生";
 
-/** [F002][S001] Admin list may include disabled kinds — hide inactive rows from payment entry. */
-function activeCoursePackageKinds(rows: unknown, member: MemberProfile): TrialClassKindDto[] {
+/** [F011][S001] Load enabled course categories for payment entry. */
+function activeCoursePackageKinds(rows: unknown, member: MemberProfile): CourseCategoryDto[] {
   if (!Array.isArray(rows)) return [];
   const hasPaidBefore = member.lesson_balance > 0 || member.current_course_package_status !== "No active package";
-  return rows.filter((r): r is TrialClassKindDto => {
-    if (!r || typeof r !== "object" || !("id" in r) || !("code" in r) || !("label_zh" in r)) return false;
-    const kind = r as TrialClassKindDto;
-    if (!kind.active) return false;
-    if (hasPaidBefore && NEW_STUDENT_KIND_CODES.has(kind.code)) return false;
+  return rows.filter((r): r is CourseCategoryDto => {
+    if (!r || typeof r !== "object" || !("id" in r) || !("name" in r)) return false;
+    const kind = r as CourseCategoryDto;
+    if (kind.is_active === false) return false;
+    if (hasPaidBefore && kind.name.startsWith(NEW_STUDENT_CATEGORY_PREFIX)) return false;
     return true;
   });
 }
@@ -68,7 +68,7 @@ export default function RenewalPage() {
   const [phone, setPhone] = useState("");
   const [lookupBusy, setLookupBusy] = useState(false);
   const [member, setMember] = useState<MemberProfile | null>(null);
-  const [coursePackageKinds, setCoursePackageKinds] = useState<TrialClassKindDto[]>([]);
+  const [coursePackageKinds, setCoursePackageKinds] = useState<CourseCategoryDto[]>([]);
   const [amount, setAmount] = useState("");
   const [totalLessons, setTotalLessons] = useState(10);
   /** Step 1 inline hint (e.g. empty phone). */
@@ -100,7 +100,7 @@ export default function RenewalPage() {
     try {
       const [row, catsRaw] = await Promise.all([
         api.memberLookupByPhone(q) as Promise<MemberProfile>,
-        api.trialClassKinds().catch(() => [])
+        api.publicCourseCategories().catch(() => [])
       ]);
       setMember(row);
       const kinds = activeCoursePackageKinds(catsRaw, row);
@@ -148,10 +148,10 @@ export default function RenewalPage() {
         branch_id: Number(form.get("branch_id")) || undefined,
         amount: amountRaw.trim().replace(/,/g, ""),
         payment_method: paymentMethod,
-        transaction_type: NEW_STUDENT_KIND_CODES.has(selectedKind.code) ? "new_package" : "renewal",
-        course_package_type_code: selectedKind.code,
-        course_package_type_label: selectedKind.label_zh,
-        note: `[${selectedKind.label_zh}] 第一堂：${firstSessionHint || "未安排"} ${String(form.get("note") ?? "")}`.trim(),
+        transaction_type: selectedKind.name.startsWith(NEW_STUDENT_CATEGORY_PREFIX) ? "new_package" : "renewal",
+        course_package_type_code: `cat_${selectedKind.id}`,
+        course_package_type_label: selectedKind.name,
+        note: `[${selectedKind.name}] 第一堂：${firstSessionHint || "未安排"} ${String(form.get("note") ?? "")}`.trim(),
         receipt: receipt instanceof File && receipt.name ? receipt : null
       };
       if (member.hkid) {
@@ -161,7 +161,7 @@ export default function RenewalPage() {
       const summary: PurchaseSummary = {
         studentName: member.full_name,
         packageName: `${lessons} 堂（admin 手動輸入）`,
-        coursePackageType: selectedKind.label_zh,
+        coursePackageType: selectedKind.name,
         amountPaid: amountRaw.trim().replace(/,/g, ""),
         remainingBalance: typeof res.member?.lesson_balance === "number" ? res.member.lesson_balance : null,
         paymentMethod,
@@ -236,7 +236,7 @@ export default function RenewalPage() {
               <option value="">請選擇</option>
               {coursePackageKinds.map((kind) => (
                 <option key={kind.id} value={kind.id}>
-                  {kind.label_zh}
+                  {kind.name}
                 </option>
               ))}
             </select>
@@ -246,7 +246,7 @@ export default function RenewalPage() {
           </label>
           {coursePackageKinds.length === 0 ? (
             <p className="text-xs text-amber-800">
-              未能載入課堂套餐種類。請確認 backend 已 seed 6 個 Course Kind，或到分店管理檢查啟用狀態。
+              未能載入課堂套餐種類。請確認 backend 已 seed course categories，或到課堂和分店管理檢查啟用狀態。
             </p>
           ) : null}
           <label className="block space-y-1 text-sm">

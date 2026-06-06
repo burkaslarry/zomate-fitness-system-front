@@ -36,8 +36,7 @@ const MENU_SECTIONS: { frameClass: string; items: NavItem[] }[] = [
   {
     frameClass: "rounded-xl border-2 border-primary/25 bg-canvas p-2.5",
     items: [
-      { href: "/admin/branches", label: "分店管理" },
-      { href: "/admin/course-categories", label: "Course 套餐開課" },
+      { href: "/admin/branches", label: "課堂和分店管理" },
       { href: "/coach/calendar", label: "教練日程 · 簽到" },
       { href: "/coach", label: "教練課表" },
       { href: "/admin/attendance/qr-console", label: "QR 簽到中心" },

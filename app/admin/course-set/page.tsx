@@ -16,7 +16,7 @@ import type {
   CoachDto,
   InstallmentSegmentPinDto,
   MemberProfile,
-  TrialClassKindDto
+  CourseCategoryDto
 } from "../../../types/api";
 
 type CourseEnrollmentSummary = {
@@ -67,7 +67,7 @@ function whatsappMeUrl(phone: string, body: string): string {
 }
 
 export default function AdminCourseSetPage() {
-  const [kinds, setKinds] = useState<TrialClassKindDto[]>([]);
+  const [kinds, setKinds] = useState<CourseCategoryDto[]>([]);
   const [branches, setBranches] = useState<BranchDto[]>([]);
   const [coaches, setCoaches] = useState<CoachDto[]>([]);
   const [students, setStudents] = useState<MemberProfile[]>([]);
@@ -103,13 +103,13 @@ export default function AdminCourseSetPage() {
       setLoading(true);
       try {
         const [k, b, c, s] = await Promise.all([
-          api.trialClassKinds(),
+          api.publicCourseCategories(),
           api.publicBranches(),
           api.publicCoaches(),
           api.listStudents()
         ]);
         if (cancelled) return;
-        setKinds(Array.isArray(k) ? (k as TrialClassKindDto[]) : []);
+        setKinds(Array.isArray(k) ? (k as CourseCategoryDto[]) : []);
         setBranches(Array.isArray(b) ? (b as BranchDto[]) : []);
         setCoaches(Array.isArray(c) ? (c as CoachDto[]) : []);
         setStudents(Array.isArray(s) ? (s as MemberProfile[]) : []);
@@ -198,7 +198,7 @@ export default function AdminCourseSetPage() {
     setSubmitBusy(true);
     try {
       const created = (await api.createCourse({
-        title: titleKind.label_zh,
+        title: titleKind.name,
         branch_id: branchId,
         coach_id: coachId,
         scheduled_start,
@@ -213,7 +213,7 @@ export default function AdminCourseSetPage() {
       })) as { id?: number; enrollments?: CourseEnrollmentSummary[] };
       setStatus("");
       const cname = coaches.find((c) => c.id === coachId)?.full_name ?? "教練";
-      setSuccessCourseTitle(titleKind.label_zh);
+      setSuccessCourseTitle(titleKind.name);
       setSuccessCoachName(cname);
       setSuccessHadStudents(student_ids.length > 0);
       setSuccessCourseId(typeof created?.id === "number" ? created.id : null);
@@ -274,7 +274,7 @@ export default function AdminCourseSetPage() {
                 <option value="">請選擇（來自 Course 種類）</option>
                 {kinds.map((k) => (
                   <option key={k.id} value={k.id}>
-                    {k.label_zh}
+                    {k.name}
                   </option>
                 ))}
               </select>

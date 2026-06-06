@@ -322,14 +322,8 @@ export const api = {
   /** 續會 / 試堂：以香港電話查唯一學員（接受 8 位或 +852） */
   memberLookupByPhone: (phone: string) =>
     request(`/api/members/lookup-phone?phone=${encodeURIComponent(phone)}`),
-  trialClassKinds: () => request("/api/trial-class-kinds"),
-  /** Course／試堂種類 — 後台含停用列（分店管理）。 */
-  adminTrialClassKinds: () => request("/api/admin/trial-class-kinds"),
-  patchTrialClassKind: (kindId: number, payload: { active: boolean }) =>
-    request(`/api/admin/trial-class-kinds/${kindId}`, {
-      method: "PATCH",
-      body: JSON.stringify(payload)
-    }),
+  /** [F011][S001] 報 Course / 試堂 — 只載入啟用中的 course category。 */
+  publicCourseCategories: () => request("/api/course-categories"),
   uploadMemberPhoto: (hkid: string, file: File) => {
     const form = new FormData();
     form.append("file", file);
@@ -511,6 +505,11 @@ export const api = {
     request(`/api/admin/course-categories/${categoryId}/hide`, { method: "POST" }),
   showCourseCategory: (categoryId: number) =>
     request(`/api/admin/course-categories/${categoryId}/show`, { method: "POST" }),
+  patchCourseCategory: (categoryId: number, payload: { is_active?: boolean }) =>
+    request(`/api/admin/course-categories/${categoryId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    }),
   upsertStudentCategoryEnrollment: (
     studentId: number,
     payload: { course_category_id: number; total_lessons: number; total_installments?: number }

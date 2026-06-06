@@ -9,7 +9,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { alertApiError, api } from "../../lib/api";
-import type { BranchDto, CoachDto, MemberProfile, TrialClassCreateResponse, TrialClassKindDto } from "../../types/api";
+import type { BranchDto, CoachDto, CourseCategoryDto, MemberProfile, TrialClassCreateResponse } from "../../types/api";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -52,11 +52,11 @@ export default function TrialClassPage() {
   const [lookupMsg, setLookupMsg] = useState("");
   const [lookupBusy, setLookupBusy] = useState(false);
 
-  const [kinds, setKinds] = useState<TrialClassKindDto[]>([]);
+  const [kinds, setKinds] = useState<CourseCategoryDto[]>([]);
   const [branches, setBranches] = useState<BranchLite[]>([]);
   const [coaches, setCoaches] = useState<CoachLite[]>([]);
   const [sessionMode, setSessionMode] = useState<"TRIAL" | "ADD_ON">("TRIAL");
-  const [trialKindId, setTrialKindId] = useState<number | "">("");
+  const [courseCategoryId, setCourseCategoryId] = useState<number | "">("");
   const [coachId, setCoachId] = useState<number | "">("");
   const [branchId, setBranchId] = useState<number | "">("");
   const [status, setStatus] = useState("");
@@ -65,15 +65,15 @@ export default function TrialClassPage() {
   const [successPayload, setSuccessPayload] = useState<TrialClassCreateResponse | null>(null);
 
   useEffect(() => {
-    void Promise.all([api.trialClassKinds(), api.publicBranches(), api.publicCoaches()])
+    void Promise.all([api.publicCourseCategories(), api.publicBranches(), api.publicCoaches()])
       .then(([k, b, c]) => {
-        const kindRows = Array.isArray(k) ? (k as TrialClassKindDto[]) : [];
+        const kindRows = Array.isArray(k) ? (k as CourseCategoryDto[]) : [];
         const branchRows = Array.isArray(b) ? (b as BranchLite[]) : [];
         const coachRows = Array.isArray(c) ? (c as CoachLite[]) : [];
         setKinds(kindRows);
         setBranches(branchRows);
         setCoaches(coachRows);
-        if (kindRows.length && trialKindId === "") setTrialKindId(kindRows[0].id);
+        if (kindRows.length && courseCategoryId === "") setCourseCategoryId(kindRows[0].id);
         const bid = pickDefaultBranchId(branchRows);
         if (bid !== "" && branchId === "") setBranchId(bid);
         const cid = pickDefaultCoachId(coachRows);
@@ -109,8 +109,8 @@ export default function TrialClassPage() {
       setStatus("請先輸入電話並按「查找學員」。");
       return;
     }
-    if (trialKindId === "") {
-      setStatus("請選擇學員類型（一對一／一對二）。");
+    if (courseCategoryId === "") {
+      setStatus("請選擇課程種類。");
       return;
     }
     const form = new FormData(event.currentTarget);
@@ -120,7 +120,7 @@ export default function TrialClassPage() {
       const res = (await api.createTrialClass({
         student_id: member.id,
         type: sessionMode,
-        trial_kind_id: Number(trialKindId),
+        course_category_id: Number(courseCategoryId),
         coach_id: coachId === "" ? null : Number(coachId),
         branch_id: branchId === "" ? null : Number(branchId),
         class_date: form.get("class_date"),
@@ -181,11 +181,11 @@ export default function TrialClassPage() {
         </label>
 
         <label className="block space-y-1 text-sm">
-          <span className="text-ink/70">學員類型（由資料庫載入）</span>
+          <span className="text-ink/70">課程種類（由資料庫載入）</span>
           <select
-            name="trial_kind_id"
-            value={trialKindId === "" ? "" : String(trialKindId)}
-            onChange={(e) => setTrialKindId(e.target.value === "" ? "" : Number(e.target.value))}
+            name="course_category_id"
+            value={courseCategoryId === "" ? "" : String(courseCategoryId)}
+            onChange={(e) => setCourseCategoryId(e.target.value === "" ? "" : Number(e.target.value))}
             className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2"
           >
             <option value="" disabled>
@@ -193,7 +193,7 @@ export default function TrialClassPage() {
             </option>
             {kinds.map((k) => (
               <option key={k.id} value={k.id}>
-                {k.label_zh}
+                {k.name}
               </option>
             ))}
           </select>

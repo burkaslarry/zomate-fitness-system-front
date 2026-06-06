@@ -190,8 +190,8 @@ export default function AdminPage() {
               href="/admin/branches"
               className="rounded-xl border border-amber-200/70 bg-amber-50/90 px-4 py-3 text-sm font-semibold text-ink shadow-sm ring-1 ring-ink/[0.04] hover:bg-amber-100/90"
             >
-              分店管理
-              <span className="mt-1 block text-xs font-normal text-ink/65">地址、營業時間、備註、CSV 匯入匯出</span>
+              課堂和分店管理
+              <span className="mt-1 block text-xs font-normal text-ink/65">分店、Course 種類（試堂／開課共用）</span>
             </Link>
             <Link
               href="/admin/course-set"

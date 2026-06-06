@@ -3,19 +3,20 @@
 /**
  * [F002][S001]
  * Feature: Course Entry & Automation
- * Step: (see Logic)
- * Logic: Branches, coaches, course-set admin surfaces.
+ * Step: Branches and course category maintenance
+ * Logic: 課堂和分店管理 — branches list + zomate_fs_course_categories (試堂／開課共用).
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import BackendShell from "../../../components/backend-shell";
 import { alertApiError, api } from "../../../lib/api";
-import type { BranchDto, TrialClassKindDto } from "../../../types/api";
+import type { BranchDto, CourseCategoryDto } from "../../../types/api";
 
 export default function AdminBranchesPage() {
   const [branches, setBranches] = useState<BranchDto[]>([]);
-  const [kinds, setKinds] = useState<TrialClassKindDto[]>([]);
+  const [categories, setCategories] = useState<CourseCategoryDto[]>([]);
   const [status, setStatus] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const reloadBranches = useCallback(() => {
     api
@@ -24,35 +25,77 @@ export default function AdminBranchesPage() {
       .catch((e) => alertApiError(e));
   }, []);
 
-  const reloadKinds = useCallback(() => {
+  const reloadCategories = useCallback(() => {
     api
-      .adminTrialClassKinds()
-      .then((data) => setKinds(Array.isArray(data) ? (data as TrialClassKindDto[]) : []))
+      .courseCategories(true)
+      .then((data) => setCategories(Array.isArray(data) ? (data as CourseCategoryDto[]) : []))
       .catch((e) => alertApiError(e));
   }, []);
 
   useEffect(() => {
     reloadBranches();
-    reloadKinds();
-  }, [reloadBranches, reloadKinds]);
+    reloadCategories();
+  }, [reloadBranches, reloadCategories]);
 
-  async function toggleKind(row: TrialClassKindDto, nextActive: boolean) {
+  async function toggleCategoryActive(row: CourseCategoryDto, nextActive: boolean) {
     setStatus("");
     try {
-      await api.patchTrialClassKind(row.id, { active: nextActive });
-      await reloadKinds();
+      await api.patchCourseCategory(row.id, { is_active: nextActive });
+      await reloadCategories();
       setStatus("已更新課程種類狀態。");
     } catch (e) {
       alertApiError(e);
     }
   }
 
+  async function onCreateCategory(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const name = String(form.get("name") ?? "").trim();
+    if (!name) {
+      setStatus("請輸入 Course 種類名稱。");
+      return;
+    }
+    setSaving(true);
+    setStatus("");
+    try {
+      await api.createCourseCategory({ name });
+      event.currentTarget.reset();
+      setStatus(`已新增：${name}`);
+      reloadCategories();
+    } catch (e) {
+      alertApiError(e);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleCategoryHidden(row: CourseCategoryDto) {
+    setStatus("");
+    try {
+      if (row.is_deleted) {
+        await api.showCourseCategory(row.id);
+        setStatus(`已恢復：${row.name}`);
+      } else {
+        await api.hideCourseCategory(row.id);
+        setStatus(`已隱藏：${row.name}`);
+      }
+      reloadCategories();
+    } catch (e) {
+      alertApiError(e);
+    }
+  }
+
+  const visibleCategories = categories.filter((row) => !row.is_deleted);
+
   return (
-    <BackendShell title="分店管理">
+    <BackendShell title="課堂和分店管理">
       <div className="mx-auto max-w-5xl space-y-10">
         <div>
-          <h2 className="text-2xl font-semibold text-ink">分店管理</h2>
-          <p className="mt-1 text-sm text-ink/65">分店資料與「課程種類」維護（試堂與 Course 套餐開課標題共用）。</p>
+          <h2 className="text-2xl font-semibold text-ink">課堂和分店管理</h2>
+          <p className="mt-1 text-sm text-ink/65">
+            分店資料與 Course 種類（試堂／開課共用）— 資料來源 <code className="text-xs">zomate_fs_course_categories</code>。
+          </p>
         </div>
 
         <section className="space-y-3">
@@ -97,33 +140,74 @@ export default function AdminBranchesPage() {
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h3 className="text-lg font-semibold text-ink">Course 種類（試堂／開課共用）</h3>
-              <p className="mt-1 text-xs text-ink/55">編輯「啟用」會影響試堂下拉與 Course 套餐開課的課程名稱選項。</p>
+              <p className="mt-1 text-xs text-ink/55">編輯「啟用」會影響試堂下拉與報 Course 的課程名稱選項。</p>
             </div>
           </div>
+
+          <form
+            onSubmit={(event) => void onCreateCategory(event)}
+            className="flex flex-wrap items-end gap-3 rounded-xl border border-ink/10 bg-surface p-4 shadow-sm ring-1 ring-ink/[0.04]"
+          >
+            <label className="min-w-[16rem] flex-1 text-sm font-medium text-ink">
+              新增 Course 種類
+              <input
+                name="name"
+                placeholder="例如：Boxing 拳擊"
+                className="mt-2 w-full rounded-lg border border-ink/15 bg-canvas px-3 py-2 text-sm text-ink outline-none focus:border-primary focus:ring-1 focus:ring-primary/40"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-primary disabled:opacity-50"
+            >
+              {saving ? "新增中…" : "新增種類"}
+            </button>
+          </form>
+
           {status ? <p className="text-sm text-emerald-800">{status}</p> : null}
           <div className="overflow-x-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
             <table className="min-w-full border-collapse text-left text-sm">
               <thead className="border-b border-ink/10 bg-canvas/50 text-ink/65">
                 <tr>
                   <th className="px-4 py-2 font-medium">課程名稱</th>
+                  <th className="px-4 py-2 font-medium">狀態</th>
                   <th className="px-4 py-2 font-medium">啟用</th>
+                  <th className="px-4 py-2 font-medium">操作</th>
                 </tr>
               </thead>
               <tbody>
-                {kinds.map((row) => (
+                {categories.map((row) => (
                   <tr key={row.id} className="border-b border-ink/[0.06] text-ink/85">
-                    <td className="px-4 py-3">{row.label_zh}</td>
+                    <td className="px-4 py-3">{row.name}</td>
+                    <td className="px-4 py-3">
+                      {row.is_deleted ? (
+                        <span className="rounded-full bg-ink/10 px-2 py-1 text-xs text-ink/55">隱藏</span>
+                      ) : (
+                        <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-xs font-medium text-emerald-800">顯示</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <button
                         type="button"
-                        onClick={() => void toggleKind(row, !row.active)}
+                        disabled={Boolean(row.is_deleted)}
+                        onClick={() => void toggleCategoryActive(row, !row.is_active)}
                         className={`rounded-lg border px-3 py-1 text-xs font-semibold transition ${
-                          row.active
+                          row.is_active
                             ? "border-emerald-400/60 bg-emerald-500/10 text-emerald-900"
                             : "border-ink/15 bg-canvas text-ink/55"
-                        }`}
+                        } disabled:cursor-not-allowed disabled:opacity-40`}
                       >
-                        {row.active ? "Y" : "N"}
+                        {row.is_active ? "Y" : "N"}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => void toggleCategoryHidden(row)}
+                        className="rounded-lg border border-ink/15 bg-canvas px-3 py-1.5 text-xs font-semibold text-ink hover:bg-surface"
+                      >
+                        {row.is_deleted ? "恢復" : "隱藏"}
                       </button>
                     </td>
                   </tr>
@@ -131,6 +215,7 @@ export default function AdminBranchesPage() {
               </tbody>
             </table>
           </div>
+          <p className="text-xs text-ink/50">啟用中種類：{visibleCategories.filter((row) => row.is_active).length}</p>
         </section>
       </div>
     </BackendShell>
