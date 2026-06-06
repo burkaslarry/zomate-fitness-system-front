@@ -47,6 +47,7 @@ export function getResolvedApiBaseUrl(): string {
 /** Build absolute URL for FastAPI-served uploads (``/uploads/...``). */
 export function apiAssetUrl(relativeOrAbsolute: string | null | undefined): string | undefined {
   if (!relativeOrAbsolute) return undefined;
+  if (relativeOrAbsolute.startsWith("data:")) return relativeOrAbsolute;
   if (/^https?:\/\//i.test(relativeOrAbsolute)) return relativeOrAbsolute;
   const path = relativeOrAbsolute.startsWith("/") ? relativeOrAbsolute : `/${relativeOrAbsolute}`;
   const base = API_BASE_URL;
