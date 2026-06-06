@@ -8,7 +8,7 @@
  */
 
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import BackendShell from "../../../../components/backend-shell";
 import { alertApiError, api, apiAssetUrl } from "../../../../lib/api";
@@ -91,6 +91,7 @@ function ReceiptThumb({ fileUrl, label }: { fileUrl: string; label: string }) {
 
 export default function AdminStudentDetailPage() {
   const params = useParams<{ hkid: string }>();
+  const router = useRouter();
   const [data, setData] = useState<MemberFull | null>(null);
   const [tab, setTab] = useState<(typeof tabs)[number]>("資料");
   const [toast, setToast] = useState("");
@@ -100,6 +101,7 @@ export default function AdminStudentDetailPage() {
   const [installments, setInstallments] = useState(3);
   const [saving, setSaving] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [receiptUploading, setReceiptUploading] = useState(false);
   const [photoFailed, setPhotoFailed] = useState(false);
   const [signatureFailed, setSignatureFailed] = useState(false);
@@ -195,6 +197,24 @@ export default function AdminStudentDetailPage() {
     setTab("課程記錄");
   }
 
+  async function onDeleteStudent() {
+    if (!data?.profile.id) return;
+    const name = data.profile.full_name;
+    const ok = window.confirm(
+      `確定要刪除學生「${name}」？\n\n此為軟刪除：學生會從名單隱藏，相關課程及收費紀錄仍會保留。`
+    );
+    if (!ok) return;
+    setDeleteBusy(true);
+    try {
+      await api.deleteStudent(data.profile.id);
+      router.push("/admin/students");
+    } catch (e) {
+      alertApiError(e);
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   async function onSaveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!data?.profile.id) return;
@@ -264,6 +284,14 @@ export default function AdminStudentDetailPage() {
               >
                 + Purchase / 買堂
               </Link>
+              <button
+                type="button"
+                disabled={!data?.profile.id || deleteBusy}
+                onClick={() => void onDeleteStudent()}
+                className="rounded-lg border border-rose-300/80 bg-rose-50 px-4 py-2 text-sm font-medium text-rose-900 shadow-sm hover:bg-rose-100 disabled:opacity-50"
+              >
+                {deleteBusy ? "刪除中…" : "刪除學生"}
+              </button>
             </div>
           </div>
           {toast && <p className="mt-3 rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink/85">{toast}</p>}
