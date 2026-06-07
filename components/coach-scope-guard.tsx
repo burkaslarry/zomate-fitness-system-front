@@ -18,8 +18,9 @@ export default function CoachScopeGuard({ children }: { children: ReactNode }) {
   useEffect(() => {
     const s = getAuthSession();
     if (s?.role !== "COACH") return;
-    if (pathname === "/coach/calendar") return;
-    router.replace("/coach/calendar");
+    if (pathname === "/coach" || pathname === "/coach/calendar") return;
+    if (pathname.startsWith("/coach/")) return;
+    router.replace("/coach");
   }, [pathname, router]);
 
   return <>{children}</>;

@@ -25,7 +25,7 @@ export default function LoginPage() {
     }
     const existing = getAuthSession();
     if (existing) {
-      router.push(existing.role === "COACH" ? "/coach/calendar" : "/admin");
+      router.push(existing.role === "COACH" ? "/coach" : "/admin");
     }
   }, [router]);
 
@@ -52,7 +52,7 @@ export default function LoginPage() {
         username: data.username,
         role
       });
-      router.push(role === "COACH" ? "/coach/calendar" : "/admin");
+      router.push(role === "COACH" ? "/coach" : "/admin");
     } catch (err) {
       setError((err as Error).message ?? "Login failed");
     } finally {

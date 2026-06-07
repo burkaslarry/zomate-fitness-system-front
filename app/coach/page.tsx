@@ -2,596 +2,557 @@
 
 /**
  * [F003][S001]
- * Feature: Attendance & Today-Only QR Check-in
- * Step: Coach timetable, optional course assign (ADMIN/CLERK), loading/success modals
- * Logic: ``/api/coach/courses``; staff-only ``/api/admin/courses/by-day`` + assign-coach; coach CRUD.
+ * Feature: Coach Dashboard
+ * Step: Auth gate, pending queue, hourly calendar (9–19), payments, signature update
+ * Logic: COACH-only; scheduling via enrollment.coach_time_confirmed; strict slot blocking.
  */
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import BackendShell from "../../components/backend-shell";
-import { alertApiError, api, downloadCsv, uploadCsv } from "../../lib/api";
+import { alertApiError, api, apiAssetUrl } from "../../lib/api";
 import { getAuthSession } from "../../lib/auth";
 
-type Coach = { id: number; full_name: string; phone: string; branch_id: number | null };
-type BranchLite = { id: number; name: string; code: string };
-type Enr = { student_id: number; student_name: string; student_phone: string; checkin_pin: string };
+type CoachMe = { id: number; full_name: string; phone: string; branch_name: string | null };
+type PendingRow = {
+  enrollment_id: number;
+  course_id: number;
+  student_id: number;
+  student_name: string;
+  student_phone: string;
+  course_title: string;
+  branch_name: string;
+  total_lessons: number;
+  placeholder_start: string;
+};
+type PaymentRow = {
+  student_id: number;
+  student_name: string;
+  student_phone: string;
+  course_id: number;
+  course_title: string;
+  payment_status: string;
+  installment_status: string;
+  signature_image_url: string | null;
+};
 type CourseRow = {
   id: number;
   title: string;
-  branch_name: string;
-  branch_address: string;
-  coach_id: number;
-  coach_name: string;
   scheduled_start: string;
   scheduled_end: string;
-  enrollments: Enr[];
+  enrollments: { student_id: number; student_name: string }[];
 };
 
-type BlockUi =
-  | null
-  | { mode: "loading"; title: string; detail?: string }
-  | { mode: "success"; title: string; detail?: string; enrollments?: Enr[] };
+type Tab = "schedule" | "payments" | "signature";
 
-const INPUT =
-  "mt-1 block w-full max-w-xl rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink placeholder:text-ink/50";
-const SELECT_CTL =
-  "!w-auto max-w-xl min-w-[12rem] rounded-lg border border-ink/15 bg-canvas px-2 py-1.5 text-sm text-ink outline-none [&>option]:bg-surface [&>option]:text-ink";
+const HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18] as const;
 
-export default function CoachPage() {
-  const [coaches, setCoaches] = useState<Coach[]>([]);
-  const [branches, setBranches] = useState<BranchLite[]>([]);
-  const [coachId, setCoachId] = useState<number | "">("");
-  const [day, setDay] = useState(() => new Date().toISOString().slice(0, 10));
-  const [courses, setCourses] = useState<CourseRow[]>([]);
-  const [dayCoursesAll, setDayCoursesAll] = useState<CourseRow[]>([]);
-  const [blockUi, setBlockUi] = useState<BlockUi>(null);
-  const [editingCoachId, setEditingCoachId] = useState<number | null>(null);
-  const [canAssignStaff, setCanAssignStaff] = useState(false);
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function localDateKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+function todayKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/** [F003][S003] Build wa.me link with polite payment reminder. */
+function remindPayWaLink(phone: string, name: string, courseTitle: string): string {
+  const digits = phone.replace(/\D/g, "");
+  const hk = digits.startsWith("852") ? digits : `852${digits.replace(/^0+/, "")}`;
+  const text = encodeURIComponent(
+    `【Zomate Fitness】${name} 你好，溫馨提醒：你的課程「${courseTitle}」尚有款項待付，請盡快安排付款。如有疑問請聯絡我們，謝謝！`
+  );
+  return `https://wa.me/${hk}?text=${text}`;
+}
+
+/** [F003][S004] Canvas stroke signature as PNG data URL (production-visible handwriting). */
+function randomSignatureDataUrl(): string {
+  const canvas = document.createElement("canvas");
+  canvas.width = 360;
+  canvas.height = 140;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return "data:image/png;base64,iVBORw0KGgo=";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = "#1a1a1a";
+  ctx.lineWidth = 2.2;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  let x = 24 + Math.random() * 20;
+  let y = 70 + Math.random() * 24;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  for (let i = 0; i < 10; i++) {
+    x += 18 + Math.random() * 36;
+    y = 45 + Math.random() * 50;
+    ctx.quadraticCurveTo(x - 12, y + (Math.random() - 0.5) * 30, x, y);
+  }
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(40 + Math.random() * 30, 95 + Math.random() * 15);
+  ctx.lineTo(canvas.width - 40, 90 + Math.random() * 20);
+  ctx.stroke();
+  return canvas.toDataURL("image/png");
+}
+
+function occupiedHoursForDay(courses: CourseRow[], day: string, pendingCourseIds: Set<number>): Set<number> {
+  const occupied = new Set<number>();
+  for (const c of courses) {
+    if (pendingCourseIds.has(c.id)) continue;
+    if (localDateKey(c.scheduled_start) !== day) continue;
+    const startH = new Date(c.scheduled_start).getHours();
+    let endH = new Date(c.scheduled_end).getHours();
+    if (endH <= startH) endH = startH + 1;
+    for (let h = startH; h < endH; h++) occupied.add(h);
+  }
+  return occupied;
+}
+
+function slotWouldConflict(
+  occupied: Set<number>,
+  startHour: number,
+  durationHours: number
+): boolean {
+  for (let h = startHour; h < startHour + durationHours; h++) {
+    if (occupied.has(h)) return true;
+  }
+  return startHour + durationHours > 19;
+}
+
+export default function CoachDashboardPage() {
+  const [authOk, setAuthOk] = useState(false);
+  const [roleDenied, setRoleDenied] = useState(false);
+  const [coach, setCoach] = useState<CoachMe | null>(null);
+  const [tab, setTab] = useState<Tab>("schedule");
+  const [pending, setPending] = useState<PendingRow[]>([]);
+  const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [dayCourses, setDayCourses] = useState<CourseRow[]>([]);
+  const [selectedDay, setSelectedDay] = useState(todayKey);
+  const [selectedPending, setSelectedPending] = useState<PendingRow | null>(null);
+  const [startHour, setStartHour] = useState<number>(9);
+  const [durationHours, setDurationHours] = useState<1 | 2>(1);
+  const [scheduling, setScheduling] = useState(false);
+  const [status, setStatus] = useState("");
+  const [sigPreview, setSigPreview] = useState<string | null>(null);
+  const [sigBusy, setSigBusy] = useState(false);
+
+  const pendingCourseIds = useMemo(() => new Set(pending.map((p) => p.course_id)), [pending]);
+  const occupied = useMemo(
+    () => occupiedHoursForDay(dayCourses, selectedDay, pendingCourseIds),
+    [dayCourses, selectedDay, pendingCourseIds]
+  );
+
+  const mingStudent = useMemo(
+    () => payments.find((p) => /ming/i.test(p.student_name)) ?? null,
+    [payments]
+  );
+
+  const reloadAll = useCallback(async (coachId: number) => {
+    const [pList, payList, cList] = await Promise.all([
+      api.coachPendingStudents(coachId) as Promise<PendingRow[]>,
+      api.coachStudentPayments(coachId) as Promise<PaymentRow[]>,
+      api.coachCourses(coachId, selectedDay) as Promise<CourseRow[]>
+    ]);
+    setPending(pList ?? []);
+    setPayments(payList ?? []);
+    setDayCourses(cList ?? []);
+  }, [selectedDay]);
 
   useEffect(() => {
-    const r = getAuthSession()?.role;
-    setCanAssignStaff(r === "ADMIN" || r === "CLERK");
-  }, []);
-
-  const reloadCoaches = useCallback(async () => {
-    const list = (await api.coaches()) as Coach[];
-    setCoaches(list);
-    setCoachId((prev) => {
-      if (typeof prev === "number" && list.some((c) => c.id === prev)) return prev;
-      return list.length ? list[0].id : "";
-    });
-  }, []);
-
-  useEffect(() => {
-    void api
-      .branches()
-      .then((b) => setBranches((b ?? []) as BranchLite[]))
-      .catch(() => setBranches([]));
-  }, []);
-
-  useEffect(() => {
-    void reloadCoaches().catch((e) => alertApiError(e));
-  }, [reloadCoaches]);
-
-  useEffect(() => {
-    if (coachId === "") {
-      setCourses([]);
-      setDayCoursesAll([]);
+    const session = getAuthSession();
+    if (!session) return;
+    if (session.role !== "COACH") {
+      setRoleDenied(true);
       return;
     }
-    let cancelled = false;
     void (async () => {
       try {
-        const mine = (await api.coachCourses(Number(coachId), { day })) as CourseRow[];
-        const all = canAssignStaff ? ((await api.adminCoursesByDay(day)) as CourseRow[]) : [];
-        if (!cancelled) {
-          setCourses(mine);
-          setDayCoursesAll(all);
-        }
+        const me = (await api.coachMe()) as CoachMe;
+        setCoach(me);
+        setAuthOk(true);
+        await reloadAll(me.id);
       } catch (e) {
-        if (!cancelled) {
-          setCourses([]);
-          setDayCoursesAll([]);
-          alertApiError(e);
-        }
+        alertApiError(e);
+        setStatus(String(e));
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [coachId, day, canAssignStaff]);
+  }, [reloadAll]);
 
-  async function reschedule(e: FormEvent<HTMLFormElement>, courseId: number) {
-    e.preventDefault();
-    if (coachId === "") return;
-    const form = new FormData(e.currentTarget);
-    const start = form.get("scheduled_start") as string;
-    const end = form.get("scheduled_end") as string;
-    setBlockUi({ mode: "loading", title: "更新課堂時間…", detail: "請稍候。" });
+  useEffect(() => {
+    if (!coach) return;
+    void api
+      .coachCourses(coach.id, selectedDay)
+      .then((c) => setDayCourses((c ?? []) as CourseRow[]))
+      .catch((e) => setStatus(String(e)));
+  }, [coach, selectedDay]);
+
+  useEffect(() => {
+    if (!selectedPending) return;
+    setStartHour(9);
+    setDurationHours(1);
+  }, [selectedPending]);
+
+  async function confirmSchedule() {
+    if (!coach || !selectedPending) return;
+    if (slotWouldConflict(occupied, startHour, durationHours)) {
+      setStatus("此時段已被佔用或超出 19:00，請另選。");
+      return;
+    }
+    setScheduling(true);
+    setStatus("");
     try {
-      await api.rescheduleCourse(courseId, Number(coachId), {
-        scheduled_start: new Date(start).toISOString(),
-        scheduled_end: new Date(end).toISOString()
+      await api.confirmCoachSchedule(selectedPending.enrollment_id, {
+        enrollment_id: selectedPending.enrollment_id,
+        day: selectedDay,
+        start_hour: startHour,
+        duration_hours: durationHours,
+        coach_id: coach.id
       });
-      setCourses((await api.coachCourses(Number(coachId), { day })) as CourseRow[]);
-      if (canAssignStaff) {
-        setDayCoursesAll((await api.adminCoursesByDay(day)) as CourseRow[]);
-      }
-      setBlockUi({ mode: "success", title: "已更新課堂時間。" });
-    } catch (err) {
-      setBlockUi(null);
-      alertApiError(err);
+      setSelectedPending(null);
+      await reloadAll(coach.id);
+      setStatus("已排程。");
+    } catch (e) {
+      alertApiError(e);
+      setStatus(String(e));
+    } finally {
+      setScheduling(false);
     }
   }
 
-  async function assignCourseToSelectedCoach(courseId: number) {
-    if (coachId === "" || !canAssignStaff) return;
-    setBlockUi({ mode: "loading", title: "指派教練中…", detail: "將課程系列歸於目前選擇嘅教練。" });
+  async function updateMingSignature() {
+    if (!mingStudent) {
+      setStatus("找不到學員 Ming。");
+      return;
+    }
+    const dataUrl = randomSignatureDataUrl();
+    setSigPreview(dataUrl);
+    setSigBusy(true);
     try {
-      const updated = (await api.assignCourseCoach(courseId, Number(coachId))) as CourseRow;
-      setCourses((await api.coachCourses(Number(coachId), { day })) as CourseRow[]);
-      setDayCoursesAll((await api.adminCoursesByDay(day)) as CourseRow[]);
-      const enr = Array.isArray(updated?.enrollments) ? updated.enrollments : [];
-      setBlockUi({
-        mode: "success",
-        title: "指派成功",
-        detail:
-          enr.length > 0
-            ? "以下學員已跟此課程；請將課堂 PIN 交俾學員簽到。"
-            : "該課程已顯示於上方「此教練嘅課程」。本課程暫未有編入學員。",
-        enrollments: enr
-      });
-    } catch (err) {
-      setBlockUi(null);
-      alertApiError(err);
+      const res = (await api.coachUpdateSignature(mingStudent.student_id, dataUrl)) as {
+        signature_image_url?: string;
+      };
+      setSigPreview(apiAssetUrl(res.signature_image_url) ?? dataUrl);
+      if (coach) await reloadAll(coach.id);
+      setStatus("已更新 Ming 簽名。");
+    } catch (e) {
+      alertApiError(e);
+      setStatus(String(e));
+    } finally {
+      setSigBusy(false);
     }
   }
 
-  async function onCreateCoach(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    const full_name = String(form.get("full_name") ?? "").trim();
-    const phone = String(form.get("phone") ?? "").trim();
-    const br = String(form.get("branch_id") ?? "");
-    const branch_id = br === "" ? null : Number(br);
-    setBlockUi({ mode: "loading", title: "新增教練中…" });
-    try {
-      await api.createCoach({ full_name, phone, branch_id });
-      e.currentTarget.reset();
-      await reloadCoaches();
-      setBlockUi({ mode: "success", title: "教練已新增。" });
-    } catch (err) {
-      setBlockUi(null);
-      alertApiError(err);
-    }
+  if (roleDenied) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-canvas p-6 text-ink">
+        <div className="max-w-md rounded-xl border border-ink/10 bg-surface p-6 text-center shadow-sm">
+          <p className="text-sm">此頁面僅供教練帳號使用。</p>
+          <Link href="/login?logout=1" className="mt-4 inline-block text-sm font-medium text-primary underline-offset-2 hover:underline">
+            重新登入
+          </Link>
+        </div>
+      </main>
+    );
   }
 
-  async function onSaveCoachEdit(coach: Coach, e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = new FormData(e.currentTarget);
-    const full_name = String(form.get("edit_full_name") ?? "").trim();
-    const phone = String(form.get("edit_phone") ?? "").trim();
-    const br = String(form.get("edit_branch_id") ?? "");
-    const branch_id = br === "" ? null : Number(br);
-    setBlockUi({ mode: "loading", title: "更新教練資料…" });
-    try {
-      await api.updateCoach(coach.id, {
-        full_name,
-        phone,
-        branch_id
-      });
-      setEditingCoachId(null);
-      await reloadCoaches();
-      setBlockUi({ mode: "success", title: "教練資料已更新。" });
-    } catch (err) {
-      setBlockUi(null);
-      alertApiError(err);
-    }
+  if (!authOk || !coach) {
+    return null;
   }
 
-  async function onDeleteCoach(coach: Coach, hard: boolean) {
-    const msg = hard
-      ? `確定永久刪除「${coach.full_name}」？（無關連課堂方可）`
-      : `確定刪除「${coach.full_name}」？將作軟刪除，列表唔再顯示。`;
-    if (!window.confirm(msg)) return;
-    setBlockUi({ mode: "loading", title: "處理中…" });
-    try {
-      await api.deleteCoach(coach.id, hard);
-      await reloadCoaches();
-      setBlockUi({ mode: "success", title: hard ? "已永久刪除。" : "已軟刪除。" });
-    } catch (err) {
-      setBlockUi(null);
-      alertApiError(err);
-    }
-  }
+  const schedulePanel = (
+    <div className="space-y-4 pb-24">
+      <section className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-ink">待排程學員</h2>
+        <p className="mt-1 text-xs text-ink/55">Admin 已指派給你、尚未確認上課時間的學員。</p>
+        {pending.length === 0 ? (
+          <p className="mt-3 text-sm text-ink/50">目前沒有待排程學員。</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {pending.map((p) => (
+              <li key={p.enrollment_id}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPending(p)}
+                  className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm transition ${
+                    selectedPending?.enrollment_id === p.enrollment_id
+                      ? "border-primary bg-primary/10 ring-1 ring-primary/30"
+                      : "border-ink/10 bg-canvas hover:border-primary/40"
+                  }`}
+                >
+                  <div className="font-medium text-ink">{p.student_name}</div>
+                  <div className="mt-0.5 text-xs text-ink/60">
+                    {p.course_title} · {p.branch_name} · {p.total_lessons} 堂
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
-  async function onImportCoachCsv(file: File) {
-    setBlockUi({ mode: "loading", title: "匯入教練 CSV…" });
-    try {
-      const r = await uploadCsv("/api/admin/coaches/import", file);
-      await reloadCoaches();
-      setBlockUi({ mode: "success", title: `匯入完成：${r.imported ?? 0} 筆。` });
-    } catch (err) {
-      setBlockUi(null);
-      alertApiError(err);
-    }
-  }
-
-  function branchName(bid: number | null) {
-    if (bid == null) return "—";
-    const b = branches.find((x) => x.id === bid);
-    return b ? `${b.name} (${b.code})` : `#${bid}`;
-  }
-
-  const selectedCoach = typeof coachId === "number" ? coaches.find((c) => c.id === coachId) : undefined;
-  const assignableOthers =
-    coachId === "" ? [] : dayCoursesAll.filter((c) => c.coach_id !== Number(coachId));
-
-  function toLocalInput(iso: string) {
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  }
-
-  return (
-    <BackendShell title="教練課表">
-      <main className="w-full max-w-[min(100%,88rem)] space-y-6 p-6">
-        <section className="rounded-xl border border-ink/10 bg-surface p-5">
-          <div className="flex flex-wrap items-start justify-between gap-4 border-b border-ink/[0.08] pb-4">
-            <div>
-              <h2 className="text-lg font-semibold text-ink">教練管理</h2>
-              <p className="mt-1 text-sm text-ink/55">
-                新增／編輯／軟刪除；CSV 欄位：full_name, phone, branch_code（同匯出格式）。
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
+      <section className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-ink">日曆 · 9:00–19:00</h2>
+          <input
+            type="date"
+            value={selectedDay}
+            onChange={(e) => setSelectedDay(e.target.value)}
+            className="rounded-lg border border-ink/15 bg-canvas px-2 py-1 text-sm text-ink"
+          />
+        </div>
+        {!selectedPending ? (
+          <p className="mt-3 text-sm text-ink/50">請先從上方揀一位待排程學員，再點選時段。</p>
+        ) : (
+          <p className="mt-2 text-xs text-ink/65">
+            正在為 <strong>{selectedPending.student_name}</strong> 排程 · 時段 1–2 小時
+          </p>
+        )}
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {HOURS.map((h) => {
+            const blocked = occupied.has(h);
+            const can1 = !slotWouldConflict(occupied, h, 1);
+            const can2 = !slotWouldConflict(occupied, h, 2);
+            const disabled = !selectedPending || (!can1 && !can2);
+            return (
               <button
+                key={h}
                 type="button"
-                className="rounded-lg border border-ink/15 bg-canvas px-3 py-1.5 text-sm font-medium text-ink hover:bg-surface"
-                onClick={() =>
-                  downloadCsv("/api/admin/coaches/export.csv", `coaches-${new Date().toISOString().slice(0, 10)}.csv`)
-                }
+                disabled={disabled || (blocked && !can1 && !can2)}
+                onClick={() => {
+                  if (!selectedPending) return;
+                  setStartHour(h);
+                  setDurationHours(can1 ? 1 : 2);
+                }}
+                className={`rounded-lg border px-2 py-3 text-center text-xs font-medium transition ${
+                  blocked
+                    ? "cursor-not-allowed border-ink/10 bg-ink/5 text-ink/35 line-through"
+                    : startHour === h && selectedPending
+                      ? "border-primary bg-primary/15 text-ink"
+                      : disabled
+                        ? "border-ink/10 bg-canvas text-ink/40"
+                        : "border-ink/15 bg-canvas text-ink hover:border-primary/50"
+                }`}
               >
-                匯出 CSV
+                {pad2(h)}:00
+                {blocked ? " 已佔" : ""}
               </button>
-              <label className="cursor-pointer rounded-lg bg-indigo-600/70 px-3 py-1.5 text-sm font-medium text-ink hover:bg-indigo-600">
-                <input
-                  type="file"
-                  accept=".csv,text/csv"
-                  className="sr-only"
-                  onChange={(ev) => {
-                    const f = ev.target.files?.[0];
-                    ev.target.value = "";
-                    if (f) void onImportCoachCsv(f);
-                  }}
-                />
-                匯入 CSV
-              </label>
-            </div>
-          </div>
-
-          <form className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4" onSubmit={onCreateCoach}>
-            <label className="text-sm text-ink/70">
-              <span className="mb-1 block font-medium text-ink/55">姓名</span>
-              <input name="full_name" required className={`${INPUT} !mt-0`} placeholder="全名" autoComplete="off" />
-            </label>
-            <label className="text-sm text-ink/70">
-              <span className="mb-1 block font-medium text-ink/55">電話</span>
-              <input
-                name="phone"
-                required
-                className={`${INPUT} !mt-0`}
-                placeholder="+852…"
-                inputMode="tel"
-                autoComplete="off"
-              />
-            </label>
-            <label className="text-sm text-ink/70 lg:col-span-2">
-              <span className="mb-1 block font-medium text-ink/55">分店（可唔揀）</span>
-              <select name="branch_id" className={`${SELECT_CTL} mt-1 !max-w-full`}>
-                <option value="">—</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name} ({b.code})
+            );
+          })}
+        </div>
+        {selectedPending ? (
+          <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-ink/10 pt-4">
+            <label className="text-xs text-ink/70">
+              開始
+              <select
+                value={startHour}
+                onChange={(e) => setStartHour(Number(e.target.value))}
+                className="mt-1 block rounded-lg border border-ink/15 bg-canvas px-2 py-1.5 text-sm"
+              >
+                {HOURS.filter((h) => !slotWouldConflict(occupied, h, durationHours)).map((h) => (
+                  <option key={h} value={h}>
+                    {pad2(h)}:00
                   </option>
                 ))}
               </select>
             </label>
-            <div className="md:col-span-2 lg:col-span-4">
-              <button
-                type="submit"
-                className="rounded-lg border border-emerald-200/80 bg-emerald-50 px-4 py-2 text-sm font-semibold text-ink hover:bg-emerald-100 hover:bg-emerald-500"
+            <label className="text-xs text-ink/70">
+              時長
+              <select
+                value={durationHours}
+                onChange={(e) => setDurationHours(Number(e.target.value) as 1 | 2)}
+                className="mt-1 block rounded-lg border border-ink/15 bg-canvas px-2 py-1.5 text-sm"
               >
-                新增教練
-              </button>
-            </div>
-          </form>
-
-          <div className="mt-6 overflow-x-auto rounded-lg border border-ink/[0.08]">
-            <table className="min-w-full text-left text-sm text-ink/80">
-              <thead className="bg-surface shadow-sm ring-1 ring-ink/[0.04] text-xs uppercase tracking-wide text-ink/50">
-                <tr>
-                  <th className="px-3 py-2">姓名</th>
-                  <th className="px-3 py-2">電話</th>
-                  <th className="px-3 py-2">分店</th>
-                  <th className="px-3 py-2 whitespace-nowrap">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {coaches.map((coach) =>
-                  editingCoachId === coach.id ? (
-                    <tr key={coach.id} className="border-b border-ink/[0.08] bg-canvas/50">
-                      <td colSpan={4} className="px-3 py-4">
-                        <form
-                          className="grid gap-3 md:grid-cols-2 lg:grid-cols-4"
-                          onSubmit={(ev) => void onSaveCoachEdit(coach, ev)}
-                        >
-                          <label className="block text-xs text-ink/55">
-                            姓名
-                            <input name="edit_full_name" required defaultValue={coach.full_name} className={INPUT} />
-                          </label>
-                          <label className="block text-xs text-ink/55">
-                            電話
-                            <input name="edit_phone" required defaultValue={coach.phone} className={INPUT} />
-                          </label>
-                          <label className="block text-xs text-ink/55 md:col-span-2 lg:col-span-2">
-                            分店
-                            <select
-                              name="edit_branch_id"
-                              defaultValue={coach.branch_id == null ? "" : String(coach.branch_id)}
-                              className={`${SELECT_CTL} !mt-1 !max-w-full`}
-                            >
-                              <option value="">—</option>
-                              {branches.map((b) => (
-                                <option key={b.id} value={b.id}>
-                                  {b.name} ({b.code})
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <div className="flex flex-wrap gap-2 md:col-span-2 lg:col-span-4">
-                            <button
-                              type="submit"
-                              className="rounded-lg border border-emerald-200/80 bg-emerald-50 px-4 py-2 text-sm font-semibold text-ink hover:bg-emerald-100 hover:bg-emerald-500"
-                            >
-                              儲存
-                            </button>
-                            <button
-                              type="button"
-                              className="rounded-lg border border-white/[0.15] px-4 py-2 text-sm text-ink/70 hover:bg-canvas"
-                              onClick={() => setEditingCoachId(null)}
-                            >
-                              取消
-                            </button>
-                          </div>
-                        </form>
-                      </td>
-                    </tr>
-                  ) : (
-                    <tr key={coach.id} className="border-b border-white/[0.06] hover:bg-white/[0.03]">
-                      <td className="px-3 py-2 font-medium text-ink">{coach.full_name}</td>
-                      <td className="px-3 py-2 font-mono text-ink/70">{coach.phone}</td>
-                      <td className="px-3 py-2 text-ink/55">{branchName(coach.branch_id)}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">
-                        <button
-                          type="button"
-                          className="mr-2 rounded-md border border-violet-400/40 bg-violet-900/40 px-2 py-1 text-xs text-violet-200 hover:bg-violet-900/55"
-                          onClick={() => setEditingCoachId(coach.id)}
-                        >
-                          編輯
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded-md border border-slate-500/50 px-2 py-1 text-xs text-ink/70 hover:bg-canvas"
-                          onClick={() => void onDeleteCoach(coach, false)}
-                        >
-                          刪除
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                )}
-              </tbody>
-            </table>
-          </div>
-          {coaches.length > 0 && (
-            <p className="mt-3 text-xs text-ink/50">
-              進階：若該教練確定無任何課堂，需要永久從資料庫移除，可先喺資料庫或課堂管理確認後，再聯繫 ADMIN 或使用 API 嘅 hard delete。
-            </p>
-          )}
-          {coaches.length === 0 && <p className="mt-3 text-sm text-ink/50">目前未有教練，請新增或匯入 CSV。</p>}
-        </section>
-
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-xl font-bold text-ink">教練 · 課堂日程</h1>
-          <Link
-            href="/coach/calendar"
-            className="text-sm text-primary transition hover:text-ink hover:underline"
-          >
-            開啟月曆 + 簽到直播 →
-          </Link>
-        </div>
-        <div className="flex flex-wrap items-end gap-4 rounded-xl border border-ink/10 bg-surface p-4">
-          <label className="flex flex-col text-sm text-ink/80">
-            <span>教練</span>
-            <select
-              className={`${SELECT_CTL} mt-1`}
-              value={coachId === "" ? "" : String(coachId)}
-              onChange={(ev) => setCoachId(ev.target.value ? Number(ev.target.value) : "")}
+                {[1, 2].filter((d) => !slotWouldConflict(occupied, startHour, d)).map((d) => (
+                  <option key={d} value={d}>
+                    {d} 小時
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={scheduling || slotWouldConflict(occupied, startHour, durationHours)}
+              onClick={() => void confirmSchedule()}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
-              <option value="">— 選擇 —</option>
-              {coaches.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.full_name}
-                </option>
+              {scheduling ? "提交中…" : "確認排程"}
+            </button>
+          </div>
+        ) : null}
+        {dayCourses.filter((c) => !pendingCourseIds.has(c.id)).length > 0 ? (
+          <ul className="mt-4 space-y-1 border-t border-ink/10 pt-3 text-xs text-ink/65">
+            {dayCourses
+              .filter((c) => !pendingCourseIds.has(c.id))
+              .map((c) => (
+                <li key={c.id}>
+                  {new Date(c.scheduled_start).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                  {" — "}
+                  {c.title}
+                  {c.enrollments.map((e) => e.student_name).join("、")}
+                </li>
               ))}
-            </select>
-          </label>
-          <label className="flex flex-col text-sm text-ink/80">
-            <span>日期（預設今日）</span>
-            <input
-              type="date"
-              className={`${INPUT} !mt-1 !w-auto`}
-              value={day}
-              onChange={(e) => setDay(e.target.value)}
-            />
-          </label>
-        </div>
-        <p className="text-xs leading-relaxed text-ink/55">
-          <strong>每週上課日</strong>由後台{" "}
-          <Link href="/admin/course-set" className="font-medium text-primary underline underline-offset-2">
-            Course 套餐開課
-          </Link>{" "}
-          揀定星期按鈕（例：只揀「一」＝每週一上一堂）。堂數可設 1–120；例如學員共 40 堂就填 40，系統會排到第 40 個上課日，簽到頁至嗰日先會顯示課堂。
-        </p>
+          </ul>
+        ) : null}
+      </section>
+    </div>
+  );
 
-        {canAssignStaff && coachId !== "" && (
-          <section className="rounded-xl border border-dashed border-amber-200/80 bg-amber-50/40 p-4">
-            <h3 className="text-sm font-semibold text-ink">
-              同日其他課程 — 指派畀「{selectedCoach?.full_name ?? "此教練"}」
-            </h3>
-            <p className="mt-1 text-xs text-ink/55">
-              以下為所選日期有堂嘅全部課程系列中，尚未歸於此教練嘅項目；按「指派」將整個課程系列改由目前教練負責。
-            </p>
-            {assignableOthers.length === 0 ? (
-              <p className="mt-3 text-sm text-ink/60">目前沒有可指派嘅其他課程。</p>
-            ) : (
-              <ul className="mt-3 space-y-2">
-                {assignableOthers.map((c) => (
-                  <li
-                    key={c.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ink/10 bg-surface px-3 py-2 text-sm"
-                  >
-                    <span className="min-w-0 text-ink">
-                      <span className="font-medium">{c.title}</span>
-                      <span className="text-ink/60">
-                        {" "}
-                        · 現任教練：{c.coach_name} · {c.branch_name}
-                      </span>
-                    </span>
-                    <button
-                      type="button"
-                      className="shrink-0 rounded-lg border border-primary/50 bg-primary/85 px-3 py-1.5 text-xs font-semibold text-ink hover:bg-primary"
-                      onClick={() => void assignCourseToSelectedCoach(c.id)}
+  const paymentsPanel = (
+    <div className="overflow-x-auto pb-24">
+      <table className="min-w-full text-left text-sm">
+        <thead>
+          <tr className="border-b border-ink/10 text-xs text-ink/55">
+            <th className="px-2 py-2 font-medium">學員</th>
+            <th className="px-2 py-2 font-medium">課程</th>
+            <th className="px-2 py-2 font-medium">付款</th>
+            <th className="px-2 py-2 font-medium">分期</th>
+            <th className="px-2 py-2 font-medium">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          {payments.length === 0 ? (
+            <tr>
+              <td colSpan={5} className="px-2 py-6 text-center text-ink/50">
+                暫無學員收款資料。
+              </td>
+            </tr>
+          ) : (
+            payments.map((row) => {
+              const needsRemind = row.payment_status === "Pending" || row.payment_status === "Overdue";
+              return (
+                <tr key={`${row.student_id}-${row.course_id}`} className="border-b border-ink/[0.06]">
+                  <td className="px-2 py-2.5">
+                    <div className="font-medium text-ink">{row.student_name}</div>
+                    <div className="text-xs text-ink/50">{row.student_phone}</div>
+                  </td>
+                  <td className="px-2 py-2.5 text-ink/80">{row.course_title}</td>
+                  <td className="px-2 py-2.5">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                        row.payment_status === "Paid"
+                          ? "bg-emerald-100 text-emerald-800"
+                          : row.payment_status === "Overdue"
+                            ? "bg-rose-100 text-rose-800"
+                            : "bg-amber-100 text-amber-900"
+                      }`}
                     >
-                      指派
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        )}
-
-        <h2 className="text-base font-semibold text-ink">此教練於選定日期嘅課程</h2>
-        <div className="space-y-4">
-          {courses.length === 0 && (
-            <p className="text-sm text-ink/70">當日未有課堂，或請先喺後台建立課堂。</p>
+                      {row.payment_status}
+                    </span>
+                  </td>
+                  <td className="px-2 py-2.5 text-xs text-ink/70">{row.installment_status}</td>
+                  <td className="px-2 py-2.5">
+                    {needsRemind ? (
+                      <a
+                        href={remindPayWaLink(row.student_phone, row.student_name, row.course_title)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block rounded-lg border border-emerald-600/40 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-900 hover:bg-emerald-100"
+                      >
+                        Remind to Pay
+                      </a>
+                    ) : (
+                      <span className="text-xs text-ink/40">—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })
           )}
-          {courses.map((c) => (
-            <article key={c.id} className="rounded-lg border border-ink/15 bg-surface p-4 shadow-sm">
-              <h2 className="font-semibold text-ink">{c.title}</h2>
-              <p className="text-sm text-ink/70">
-                {c.branch_name} · {c.branch_address}
-              </p>
-              <p className="text-xs text-ink/55">
-                {new Date(c.scheduled_start).toLocaleString()} → {new Date(c.scheduled_end).toLocaleString()}
-              </p>
-              <ul className="mt-2 space-y-1 text-sm text-ink/80">
-                {c.enrollments.map((e) => (
-                  <li key={e.student_id}>
-                    {e.student_name}（{e.student_phone}）· 課堂 PIN{" "}
-                    <span className="font-mono">{e.checkin_pin}</span>
-                  </li>
-                ))}
-              </ul>
-              <form
-                className="mt-3 grid gap-2 border-t border-ink/15 pt-3 md:grid-cols-2"
-                onSubmit={(ev) => reschedule(ev, c.id)}
-              >
-                <input
-                  type="datetime-local"
-                  name="scheduled_start"
-                  defaultValue={toLocalInput(c.scheduled_start)}
-                  required
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const signaturePanel = (
+    <div className="space-y-4 pb-24">
+      <section className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-ink">學員簽名更新</h2>
+        <p className="mt-1 text-xs text-ink/55">測試：為 Ming 產生新手寫簽名並寫入資料庫。</p>
+        {mingStudent ? (
+          <div className="mt-3 space-y-3">
+            <p className="text-sm text-ink">
+              目標學員：<strong>{mingStudent.student_name}</strong>（#{mingStudent.student_id}）
+            </p>
+            <button
+              type="button"
+              disabled={sigBusy}
+              onClick={() => void updateMingSignature()}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {sigBusy ? "更新中…" : "更新 Ming 簽名（隨機筆跡）"}
+            </button>
+            {(sigPreview || mingStudent.signature_image_url) && (
+              <div className="rounded-lg border border-ink/10 bg-white p-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={sigPreview ?? apiAssetUrl(mingStudent.signature_image_url) ?? ""}
+                  alt="簽名預覽"
+                  className="max-h-36 w-full object-contain"
                 />
-                <input
-                  type="datetime-local"
-                  name="scheduled_end"
-                  defaultValue={toLocalInput(c.scheduled_end)}
-                  required
-                />
-                <div className="md:col-span-2">
-                  <button
-                    type="submit"
-                    className="rounded-lg border border-ink/10 bg-neutral-700 px-3 py-2 text-sm font-medium text-ink hover:bg-neutral-600"
-                  >
-                    更改日期時間
-                  </button>
-                </div>
-              </form>
-            </article>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-ink/50">找不到名稱含 Ming 的指派學員。</p>
+        )}
+      </section>
+      <p className="text-center text-[11px] text-ink/45">
+        <Link href="/coach/calendar" className="text-primary underline-offset-2 hover:underline">
+          教練日程 · 簽到
+        </Link>
+      </p>
+    </div>
+  );
+
+  return (
+    <BackendShell title={`教練 · ${coach.full_name}`} layout="coach">
+      <div className="mx-auto max-w-lg px-3 py-4 md:max-w-2xl md:px-4">
+        {status ? (
+          <p className="mb-3 rounded-lg border border-ink/10 bg-surface px-3 py-2 text-xs text-ink/70">{status}</p>
+        ) : null}
+
+        {tab === "schedule" ? schedulePanel : null}
+        {tab === "payments" ? paymentsPanel : null}
+        {tab === "signature" ? signaturePanel : null}
+      </div>
+
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-[100] border-t border-ink/15 bg-surface/98 pb-[env(safe-area-inset-bottom,0)] shadow-[0_-6px_24px_rgba(45,36,34,0.08)] backdrop-blur-md md:mx-auto md:max-w-lg"
+        aria-label="教練主選單"
+      >
+        <div className="mx-auto grid max-w-lg grid-cols-3 gap-1 p-2">
+          {(
+            [
+              { id: "schedule" as Tab, label: "排程", icon: "▣" },
+              { id: "payments" as Tab, label: "收款", icon: "◎" },
+              { id: "signature" as Tab, label: "簽名", icon: "✎" }
+            ] as const
+          ).map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              aria-current={tab === item.id ? "page" : undefined}
+              onClick={() => setTab(item.id)}
+              className={`flex flex-col items-center justify-center gap-0.5 rounded-xl py-2 text-[11px] font-semibold sm:text-[12px] ${
+                tab === item.id
+                  ? "!border-transparent !bg-zinc-800 !text-white shadow-md"
+                  : "!border-transparent !bg-transparent !text-zinc-700 hover:!bg-black/[0.04]"
+              }`}
+            >
+              <span className="text-[16px] leading-none" aria-hidden>
+                {item.icon}
+              </span>
+              {item.label}
+            </button>
           ))}
         </div>
-
-        {blockUi?.mode === "loading" && (
-          <div
-            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/45 p-4"
-            role="alertdialog"
-            aria-busy="true"
-            aria-live="polite"
-            aria-labelledby="coach-block-loading-title"
-          >
-            <div className="w-full max-w-sm rounded-xl border border-ink/10 bg-surface p-6 shadow-lg ring-1 ring-ink/[0.06]">
-              <p id="coach-block-loading-title" className="text-center text-lg font-semibold text-ink">
-                {blockUi.title}
-              </p>
-              {blockUi.detail ? (
-                <p className="mt-2 text-center text-sm text-ink/60">{blockUi.detail}</p>
-              ) : null}
-            </div>
-          </div>
-        )}
-
-        {blockUi?.mode === "success" && (
-          <div
-            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/45 p-4"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="coach-block-success-title"
-          >
-            <div className="w-full max-w-md rounded-xl border border-ink/10 bg-surface p-6 shadow-lg ring-1 ring-ink/[0.06]">
-              <p id="coach-block-success-title" className="text-center text-lg font-semibold text-emerald-900">
-                {blockUi.title}
-              </p>
-              {blockUi.detail ? (
-                <p className="mt-2 text-center text-sm text-ink/70">{blockUi.detail}</p>
-              ) : null}
-              {blockUi.enrollments && blockUi.enrollments.length > 0 ? (
-                <ul className="mt-4 max-h-64 space-y-3 overflow-y-auto rounded-lg border border-ink/10 bg-canvas p-3 text-left text-sm">
-                  {blockUi.enrollments.map((e) => (
-                    <li key={`${e.student_id}-${e.checkin_pin}`} className="border-b border-ink/[0.06] pb-3 last:border-0 last:pb-0">
-                      <div className="font-medium text-ink">{e.student_name}</div>
-                      <div className="mt-0.5 text-xs text-ink/65">電話 {e.student_phone}</div>
-                      <div className="mt-1 font-mono text-sm font-semibold tracking-wide text-ink">
-                        課堂 PIN：{e.checkin_pin}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              <button
-                type="button"
-                className="mt-5 w-full rounded-lg border border-ink/15 bg-primary/90 px-4 py-2.5 text-sm font-semibold text-ink hover:bg-primary"
-                onClick={() => setBlockUi(null)}
-              >
-                確定
-              </button>
-            </div>
-          </div>
-        )}
-      </main>
+      </nav>
     </BackendShell>
   );
 }

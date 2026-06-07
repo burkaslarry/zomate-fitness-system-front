@@ -542,6 +542,35 @@ export const api = {
     }
     return request(`/api/coach/courses?${sp.toString()}`);
   },
+  /** [F003][S001] Logged-in coach profile (COACH role only). */
+  coachMe: () => request("/api/coach/me"),
+  coachPendingStudents: (coachId?: number) => {
+    const qs = coachId != null ? `?coach_id=${coachId}` : "";
+    return request(`/api/coach/pending-students${qs}`);
+  },
+  coachStudentPayments: (coachId?: number) => {
+    const qs = coachId != null ? `?coach_id=${coachId}` : "";
+    return request(`/api/coach/student-payments${qs}`);
+  },
+  confirmCoachSchedule: (
+    enrollmentId: number,
+    payload: {
+      enrollment_id: number;
+      day: string;
+      start_hour: number;
+      duration_hours: number;
+      coach_id?: number;
+    }
+  ) =>
+    request(`/api/coach/enrollments/${enrollmentId}/confirm-schedule`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+  coachUpdateSignature: (studentId: number, digitalSignature: string) =>
+    request(`/api/coach/students/${studentId}/signature`, {
+      method: "PATCH",
+      body: JSON.stringify({ digital_signature: digitalSignature })
+    }),
   rescheduleCourse: (courseId: number, coachId: number, payload: Record<string, string>) =>
     request(`/api/coach/courses/${courseId}?coach_id=${coachId}`, {
       method: "PATCH",
