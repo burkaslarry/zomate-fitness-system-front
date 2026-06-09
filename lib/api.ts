@@ -456,6 +456,8 @@ export const api = {
     phone: string;
     branch_id: number | null;
     hire_date?: string | null;
+    login_username?: string | null;
+    password?: string | null;
   }) => request("/api/admin/coaches", { method: "POST", body: JSON.stringify(payload) }),
   updateCoach: (
     coachId: number,
@@ -466,6 +468,8 @@ export const api = {
       specialty?: string | null;
       active?: boolean;
       hire_date?: string | null;
+      login_username?: string | null;
+      password?: string | null;
     }
   ) =>
     request(`/api/admin/coaches/${coachId}`, {

@@ -87,6 +87,7 @@ export type CoachDto = {
   branch_id: number | null;
   branch_name?: string | null;
   hire_date?: string | null;
+  login_username?: string | null;
   enrolled_students?: CoachEnrolledStudentDto[];
 };
 

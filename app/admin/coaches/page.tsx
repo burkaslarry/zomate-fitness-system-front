@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * [F002][S001]
- * Feature: Course Entry & Automation
- * Step: Admin coaches grid + enrolled students (courses under this coach)
- * Logic: GET /api/admin/coaches returns enrolled_students; table column lists names/phones.
+ * [F003][S002]
+ * Feature: Coach authentication
+ * Step: Admin coaches grid + login username/password on create and edit
+ * Logic: POST/PATCH /api/admin/coaches with login_username and password fields.
  */
 
 import { FormEvent, useEffect, useState } from "react";
@@ -21,12 +21,23 @@ function fmtHireDate(iso: string | null | undefined): string {
   return d.toLocaleDateString("zh-HK", { dateStyle: "medium" });
 }
 
+type EditForm = {
+  full_name: string;
+  phone: string;
+  specialty: string;
+  hire_date: string;
+  login_username: string;
+  password: string;
+};
+
 export default function AdminCoachesPage() {
   const [rows, setRows] = useState<CoachDto[]>([]);
   const [status, setStatus] = useState("");
   const [searchQ, setSearchQ] = useState("");
   const [searchBy, setSearchBy] = useState<"name" | "phone">("name");
   const [formKey, setFormKey] = useState(0);
+  const [editing, setEditing] = useState<CoachDto | null>(null);
+  const [editForm, setEditForm] = useState<EditForm | null>(null);
 
   async function load() {
     const q = searchQ.trim();
@@ -50,17 +61,26 @@ export default function AdminCoachesPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setStatus("");
     const form = new FormData(event.currentTarget);
     const hireRaw = String(form.get("hire_date") ?? "").trim();
-    await api.createCoach({
-      full_name: String(form.get("full_name") ?? ""),
-      phone: String(form.get("phone") ?? ""),
-      branch_id: Number(form.get("branch_id")) || null,
-      ...(hireRaw ? { hire_date: hireRaw } : {})
-    });
-    setFormKey((k) => k + 1);
-    setStatus("教練已建立。");
-    await load();
+    const loginUsername = String(form.get("login_username") ?? "").trim();
+    const password = String(form.get("password") ?? "").trim();
+    try {
+      await api.createCoach({
+        full_name: String(form.get("full_name") ?? ""),
+        phone: String(form.get("phone") ?? ""),
+        branch_id: Number(form.get("branch_id")) || null,
+        ...(hireRaw ? { hire_date: hireRaw } : {}),
+        ...(loginUsername ? { login_username: loginUsername } : {}),
+        ...(password ? { password } : {})
+      });
+      setFormKey((k) => k + 1);
+      setStatus("教練已建立。");
+      await load();
+    } catch (err) {
+      setStatus(String(err));
+    }
   }
 
   async function deactivate(id: number) {
@@ -68,31 +88,42 @@ export default function AdminCoachesPage() {
     await load();
   }
 
-  async function edit(row: CoachDto) {
-    const fullName = window.prompt("教練姓名", row.full_name);
-    if (!fullName) return;
-    const phone = window.prompt("電話", row.phone);
-    if (!phone) return;
-    const specialty = window.prompt("Specialty", row.specialty ?? "") ?? "";
-    const hdDefault = row.hire_date?.slice(0, 10) ?? "";
-    const hirePrompt = window.prompt("入職日期 (YYYY-MM-DD，留空則清除)", hdDefault);
-    if (hirePrompt === null) return;
-    const hireTrim = hirePrompt.trim();
-    let hire_date: string | null;
-    if (!hireTrim) hire_date = null;
-    else if (!/^\d{4}-\d{2}-\d{2}$/.test(hireTrim)) {
-      setStatus("入職日期格式須為 YYYY-MM-DD");
-      return;
-    } else hire_date = hireTrim;
-
-    await api.updateCoach(row.id, {
-      full_name: fullName,
-      phone,
-      specialty: specialty || null,
-      hire_date
+  function startEdit(row: CoachDto) {
+    setEditing(row);
+    setEditForm({
+      full_name: row.full_name,
+      phone: row.phone,
+      specialty: row.specialty ?? "",
+      hire_date: row.hire_date?.slice(0, 10) ?? "",
+      login_username: row.login_username ?? "",
+      password: ""
     });
     setStatus("");
-    await load();
+  }
+
+  async function saveEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editing || !editForm) return;
+    setStatus("");
+    try {
+      const payload: Parameters<typeof api.updateCoach>[1] = {
+        full_name: editForm.full_name.trim(),
+        phone: editForm.phone.trim(),
+        specialty: editForm.specialty.trim() || null,
+        hire_date: editForm.hire_date.trim() || null,
+        login_username: editForm.login_username.trim() || undefined
+      };
+      if (editForm.password.trim()) {
+        payload.password = editForm.password.trim();
+      }
+      await api.updateCoach(editing.id, payload);
+      setEditing(null);
+      setEditForm(null);
+      setStatus("教練資料已更新。");
+      await load();
+    } catch (err) {
+      setStatus(String(err));
+    }
   }
 
   const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -135,7 +166,7 @@ export default function AdminCoachesPage() {
         <form
           key={formKey}
           onSubmit={submit}
-          className="grid gap-3 rounded-xl border border-ink/10 bg-surface p-5 shadow-sm ring-1 ring-ink/[0.04] md:grid-cols-2 lg:grid-cols-4"
+          className="grid gap-3 rounded-xl border border-ink/10 bg-surface p-5 shadow-sm ring-1 ring-ink/[0.04] md:grid-cols-2 lg:grid-cols-3"
         >
           <input name="full_name" required placeholder="教練姓名" className="rounded-lg border border-ink/10 px-3 py-2 text-sm" />
           <input name="phone" required placeholder="電話" className="rounded-lg border border-ink/10 px-3 py-2 text-sm" />
@@ -144,26 +175,110 @@ export default function AdminCoachesPage() {
             <span className="text-ink/70">入職日期</span>
             <input type="date" name="hire_date" defaultValue={todayIso()} className="w-full rounded-lg border border-ink/10 px-3 py-2 text-sm" />
           </label>
-          <button className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-primary lg:col-span-4 lg:justify-self-start">
+          <input name="login_username" placeholder="登入帳號（選填）" className="rounded-lg border border-ink/10 px-3 py-2 text-sm" />
+          <input
+            name="password"
+            type="password"
+            autoComplete="new-password"
+            placeholder="登入密碼（選填，≥6 字）"
+            className="rounded-lg border border-ink/10 px-3 py-2 text-sm"
+          />
+          <p className="text-xs text-ink/55 lg:col-span-3">
+            填寫帳號＋密碼會建立 COACH 登入；帳號可留空（以姓名拼音自動產生）。教練登入後使用 /coach。
+          </p>
+          <button className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-primary lg:col-span-3 lg:justify-self-start">
             新增
           </button>
         </form>
+
+        {editing && editForm && (
+          <form
+            onSubmit={saveEdit}
+            className="grid gap-3 rounded-xl border border-primary/30 bg-primary/5 p-5 shadow-sm md:grid-cols-2 lg:grid-cols-3"
+          >
+            <h3 className="text-lg font-semibold text-ink lg:col-span-3">編輯教練 · {editing.full_name}</h3>
+            <input
+              required
+              value={editForm.full_name}
+              onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
+              placeholder="教練姓名"
+              className="rounded-lg border border-ink/10 px-3 py-2 text-sm"
+            />
+            <input
+              required
+              value={editForm.phone}
+              onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+              placeholder="電話"
+              className="rounded-lg border border-ink/10 px-3 py-2 text-sm"
+            />
+            <input
+              value={editForm.specialty}
+              onChange={(e) => setEditForm({ ...editForm, specialty: e.target.value })}
+              placeholder="Specialty"
+              className="rounded-lg border border-ink/10 px-3 py-2 text-sm"
+            />
+            <label className="block space-y-1 text-sm">
+              <span className="text-ink/70">入職日期</span>
+              <input
+                type="date"
+                value={editForm.hire_date}
+                onChange={(e) => setEditForm({ ...editForm, hire_date: e.target.value })}
+                className="w-full rounded-lg border border-ink/10 px-3 py-2 text-sm"
+              />
+            </label>
+            <input
+              value={editForm.login_username}
+              onChange={(e) => setEditForm({ ...editForm, login_username: e.target.value })}
+              placeholder="登入帳號"
+              className="rounded-lg border border-ink/10 px-3 py-2 text-sm"
+            />
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={editForm.password}
+              onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+              placeholder="新密碼（留空不變）"
+              className="rounded-lg border border-ink/10 px-3 py-2 text-sm"
+            />
+            <div className="flex gap-2 lg:col-span-3">
+              <button
+                type="submit"
+                className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-primary"
+              >
+                儲存
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(null);
+                  setEditForm(null);
+                }}
+                className="rounded-lg border border-ink/15 bg-canvas px-4 py-2 text-sm text-ink"
+              >
+                取消
+              </button>
+            </div>
+          </form>
+        )}
+
         {status && <p className="text-sm text-emerald-800">{status}</p>}
         <div className="max-h-[min(70vh,720px)] overflow-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
           <table className="min-w-full border-collapse text-left text-sm table-fixed">
             <colgroup>
-              <col className="w-[140px]" />
               <col className="w-[120px]" />
+              <col className="w-[110px]" />
+              <col className="w-[100px]" />
               <col className="w-[100px]" />
               <col className="w-[100px]" />
               <col className="w-[72px]" />
-              <col className="min-w-[200px]" />
+              <col className="min-w-[180px]" />
               <col className="w-[140px]" />
             </colgroup>
             <thead className="sticky top-0 z-10 border-b border-ink/10 bg-surface text-ink/65 shadow-[0_1px_0_rgba(0,0,0,0.06)]">
               <tr>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">姓名</th>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">電話</th>
+                <th className="whitespace-nowrap px-4 py-3 font-medium">登入帳號</th>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">分店</th>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">入職日期</th>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">狀態</th>
@@ -176,6 +291,7 @@ export default function AdminCoachesPage() {
                 <tr key={row.id} className={`border-b border-ink/[0.06] text-ink/85 ${i % 2 === 1 ? "bg-canvas/40" : ""}`}>
                   <td className="px-4 py-3 font-medium text-ink">{row.full_name}</td>
                   <td className="whitespace-nowrap px-4 py-3">{row.phone}</td>
+                  <td className="px-4 py-3 text-xs">{row.login_username ?? "—"}</td>
                   <td className="px-4 py-3">{row.branch_name ?? "—"}</td>
                   <td className="whitespace-nowrap px-4 py-3">{fmtHireDate(row.hire_date)}</td>
                   <td className="px-4 py-3 align-top">
@@ -188,9 +304,7 @@ export default function AdminCoachesPage() {
                   <td className="px-4 py-3 align-top text-xs leading-relaxed text-ink/80">
                     {row.enrolled_students && row.enrolled_students.length > 0 ? (
                       <div className="space-y-1">
-                        <div className="text-[11px] font-medium text-ink/50">
-                          共 {row.enrolled_students.length} 位
-                        </div>
+                        <div className="text-[11px] font-medium text-ink/50">共 {row.enrolled_students.length} 位</div>
                         <ul className="space-y-1">
                           {row.enrolled_students.map((s) => (
                             <li key={s.id}>
@@ -208,7 +322,7 @@ export default function AdminCoachesPage() {
                     <div className="flex justify-end gap-2">
                       <button
                         type="button"
-                        onClick={() => void edit(row)}
+                        onClick={() => startEdit(row)}
                         className="rounded-md border border-ink/15 bg-canvas px-3 py-1 text-xs text-ink hover:border-primary/40"
                       >
                         Edit
