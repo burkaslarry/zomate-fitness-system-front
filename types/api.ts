@@ -89,6 +89,12 @@ export type CoachDto = {
   hire_date?: string | null;
   login_username?: string | null;
   enrolled_students?: CoachEnrolledStudentDto[];
+  skill_category_ids?: number[];
+};
+
+export type CoachSkillsDto = {
+  coach_id: number;
+  course_category_ids: number[];
 };
 
 export type TrialClassKindDto = {

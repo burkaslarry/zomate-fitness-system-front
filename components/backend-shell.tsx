@@ -108,6 +108,15 @@ export default function BackendShell({
         if (!cancelled) setVerifiedSession(s);
         return;
       } catch {
+        /** [F006][S002] Silent session token healing — one background retry before logout. */
+        await new Promise((resolve) => window.setTimeout(resolve, 450));
+        try {
+          await api.me();
+          if (!cancelled) setVerifiedSession(s);
+          return;
+        } catch {
+          /* fall through to session replacement / logout */
+        }
         const replacement = await waitForSessionReplacement(s.token);
         if (replacement) {
           try {
@@ -133,6 +142,29 @@ export default function BackendShell({
       cancelled = true;
     };
   }, [router]);
+
+  /** [F006][S002] Mid-session stale-auth — silent one-shot heal on panel routes. */
+  useEffect(() => {
+    let cancelled = false;
+    const onStaleAuth = () => {
+      const s = getAuthSession();
+      if (!s || cancelled) return;
+      void (async () => {
+        await new Promise((resolve) => window.setTimeout(resolve, 300));
+        try {
+          await api.me();
+          if (!cancelled) setVerifiedSession(s);
+        } catch {
+          /* BackendShell mount path handles hard logout */
+        }
+      })();
+    };
+    window.addEventListener("zomate_stale_auth", onStaleAuth);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("zomate_stale_auth", onStaleAuth);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

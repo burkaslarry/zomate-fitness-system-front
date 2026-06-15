@@ -10,7 +10,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import BackendShell from "../../../components/backend-shell";
 import { api } from "../../../lib/api";
-import type { CoachDto } from "../../../types/api";
+import type { CoachDto, CourseCategoryDto } from "../../../types/api";
 import SelectAsync from "../../../components/forms/select-async";
 
 function fmtHireDate(iso: string | null | undefined): string {
@@ -38,6 +38,10 @@ export default function AdminCoachesPage() {
   const [formKey, setFormKey] = useState(0);
   const [editing, setEditing] = useState<CoachDto | null>(null);
   const [editForm, setEditForm] = useState<EditForm | null>(null);
+  const [skillsCoach, setSkillsCoach] = useState<CoachDto | null>(null);
+  const [allCategories, setAllCategories] = useState<CourseCategoryDto[]>([]);
+  const [selectedSkillIds, setSelectedSkillIds] = useState<Set<number>>(new Set());
+  const [skillsBusy, setSkillsBusy] = useState(false);
 
   async function load() {
     const q = searchQ.trim();
@@ -86,6 +90,52 @@ export default function AdminCoachesPage() {
   async function deactivate(id: number) {
     await api.updateCoach(id, { active: false });
     await load();
+  }
+
+  async function openSkillsModal(row: CoachDto) {
+    setSkillsCoach(row);
+    setSkillsBusy(true);
+    setStatus("");
+    try {
+      const [catsRaw, skillsRaw] = await Promise.all([
+        api.courseCategories() as Promise<CourseCategoryDto[]>,
+        api.getCoachSkills(row.id) as Promise<{ course_category_ids?: number[] }>
+      ]);
+      const cats = Array.isArray(catsRaw) ? catsRaw.filter((c) => c.is_active !== false && c.is_deleted !== true) : [];
+      setAllCategories(cats);
+      const ids = Array.isArray(skillsRaw?.course_category_ids) ? skillsRaw.course_category_ids : row.skill_category_ids ?? [];
+      setSelectedSkillIds(new Set(ids));
+    } catch (err) {
+      setStatus(String(err));
+      setSkillsCoach(null);
+    } finally {
+      setSkillsBusy(false);
+    }
+  }
+
+  async function saveSkills() {
+    if (!skillsCoach) return;
+    setSkillsBusy(true);
+    setStatus("");
+    try {
+      await api.setCoachSkills(skillsCoach.id, Array.from(selectedSkillIds));
+      setStatus(`已更新 ${skillsCoach.full_name} 的課程權限。`);
+      setSkillsCoach(null);
+      await load();
+    } catch (err) {
+      setStatus(String(err));
+    } finally {
+      setSkillsBusy(false);
+    }
+  }
+
+  function toggleSkill(categoryId: number) {
+    setSelectedSkillIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(categoryId)) next.delete(categoryId);
+      else next.add(categoryId);
+      return next;
+    });
   }
 
   function startEdit(row: CoachDto) {
@@ -322,6 +372,13 @@ export default function AdminCoachesPage() {
                     <div className="flex justify-end gap-2">
                       <button
                         type="button"
+                        onClick={() => void openSkillsModal(row)}
+                        className="rounded-md border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-ink hover:bg-primary/20"
+                      >
+                        課程權限
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => startEdit(row)}
                         className="rounded-md border border-ink/15 bg-canvas px-3 py-1 text-xs text-ink hover:border-primary/40"
                       >
@@ -341,6 +398,59 @@ export default function AdminCoachesPage() {
             </tbody>
           </table>
         </div>
+
+        {skillsCoach ? (
+          <div
+            className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="coach-skills-title"
+          >
+            <div className="w-full max-w-lg space-y-4 rounded-2xl border border-ink/10 bg-surface p-5 shadow-xl">
+              <h3 id="coach-skills-title" className="text-lg font-semibold text-ink">
+                教練課程權限分配 · {skillsCoach.full_name}
+              </h3>
+              <p className="text-xs text-ink/60">勾選此教練可教授的課程種類（新會員登記時會依此過濾）。</p>
+              {skillsBusy && allCategories.length === 0 ? (
+                <p className="text-sm text-ink/50">載入中…</p>
+              ) : (
+                <div className="grid max-h-64 gap-2 overflow-y-auto rounded-lg border border-ink/10 bg-canvas p-3 sm:grid-cols-2">
+                  {allCategories.map((cat) => (
+                    <label
+                      key={cat.id}
+                      className="flex cursor-pointer items-center gap-2 rounded-md border border-ink/10 bg-surface px-2 py-2 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-primary"
+                        checked={selectedSkillIds.has(cat.id)}
+                        onChange={() => toggleSkill(cat.id)}
+                      />
+                      <span>{cat.name}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={skillsBusy}
+                  onClick={() => void saveSkills()}
+                  className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-ink disabled:opacity-50"
+                >
+                  儲存
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSkillsCoach(null)}
+                  className="rounded-lg border border-ink/15 bg-canvas px-4 py-2 text-sm text-ink"
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </BackendShell>
   );

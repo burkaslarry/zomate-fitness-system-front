@@ -44,12 +44,19 @@ export function getResolvedApiBaseUrl(): string {
   return API_BASE_URL;
 }
 
-/** Build absolute URL for FastAPI-served uploads (``/uploads/...``). */
+/** Build absolute URL for uploads — same-origin `/api/uploads/...` proxy in production & Docker. */
 export function apiAssetUrl(relativeOrAbsolute: string | null | undefined): string | undefined {
   if (!relativeOrAbsolute) return undefined;
   if (relativeOrAbsolute.startsWith("data:")) return relativeOrAbsolute;
   if (/^https?:\/\//i.test(relativeOrAbsolute)) return relativeOrAbsolute;
-  const path = relativeOrAbsolute.startsWith("/") ? relativeOrAbsolute : `/${relativeOrAbsolute}`;
+  let path = relativeOrAbsolute.startsWith("/") ? relativeOrAbsolute : `/${relativeOrAbsolute}`;
+  if (path.startsWith("/uploads/")) {
+    return `/api${path}`;
+  }
+  if (!path.startsWith("/api/uploads/") && !path.includes("://")) {
+    path = `/uploads/${path.replace(/^\/+/, "")}`;
+    return `/api${path}`;
+  }
   const base = API_BASE_URL;
   if (!base) return path;
   return `${base}${path}`;
@@ -324,7 +331,10 @@ export const api = {
   memberLookupByPhone: (phone: string) =>
     request(`/api/members/lookup-phone?phone=${encodeURIComponent(phone)}`),
   /** [F011][S001] 報 Course / 試堂 — 只載入啟用中的 course category。 */
-  publicCourseCategories: () => request("/api/course-categories"),
+  publicCourseCategories: (coachId?: number) => {
+    const qs = coachId != null ? `?coach_id=${encodeURIComponent(String(coachId))}` : "";
+    return request(`/api/course-categories${qs}`);
+  },
   uploadMemberPhoto: (hkid: string, file: File) => {
     const form = new FormData();
     form.append("file", file);
@@ -546,6 +556,27 @@ export const api = {
     }
     return request(`/api/coach/courses?${sp.toString()}`);
   },
+  /** [F003][S002] Coach-isolated calendar refresh alias. */
+  coachSchedule: (
+    coachId: number,
+    query?: string | { day?: string; fromDate?: string; toDate?: string }
+  ) => {
+    const sp = new URLSearchParams({ coach_id: String(coachId) });
+    if (typeof query === "string") {
+      sp.set("day", query);
+    } else if (query && typeof query === "object") {
+      if (query.day) sp.set("day", query.day);
+      if (query.fromDate) sp.set("from_date", query.fromDate);
+      if (query.toDate) sp.set("to_date", query.toDate);
+    }
+    return request(`/api/coach/schedule?${sp.toString()}`);
+  },
+  getCoachSkills: (coachId: number) => request(`/api/admin/coaches/${coachId}/skills`),
+  setCoachSkills: (coachId: number, courseCategoryIds: number[]) =>
+    request(`/api/admin/coaches/${coachId}/skills`, {
+      method: "PUT",
+      body: JSON.stringify({ course_category_ids: courseCategoryIds })
+    }),
   /** [F003][S001] Logged-in coach profile (COACH role only). */
   coachMe: () => request("/api/coach/me"),
   coachPendingStudents: (coachId?: number) => {

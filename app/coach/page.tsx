@@ -153,11 +153,20 @@ export default function CoachDashboardPage() {
     [payments]
   );
 
+  const reloadCoachSchedule = useCallback(async (coachId: number) => {
+    const [pList, cList] = await Promise.all([
+      api.coachPendingStudents(coachId) as Promise<PendingRow[]>,
+      api.coachSchedule(coachId, selectedDay) as Promise<CourseRow[]>
+    ]);
+    setPending(pList ?? []);
+    setDayCourses(cList ?? []);
+  }, [selectedDay]);
+
   const reloadAll = useCallback(async (coachId: number) => {
     const [pList, payList, cList] = await Promise.all([
       api.coachPendingStudents(coachId) as Promise<PendingRow[]>,
       api.coachStudentPayments(coachId) as Promise<PaymentRow[]>,
-      api.coachCourses(coachId, selectedDay) as Promise<CourseRow[]>
+      api.coachSchedule(coachId, selectedDay) as Promise<CourseRow[]>
     ]);
     setPending(pList ?? []);
     setPayments(payList ?? []);
@@ -187,7 +196,7 @@ export default function CoachDashboardPage() {
   useEffect(() => {
     if (!coach) return;
     void api
-      .coachCourses(coach.id, selectedDay)
+      .coachSchedule(coach.id, selectedDay)
       .then((c) => setDayCourses((c ?? []) as CourseRow[]))
       .catch((e) => setStatus(String(e)));
   }, [coach, selectedDay]);
@@ -215,7 +224,11 @@ export default function CoachDashboardPage() {
         coach_id: coach.id
       });
       setSelectedPending(null);
-      await reloadAll(coach.id);
+      console.log("[Demo Track] Schedule Confirmed → Local Coach Calendar Hydrating", {
+        coach_id: coach.id,
+        day: selectedDay
+      });
+      await reloadCoachSchedule(coach.id);
       setStatus("已排程。");
     } catch (e) {
       alertApiError(e);
@@ -269,7 +282,11 @@ export default function CoachDashboardPage() {
     <div className="space-y-4 pb-24">
       <section className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
         <h2 className="text-sm font-semibold text-ink">待排程學員</h2>
-        <p className="mt-1 text-xs text-ink/55">Admin 已指派給你、尚未確認上課時間的學員。</p>
+        <p className="mt-1 text-xs text-ink/55">
+          {pending.length > 0
+            ? `你有 ${pending.length} 位學生未約第一堂時間`
+            : "Admin 已指派給你、尚未確認上課時間的學員。"}
+        </p>
         {pending.length === 0 ? (
           <p className="mt-3 text-sm text-ink/50">目前沒有待排程學員。</p>
         ) : (

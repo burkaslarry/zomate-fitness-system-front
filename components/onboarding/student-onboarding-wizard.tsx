@@ -82,6 +82,8 @@ const defaults: Partial<StudentRegistrationPayload> = {
   cooling_off_acknowledged: false,
   disclaimer_accepted: false,
   digital_signature: "",
+  coach_id: 0,
+  course_category_id: 0,
   renewal_notes: "",
   medical_clearance_file_name: ""
 };
@@ -102,6 +104,9 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   const signatureRef = useRef<SignatureCanvas | null>(null);
   const router = useRouter();
   const [parqUploadError, setParqUploadError] = useState("");
+  const [coaches, setCoaches] = useState<{ id: number; full_name: string }[]>([]);
+  const [coachCategories, setCoachCategories] = useState<{ id: number; name: string }[]>([]);
+  const [coachCategoriesLoading, setCoachCategoriesLoading] = useState(false);
 
   /**
    * [F001][S001]
@@ -114,6 +119,8 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     defaultValues: { ...defaults, full_name: quickName ?? "" } as StudentRegistrationPayload,
     mode: "onBlur"
   });
+
+  const selectedCoachId = form.watch("coach_id");
 
   /**
    * [F001][S002]
@@ -161,6 +168,42 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     const t = window.setTimeout(() => setDupToastMsg(null), 6500);
     return () => window.clearTimeout(t);
   }, [dupToastMsg]);
+
+  useEffect(() => {
+    if (step !== 3) return;
+    void api
+      .publicCoaches()
+      .then((rows) => {
+        const list = Array.isArray(rows)
+          ? rows.filter((r): r is { id: number; full_name: string } => Boolean(r && typeof r === "object" && "id" in r))
+          : [];
+        setCoaches(list);
+      })
+      .catch(() => setCoaches([]));
+  }, [step]);
+
+  useEffect(() => {
+    if (step !== 3 || !selectedCoachId || selectedCoachId < 1) {
+      setCoachCategories([]);
+      form.setValue("course_category_id", 0);
+      return;
+    }
+    setCoachCategoriesLoading(true);
+    console.log("[Demo Track] Coach Selected → Updating Categories", { coach_id: selectedCoachId });
+    void api
+      .publicCourseCategories(selectedCoachId)
+      .then((rows) => {
+        const list = Array.isArray(rows)
+          ? rows.filter((r): r is { id: number; name: string } =>
+              Boolean(r && typeof r === "object" && "id" in r && "name" in r)
+            )
+          : [];
+        setCoachCategories(list);
+        form.setValue("course_category_id", list[0]?.id ?? 0);
+      })
+      .catch(() => setCoachCategories([]))
+      .finally(() => setCoachCategoriesLoading(false));
+  }, [step, selectedCoachId, form]);
 
   /**
    * [F001][S002]
@@ -295,6 +338,14 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
       form.setError("digital_signature", { message: "請在簽名框手寫簽署" });
       return;
     }
+    if (!values.coach_id || values.coach_id < 1) {
+      form.setError("coach_id", { message: "請先選擇教練" });
+      return;
+    }
+    if (!values.course_category_id || values.course_category_id < 1) {
+      form.setError("course_category_id", { message: "請選擇課程種類" });
+      return;
+    }
     setStatus("提交中…");
     setShowSuccessDialog(false);
     try {
@@ -310,7 +361,9 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         medical_clearance_file_name: (values.medical_clearance_file_name || "").trim(),
         cooling_off_acknowledged: values.cooling_off_acknowledged,
         disclaimer_accepted: values.disclaimer_accepted,
-        digital_signature: signatureData
+        digital_signature: signatureData,
+        coach_id: values.coach_id,
+        course_category_id: values.course_category_id
       })) as {
         member?: { hkid?: string; full_name?: string };
       };
@@ -528,6 +581,60 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         {/* [F001][S004] Step 3 — cooling-off + disclaimer + e-signature + optional renewal notes */}
         {step === 3 && (
           <div className="space-y-4">
+            <div className="space-y-3 rounded-lg border border-primary/25 bg-primary/5 p-4">
+              <p className="text-sm font-semibold text-ink">Step 1 · 選擇教練（必選）</p>
+              <label className="block space-y-1 text-sm">
+                <span className="text-ink/70">負責教練</span>
+                <select
+                  className={fieldClass}
+                  value={selectedCoachId && selectedCoachId > 0 ? selectedCoachId : ""}
+                  onChange={(e) => {
+                    const id = e.target.value ? Number(e.target.value) : 0;
+                    form.setValue("coach_id", id, { shouldValidate: true });
+                    form.setValue("course_category_id", 0);
+                  }}
+                >
+                  <option value="">請先選擇教練</option>
+                  {coaches.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.full_name}
+                    </option>
+                  ))}
+                </select>
+                {form.formState.errors.coach_id ? (
+                  <p className="text-xs text-rose-400">{String(form.formState.errors.coach_id.message)}</p>
+                ) : null}
+              </label>
+              <label className="block space-y-1 text-sm">
+                <span className="text-ink/70">Step 2 · 課程種類（依教練權限過濾）</span>
+                <select
+                  className={fieldClass}
+                  disabled={!selectedCoachId || selectedCoachId < 1 || coachCategoriesLoading}
+                  value={form.watch("course_category_id") || ""}
+                  onChange={(e) =>
+                    form.setValue("course_category_id", e.target.value ? Number(e.target.value) : 0, {
+                      shouldValidate: true
+                    })
+                  }
+                >
+                  <option value="">
+                    {coachCategoriesLoading
+                      ? "載入中…"
+                      : !selectedCoachId
+                        ? "請先選擇教練"
+                        : "請選擇課程種類"}
+                  </option>
+                  {coachCategories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+                {form.formState.errors.course_category_id ? (
+                  <p className="text-xs text-rose-400">{String(form.formState.errors.course_category_id.message)}</p>
+                ) : null}
+              </label>
+            </div>
             <div data-cooling-copy className="rounded-lg border border-ink/10 bg-canvas p-4 text-xs leading-relaxed text-ink/85">
               <p className="font-semibold text-ink">7 天冷靜期</p>
               <p className="mt-2">

@@ -25,9 +25,9 @@ test.describe("F02 trial / renewal surfaces", () => {
   });
 
   test("renewal page has phone lookup entrance", async ({ page }) => {
-    await page.goto("/renewal");
+    await page.goto("/regCourse");
 
-    await expect(page.getByRole("heading", { name: "續會 Renewal" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Reg Course / Payment First" })).toBeVisible();
     await expect(page.getByRole("button", { name: "搜尋" })).toBeVisible();
   });
 });
