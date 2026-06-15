@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import BackendShell from "../../components/backend-shell";
 import { alertApiError, api, apiAssetUrl } from "../../lib/api";
 import { getAuthSession } from "../../lib/auth";
+import type { CoachStudentBriefDto, CoachStudentRecordDto, CoachRemindPaymentDto } from "../../types/api";
 
 type CoachMe = { id: number; full_name: string; phone: string; branch_name: string | null };
 type PendingRow = {
@@ -43,7 +44,7 @@ type CourseRow = {
   enrollments: { student_id: number; student_name: string }[];
 };
 
-type Tab = "schedule" | "payments" | "signature";
+type Tab = "schedule" | "students" | "payments" | "signature";
 
 const HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18] as const;
 
@@ -141,6 +142,16 @@ export default function CoachDashboardPage() {
   const [status, setStatus] = useState("");
   const [sigPreview, setSigPreview] = useState<string | null>(null);
   const [sigBusy, setSigBusy] = useState(false);
+  const [students, setStudents] = useState<CoachStudentBriefDto[]>([]);
+  const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
+  const [studentRecords, setStudentRecords] = useState<CoachStudentRecordDto | null>(null);
+  const [recordsLoading, setRecordsLoading] = useState(false);
+  const [bookingEnrollmentId, setBookingEnrollmentId] = useState<number | null>(null);
+  const [bookDay, setBookDay] = useState(todayKey);
+  const [bookStartHour, setBookStartHour] = useState(9);
+  const [bookDuration, setBookDuration] = useState<1 | 2>(1);
+  const [bookBusy, setBookBusy] = useState(false);
+  const [remindBusy, setRemindBusy] = useState<number | null>(null);
 
   const pendingCourseIds = useMemo(() => new Set(pending.map((p) => p.course_id)), [pending]);
   const occupied = useMemo(
@@ -153,6 +164,11 @@ export default function CoachDashboardPage() {
     [payments]
   );
 
+  const bookOccupiedForStudent = useMemo(
+    () => occupiedHoursForDay(dayCourses, bookDay, pendingCourseIds),
+    [dayCourses, bookDay, pendingCourseIds]
+  );
+
   const reloadCoachSchedule = useCallback(async (coachId: number) => {
     const [pList, cList] = await Promise.all([
       api.coachPendingStudents(coachId) as Promise<PendingRow[]>,
@@ -163,14 +179,16 @@ export default function CoachDashboardPage() {
   }, [selectedDay]);
 
   const reloadAll = useCallback(async (coachId: number) => {
-    const [pList, payList, cList] = await Promise.all([
+    const [pList, payList, cList, sList] = await Promise.all([
       api.coachPendingStudents(coachId) as Promise<PendingRow[]>,
       api.coachStudentPayments(coachId) as Promise<PaymentRow[]>,
-      api.coachSchedule(coachId, selectedDay) as Promise<CourseRow[]>
+      api.coachSchedule(coachId, selectedDay) as Promise<CourseRow[]>,
+      api.coachStudents(coachId) as Promise<CoachStudentBriefDto[]>
     ]);
     setPending(pList ?? []);
     setPayments(payList ?? []);
     setDayCourses(cList ?? []);
+    setStudents(sList ?? []);
   }, [selectedDay]);
 
   useEffect(() => {
@@ -216,7 +234,7 @@ export default function CoachDashboardPage() {
     setScheduling(true);
     setStatus("");
     try {
-      await api.confirmCoachSchedule(selectedPending.enrollment_id, {
+      await api.coachBookSession({
         enrollment_id: selectedPending.enrollment_id,
         day: selectedDay,
         start_hour: startHour,
@@ -231,10 +249,92 @@ export default function CoachDashboardPage() {
       await reloadCoachSchedule(coach.id);
       setStatus("已排程。");
     } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/conflict|409|佔用/i.test(msg)) {
+        setStatus("此時段已被佔用，請另選時間。");
+      } else {
+        alertApiError(e);
+        setStatus(msg);
+      }
+    } finally {
+      setScheduling(false);
+    }
+  }
+
+  async function loadStudentRecords(studentId: number) {
+    if (!coach) return;
+    setSelectedStudentId(studentId);
+    setRecordsLoading(true);
+    setStudentRecords(null);
+    setBookingEnrollmentId(null);
+    try {
+      const rec = (await api.coachStudentRecords(studentId, coach.id)) as CoachStudentRecordDto;
+      setStudentRecords(rec);
+      console.log("[Demo Track] Student Records Loaded", { student_id: studentId, checkins: rec.checkins.length });
+    } catch (e) {
       alertApiError(e);
       setStatus(String(e));
     } finally {
-      setScheduling(false);
+      setRecordsLoading(false);
+    }
+  }
+
+  async function bookEnrollment(enrollmentId: number, confirmed: boolean) {
+    if (!coach) return;
+    const bookOccupied = occupiedHoursForDay(dayCourses, bookDay, pendingCourseIds);
+    if (slotWouldConflict(bookOccupied, bookStartHour, bookDuration)) {
+      setStatus("此時段已被佔用或超出 19:00，請另選。");
+      return;
+    }
+    setBookBusy(true);
+    setStatus("");
+    try {
+      await api.coachBookSession({
+        enrollment_id: enrollmentId,
+        day: bookDay,
+        start_hour: bookStartHour,
+        duration_hours: bookDuration,
+        coach_id: coach.id
+      });
+      console.log("[Demo Track] Coach Booking Confirmed", {
+        enrollment_id: enrollmentId,
+        confirmed,
+        day: bookDay
+      });
+      await reloadAll(coach.id);
+      if (selectedStudentId) await loadStudentRecords(selectedStudentId);
+      setBookingEnrollmentId(null);
+      setStatus(confirmed ? "已改期。" : "已排程。");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/conflict|409|佔用/i.test(msg)) {
+        setStatus("此時段已被佔用，請另選時間。");
+      } else {
+        alertApiError(e);
+        setStatus(msg);
+      }
+    } finally {
+      setBookBusy(false);
+    }
+  }
+
+  async function sendPaymentReminder(studentId: number, courseId: number) {
+    if (!coach) return;
+    setRemindBusy(courseId);
+    setStatus("");
+    try {
+      const res = (await api.coachRemindPayment(studentId, {
+        course_id: courseId,
+        coach_id: coach.id
+      })) as CoachRemindPaymentDto;
+      console.log("[Demo Track] WhatsApp Payment Reminder Logged", { student_id: studentId, course_id: courseId });
+      window.open(res.wa_link, "_blank", "noopener,noreferrer");
+      setStatus("已記錄 WhatsApp 催款訊息，並開啟 WhatsApp。");
+    } catch (e) {
+      alertApiError(e);
+      setStatus(String(e));
+    } finally {
+      setRemindBusy(null);
     }
   }
 
@@ -465,14 +565,14 @@ export default function CoachDashboardPage() {
                   <td className="px-2 py-2.5 text-xs text-ink/70">{row.installment_status}</td>
                   <td className="px-2 py-2.5">
                     {needsRemind ? (
-                      <a
-                        href={remindPayWaLink(row.student_phone, row.student_name, row.course_title)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-block rounded-lg border border-emerald-600/40 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-900 hover:bg-emerald-100"
+                      <button
+                        type="button"
+                        disabled={remindBusy === row.course_id}
+                        onClick={() => void sendPaymentReminder(row.student_id, row.course_id)}
+                        className="inline-block rounded-lg border border-emerald-600/40 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
                       >
-                        Remind to Pay
-                      </a>
+                        {remindBusy === row.course_id ? "…" : "WhatsApp 催款"}
+                      </button>
                     ) : (
                       <span className="text-xs text-ink/40">—</span>
                     )}
@@ -483,6 +583,165 @@ export default function CoachDashboardPage() {
           )}
         </tbody>
       </table>
+    </div>
+  );
+
+  const studentsPanel = (
+    <div className="space-y-4 pb-24">
+      <section className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-ink">我的學員</h2>
+        <p className="mt-1 text-xs text-ink/55">查閱上堂記錄、分期催款、代排 1–2 小時時段。</p>
+        {students.length === 0 ? (
+          <p className="mt-3 text-sm text-ink/50">暫無指派學員。</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {students.map((s) => (
+              <li key={s.student_id}>
+                <button
+                  type="button"
+                  onClick={() => void loadStudentRecords(s.student_id)}
+                  className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm transition ${
+                    selectedStudentId === s.student_id
+                      ? "border-primary bg-primary/10 ring-1 ring-primary/30"
+                      : "border-ink/10 bg-canvas hover:border-primary/40"
+                  }`}
+                >
+                  <div className="font-medium text-ink">{s.full_name}</div>
+                  <div className="mt-0.5 text-xs text-ink/60">
+                    餘 {s.lesson_balance} 堂 · {s.enrollment_count} 課程
+                    {s.pending_schedule ? " · 待排程" : ""}
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {recordsLoading ? (
+        <p className="text-sm text-ink/50">載入學員記錄…</p>
+      ) : null}
+
+      {studentRecords ? (
+        <section className="space-y-4 rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
+          <h3 className="text-sm font-semibold text-ink">
+            {studentRecords.full_name} · 餘 {studentRecords.lesson_balance} 堂
+          </h3>
+
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-ink/50">課程 / 分期</h4>
+            <ul className="mt-2 space-y-3">
+              {studentRecords.enrollments.map((enr) => (
+                <li key={enr.enrollment_id} className="rounded-lg border border-ink/10 bg-canvas p-3 text-sm">
+                  <div className="font-medium text-ink">{enr.course_title}</div>
+                  <div className="mt-1 text-xs text-ink/60">
+                    {enr.coach_time_confirmed
+                      ? `${new Date(enr.scheduled_start).toLocaleString("zh-HK")} · ${enr.total_lessons} 堂`
+                      : "待排程"}
+                    {" · "}
+                    {enr.installment_status} ({enr.payment_status})
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {enr.payment_status !== "Paid" ? (
+                      <button
+                        type="button"
+                        disabled={remindBusy === enr.enrollment_id}
+                        onClick={() => void sendPaymentReminder(studentRecords.student_id, enr.enrollment_id)}
+                        className="rounded-md border border-emerald-600/40 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-900"
+                      >
+                        WhatsApp 催款
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBookingEnrollmentId(enr.enrollment_id);
+                        setBookDay(enr.coach_time_confirmed ? localDateKey(enr.scheduled_start) : todayKey());
+                      }}
+                      className="rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-xs font-medium text-ink"
+                    >
+                      {enr.coach_time_confirmed ? "改期" : "排程"} 1–2h
+                    </button>
+                  </div>
+                  {bookingEnrollmentId === enr.enrollment_id ? (
+                    <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-ink/10 pt-3">
+                      <label className="text-xs text-ink/70">
+                        日期
+                        <input
+                          type="date"
+                          value={bookDay}
+                          onChange={(e) => setBookDay(e.target.value)}
+                          className="mt-1 block rounded-lg border border-ink/15 bg-surface px-2 py-1 text-sm"
+                        />
+                      </label>
+                      <label className="text-xs text-ink/70">
+                        開始
+                        <select
+                          value={bookStartHour}
+                          onChange={(e) => setBookStartHour(Number(e.target.value))}
+                          className="mt-1 block rounded-lg border border-ink/15 bg-surface px-2 py-1 text-sm"
+                        >
+                          {HOURS.filter((h) => !slotWouldConflict(bookOccupiedForStudent, h, bookDuration)).map((h) => (
+                            <option key={h} value={h}>
+                              {pad2(h)}:00
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="text-xs text-ink/70">
+                        時長
+                        <select
+                          value={bookDuration}
+                          onChange={(e) => setBookDuration(Number(e.target.value) as 1 | 2)}
+                          className="mt-1 block rounded-lg border border-ink/15 bg-surface px-2 py-1 text-sm"
+                        >
+                          {[1, 2]
+                            .filter((d) => !slotWouldConflict(bookOccupiedForStudent, bookStartHour, d))
+                            .map((d) => (
+                              <option key={d} value={d}>
+                                {d} 小時
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        disabled={bookBusy || slotWouldConflict(bookOccupiedForStudent, bookStartHour, bookDuration)}
+                        onClick={() => void bookEnrollment(enr.enrollment_id, enr.coach_time_confirmed)}
+                        className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                      >
+                        {bookBusy ? "…" : "確認"}
+                      </button>
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-ink/50">上堂記錄（簽到）</h4>
+            {studentRecords.attendance.length === 0 && studentRecords.checkins.length === 0 ? (
+              <p className="mt-2 text-xs text-ink/45">暫無上堂記錄。</p>
+            ) : (
+              <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-xs text-ink/75">
+                {studentRecords.attendance.map((a) => (
+                  <li key={`att-${a.id}`}>
+                    {a.session_calendar_date} · {a.course_title ?? "課堂"} ·{" "}
+                    {new Date(a.attended_at).toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit" })}
+                  </li>
+                ))}
+                {studentRecords.checkins.map((c) => (
+                  <li key={`chk-${c.id}`}>
+                    {new Date(c.created_at).toLocaleString("zh-HK")} · {c.channel}
+                    {c.remarks ? ` · ${c.remarks}` : ""}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 
@@ -535,6 +794,7 @@ export default function CoachDashboardPage() {
         ) : null}
 
         {tab === "schedule" ? schedulePanel : null}
+        {tab === "students" ? studentsPanel : null}
         {tab === "payments" ? paymentsPanel : null}
         {tab === "signature" ? signaturePanel : null}
       </div>
@@ -543,10 +803,11 @@ export default function CoachDashboardPage() {
         className="fixed bottom-0 left-0 right-0 z-[100] border-t border-ink/15 bg-surface/98 pb-[env(safe-area-inset-bottom,0)] shadow-[0_-6px_24px_rgba(45,36,34,0.08)] backdrop-blur-md md:mx-auto md:max-w-lg"
         aria-label="教練主選單"
       >
-        <div className="mx-auto grid max-w-lg grid-cols-3 gap-1 p-2">
+        <div className="mx-auto grid max-w-lg grid-cols-4 gap-1 p-2">
           {(
             [
               { id: "schedule" as Tab, label: "排程", icon: "▣" },
+              { id: "students" as Tab, label: "學員", icon: "👤" },
               { id: "payments" as Tab, label: "收款", icon: "◎" },
               { id: "signature" as Tab, label: "簽名", icon: "✎" }
             ] as const

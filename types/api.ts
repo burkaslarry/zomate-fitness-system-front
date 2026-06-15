@@ -97,6 +97,47 @@ export type CoachSkillsDto = {
   course_category_ids: number[];
 };
 
+export type CoachStudentBriefDto = {
+  student_id: number;
+  full_name: string;
+  phone: string;
+  lesson_balance: number;
+  enrollment_count: number;
+  pending_schedule: boolean;
+};
+
+export type CoachStudentRecordDto = {
+  student_id: number;
+  full_name: string;
+  phone: string;
+  lesson_balance: number;
+  enrollments: {
+    enrollment_id: number;
+    course_title: string;
+    scheduled_start: string;
+    scheduled_end: string;
+    total_lessons: number;
+    coach_time_confirmed: boolean;
+    payment_status: string;
+    installment_status: string;
+  }[];
+  checkins: { id: number; channel: string; remarks: string | null; created_at: string }[];
+  attendance: {
+    id: number;
+    course_id: number | null;
+    course_title: string | null;
+    session_calendar_date: string;
+    attended_at: string;
+  }[];
+};
+
+export type CoachRemindPaymentDto = {
+  ok: boolean;
+  message: string;
+  wa_link: string;
+  logged: boolean;
+};
+
 export type TrialClassKindDto = {
   id: number;
   code: string;

@@ -587,6 +587,33 @@ export const api = {
     const qs = coachId != null ? `?coach_id=${coachId}` : "";
     return request(`/api/coach/student-payments${qs}`);
   },
+  coachStudents: (coachId?: number) => {
+    const qs = coachId != null ? `?coach_id=${coachId}` : "";
+    return request(`/api/coach/students${qs}`);
+  },
+  coachStudentRecords: (studentId: number, coachId?: number) => {
+    const qs = coachId != null ? `?coach_id=${coachId}` : "";
+    return request(`/api/coach/students/${studentId}${qs}`);
+  },
+  coachRemindPayment: (
+    studentId: number,
+    payload: { course_id: number; coach_id?: number }
+  ) =>
+    request(`/api/coach/students/${studentId}/remind-payment`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+  coachBookSession: (payload: {
+    enrollment_id: number;
+    day: string;
+    start_hour: number;
+    duration_hours: number;
+    coach_id?: number;
+  }) =>
+    request("/api/coach/bookings", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
   confirmCoachSchedule: (
     enrollmentId: number,
     payload: {
