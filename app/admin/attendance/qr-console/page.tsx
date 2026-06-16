@@ -3,13 +3,8 @@
 /**
  * [F002][S004]
  * Feature: Course Entry & Automation
- * Step: (see Logic)
- * Logic: Admin QR console: onboard and attendance PDF previews.
- */
-
-/*
- * QR console — onboarding / check-in / payload PDFs via FastAPI ``qrcode-pdf``;
- * attendance CSV template via ``downloadCsv`` (authenticated blob download).
+ * Step: Admin QR console — onboard and check-in PDF previews
+ * Logic: Onboarding / check-in URL PDFs via FastAPI ``qrcode-pdf`` (Zomate Fitness Limited branded).
  */
 
 import BackendShell from "../../../../components/backend-shell";
@@ -29,31 +24,26 @@ export default function AdminQrConsolePage() {
 
   const onboardUrl = origin ? `${origin}/student/onboard` : "";
   const checkinUrl = origin ? `${origin}/student/checkin?from=qr` : "";
-  const payload = JSON.stringify({ type: "zomate_checkin", v: 1 });
   const onboardQrSrc = onboardUrl
     ? `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(onboardUrl)}`
     : "";
   const checkinQrSrc = checkinUrl
     ? `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(checkinUrl)}`
     : "";
-  const payloadQrSrc = origin
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(payload)}`
-    : "";
 
-  async function downloadQrPdf(kind: "onboard" | "checkin" | "payload") {
+  async function downloadQrPdf(kind: "onboard" | "checkin") {
     try {
       setStatus("PDF 生成中…");
-      const blob = await api.qrcodePdfBlob(kind, origin, kind === "payload" ? payload : undefined);
+      const blob = await api.qrcodePdfBlob(kind, origin);
       const href = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = href;
-      link.download =
-        kind === "onboard" ? "zomate_onboarding_qrcode.pdf" : kind === "checkin" ? "checkin_qrcode.pdf" : "payload_qrcode.pdf";
+      link.download = kind === "onboard" ? "zomate_onboarding_qrcode.pdf" : "checkin_qrcode.pdf";
       document.body.appendChild(link);
       link.click();
       link.remove();
       URL.revokeObjectURL(href);
-      setStatus("PDF 已生成並下載。");
+      setStatus("PDF 已生成並下載（含 Zomate Fitness Limited 標題）。");
     } catch (err) {
       setStatus(String(err));
     }
@@ -75,10 +65,12 @@ export default function AdminQrConsolePage() {
     <BackendShell title="QR 簽到中心">
       <div className="mx-auto max-w-6xl space-y-4">
         <h2 className="text-2xl font-semibold">出勤 / 簽到管理</h2>
-        <p className="text-sm text-ink/55">Demo 導覽頁：可集中管理簽到 QR、JSON QR、出勤核銷流程。</p>
-        <div className="grid gap-4 md:grid-cols-3">
+        <p className="text-sm text-ink/55">
+          下載 PDF 含 <strong className="text-ink">Zomate Fitness Limited</strong> 標題及 QR 碼，可列印放於接待處。
+        </p>
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2 rounded-xl border border-ink/10 bg-surface p-3 shadow-sm ring-1 ring-ink/[0.04]">
-            <p className="text-sm font-medium text-ink">Core 1 · Onboarding QR</p>
+            <p className="text-sm font-medium text-ink">Zomate Fitness Limited · Onboarding QR</p>
             {onboardQrSrc && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={onboardQrSrc} width={180} height={180} alt="Onboarding QR" className="rounded border border-ink/10 bg-white p-2" />
@@ -88,23 +80,13 @@ export default function AdminQrConsolePage() {
             </button>
           </div>
           <div className="space-y-2 rounded-xl border border-ink/10 bg-surface p-3 shadow-sm ring-1 ring-ink/[0.04]">
-            <p className="text-sm font-medium text-ink">Core 3 · Check-in URL QR</p>
+            <p className="text-sm font-medium text-ink">Zomate Fitness Limited · Check-in URL QR</p>
             {checkinQrSrc && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={checkinQrSrc} width={180} height={180} alt="Check-in URL QR" className="rounded border border-ink/10 bg-white p-2" />
             )}
             <button type="button" onClick={() => void downloadQrPdf("checkin")}>
               匯出 checkin PDF
-            </button>
-          </div>
-          <div className="space-y-2 rounded-xl border border-ink/10 bg-surface p-3 shadow-sm ring-1 ring-ink/[0.04]">
-            <p className="text-sm font-medium text-ink">Payload QR（離線牌）</p>
-            {payloadQrSrc && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={payloadQrSrc} width={180} height={180} alt="Payload QR" className="rounded border border-ink/10 bg-white p-2" />
-            )}
-            <button type="button" onClick={() => void downloadQrPdf("payload")}>
-              匯出 payload PDF
             </button>
           </div>
         </div>

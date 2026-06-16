@@ -41,7 +41,6 @@ const MENU_SECTIONS: { frameClass: string; items: NavItem[] }[] = [
       { href: "/coach", label: "教練課表" },
       { href: "/admin/attendance/qr-console", label: "QR 簽到中心" },
       { href: "/admin/attendance/session-ledger", label: "Session Ledger · 扣堂原因" },
-      { href: "/student/trial", label: "試堂 / 開課管理" },
       { href: "/student", label: "學生入口" }
     ]
   },

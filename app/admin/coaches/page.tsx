@@ -7,6 +7,7 @@
  * Logic: POST/PATCH /api/admin/coaches with login_username and password fields.
  */
 
+import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import BackendShell from "../../../components/backend-shell";
 import { api } from "../../../lib/api";
@@ -332,7 +333,7 @@ export default function AdminCoachesPage() {
                 <th className="whitespace-nowrap px-4 py-3 font-medium">分店</th>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">入職日期</th>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">狀態</th>
-                <th className="px-4 py-3 font-medium">學員（已報此教練課程）</th>
+                <th className="px-4 py-3 font-medium">學員</th>
                 <th className="whitespace-nowrap px-4 py-3 text-right font-medium">操作</th>
               </tr>
             </thead>
@@ -351,22 +352,13 @@ export default function AdminCoachesPage() {
                       <span className="rounded-full bg-ink/10 px-2 py-1 text-xs text-ink/60">停用</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 align-top text-xs leading-relaxed text-ink/80">
-                    {row.enrolled_students && row.enrolled_students.length > 0 ? (
-                      <div className="space-y-1">
-                        <div className="text-[11px] font-medium text-ink/50">共 {row.enrolled_students.length} 位</div>
-                        <ul className="space-y-1">
-                          {row.enrolled_students.map((s) => (
-                            <li key={s.id}>
-                              <span className="font-medium text-ink">{s.full_name}</span>
-                              <span className="text-ink/50"> · {s.phone}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : (
-                      <span className="text-ink/45">—</span>
-                    )}
+                  <td className="px-4 py-3 align-top">
+                    <Link
+                      href={`/admin/coaches/${row.id}/students`}
+                      className="inline-block rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-ink hover:bg-primary/20"
+                    >
+                      Students
+                    </Link>
                   </td>
                   <td className="px-4 py-3 align-top text-right">
                     <div className="flex justify-end gap-2">

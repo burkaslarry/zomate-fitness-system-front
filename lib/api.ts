@@ -577,6 +577,8 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ course_category_ids: courseCategoryIds })
     }),
+  coachStudentFollowUp: (coachId: number) =>
+    request(`/api/admin/coaches/${coachId}/student-follow-up`),
   /** [F003][S001] Logged-in coach profile (COACH role only). */
   coachMe: () => request("/api/coach/me"),
   coachPendingStudents: (coachId?: number) => {
@@ -644,7 +646,7 @@ export const api = {
     if (payload) params.set("payload", payload);
     return `${API_BASE_URL}/api/admin/qrcode-pdf?${params.toString()}`;
   },
-  qrcodePdfBlob: (kind: string, origin?: string, payload?: string) =>
+  qrcodePdfBlob: (kind: "onboard" | "checkin", origin?: string, payload?: string) =>
     requestBlob(`/api/admin/qrcode-pdf?${new URLSearchParams({
       kind,
       ...(origin ? { origin } : {}),

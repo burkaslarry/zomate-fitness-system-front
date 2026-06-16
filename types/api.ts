@@ -138,6 +138,15 @@ export type CoachRemindPaymentDto = {
   logged: boolean;
 };
 
+export type CoachStudentFollowUpDto = {
+  student_id: number;
+  full_name: string;
+  phone: string;
+  attendance_status: string;
+  next_lesson: string;
+  payment_reminder: string | null;
+};
+
 export type TrialClassKindDto = {
   id: number;
   code: string;
