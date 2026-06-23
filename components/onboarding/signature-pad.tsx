@@ -13,6 +13,7 @@ import {
   useEffect,
   useImperativeHandle,
   useRef,
+  useState,
   type CSSProperties
 } from "react";
 import SignatureCanvas from "react-signature-canvas";
@@ -41,16 +42,19 @@ export const SignaturePad = forwardRef<SignaturePadHandle, Props>(function Signa
   const containerRef = useRef<HTMLDivElement | null>(null);
   const sigRef = useRef<SignatureCanvas | null>(null);
   const strokeDataRef = useRef<StrokeData>([]);
+  const [hasStroke, setHasStroke] = useState(false);
 
   const syncFromCanvas = useCallback(() => {
     const sig = sigRef.current;
     if (!sig) return;
     if (sig.isEmpty()) {
       strokeDataRef.current = [];
+      setHasStroke(false);
       onChange?.("");
       return;
     }
     strokeDataRef.current = sig.toData() as StrokeData;
+    setHasStroke(strokeDataRef.current.length > 0);
     const dataUrl = sig.getTrimmedCanvas().toDataURL("image/png");
     onChange?.(dataUrl);
   }, [onChange]);
@@ -103,17 +107,39 @@ export const SignaturePad = forwardRef<SignaturePadHandle, Props>(function Signa
     const ro = new ResizeObserver(() => onResize());
     ro.observe(container);
     window.addEventListener("orientationchange", onResize);
+    if (process.env.NODE_ENV !== "production") {
+      (window as unknown as { __zomateSeedSignature?: () => void }).__zomateSeedSignature = () => {
+        const sig = sigRef.current;
+        if (!sig) throw new Error("Signature canvas not ready");
+        const demo: StrokeData = [
+          [
+            { x: 20, y: 20, time: Date.now() },
+            { x: 120, y: 80, time: Date.now() + 16 }
+          ]
+        ];
+        sig.fromData(demo as Parameters<SignatureCanvas["fromData"]>[0]);
+        strokeDataRef.current = demo;
+        setHasStroke(true);
+        if (!sig.isEmpty()) {
+          onChange?.(sig.getTrimmedCanvas().toDataURL("image/png"));
+        }
+      };
+    }
     return () => {
       ro.disconnect();
       window.removeEventListener("orientationchange", onResize);
+      if (process.env.NODE_ENV !== "production") {
+        delete (window as unknown as { __zomateSeedSignature?: () => void }).__zomateSeedSignature;
+      }
     };
-  }, [applyCanvasDimensions, restoreStrokes]);
+  }, [applyCanvasDimensions, restoreStrokes, syncFromCanvas]);
 
   useImperativeHandle(
     ref,
     () => ({
       clear: () => {
         strokeDataRef.current = [];
+        setHasStroke(false);
         sigRef.current?.clear();
         onChange?.("");
       },
@@ -132,7 +158,12 @@ export const SignaturePad = forwardRef<SignaturePadHandle, Props>(function Signa
   const containerStyle: CSSProperties = { height: `${height}px` };
 
   return (
-    <div ref={containerRef} className={className ?? "w-full"} style={containerStyle}>
+    <div
+      ref={containerRef}
+      className={className ?? "w-full"}
+      style={containerStyle}
+      data-signature-has-stroke={hasStroke ? "true" : "false"}
+    >
       <SignatureCanvas
         ref={sigRef}
         penColor="#2d2422"

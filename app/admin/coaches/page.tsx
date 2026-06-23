@@ -11,6 +11,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import BackendShell from "../../../components/backend-shell";
 import { api } from "../../../lib/api";
+import { getAuthSession } from "../../../lib/auth";
 import type { CoachDto, CourseCategoryDto } from "../../../types/api";
 import SelectAsync from "../../../components/forms/select-async";
 
@@ -43,6 +44,7 @@ export default function AdminCoachesPage() {
   const [allCategories, setAllCategories] = useState<CourseCategoryDto[]>([]);
   const [selectedSkillIds, setSelectedSkillIds] = useState<Set<number>>(new Set());
   const [skillsBusy, setSkillsBusy] = useState(false);
+  const isAdmin = getAuthSession()?.role === "ADMIN";
 
   async function load() {
     const q = searchQ.trim();
@@ -362,13 +364,15 @@ export default function AdminCoachesPage() {
                   </td>
                   <td className="px-4 py-3 align-top text-right">
                     <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => void openSkillsModal(row)}
-                        className="rounded-md border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-ink hover:bg-primary/20"
-                      >
-                        課程權限
-                      </button>
+                      {isAdmin ? (
+                        <button
+                          type="button"
+                          onClick={() => void openSkillsModal(row)}
+                          className="rounded-md border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-ink hover:bg-primary/20"
+                        >
+                          課程權限
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => startEdit(row)}

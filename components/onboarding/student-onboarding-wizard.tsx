@@ -190,7 +190,6 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   const step3SubmitEnabled =
     Boolean(coolingOffWatch) &&
     Boolean(disclaimerWatch) &&
-    Boolean((digitalSignatureWatch || "").trim()) &&
     Boolean((selectedCoachUsername || "").trim()) &&
     selectedCoachId >= 1 &&
     courseCategoryWatch >= 1;
