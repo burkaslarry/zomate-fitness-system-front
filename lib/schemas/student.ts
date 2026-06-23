@@ -64,7 +64,7 @@ export const onboardingStep3Schema = z.object({
   digital_signature: z.string()
 });
 
-/** Full POST body after wizard steps — PAR-Q「是」須附醫療證明檔名（後端寫入 health_notes）。 */
+/** Full POST body after wizard steps — medical clearance filename is optional (候補). */
 export const studentRegistrationPayloadSchema = z
   .object({
     full_name: z.string().min(1),
@@ -79,13 +79,14 @@ export const studentRegistrationPayloadSchema = z
     medical_clearance_file_name: z.string(),
     cooling_off_acknowledged: z.boolean(),
     disclaimer_accepted: z.boolean(),
-    digital_signature: z.string(),
+    digital_signature: z.string().min(1, "請在簽名框手寫簽署"),
+    coach_username: z.string().min(1, "請先選擇教練"),
     coach_id: z.number().int().min(0),
     course_category_id: z.number().int().min(0),
     package_sessions: z.union([z.literal(10), z.literal(30)]).optional(),
     renewal_notes: z.string().optional()
   })
-  .refine((d) => d.coach_id >= 1, { message: "請先選擇教練", path: ["coach_id"] })
+  .refine((d) => d.coach_id >= 1, { message: "請先選擇教練", path: ["coach_username"] })
   .refine((d) => d.course_category_id >= 1, { message: "請選擇課程種類", path: ["course_category_id"] })
   .refine((d) => d.cooling_off_acknowledged, {
     message: "請確認已閱讀 7 天冷靜期條款",
@@ -94,16 +95,6 @@ export const studentRegistrationPayloadSchema = z
   .refine((d) => d.disclaimer_accepted, {
     message: "請同意免責聲明",
     path: ["disclaimer_accepted"]
-  })
-  .refine(
-    (d) => {
-      if (!parqAnyYes(d.parq)) return true;
-      return (d.medical_clearance_file_name ?? "").trim().length > 0;
-    },
-    {
-      message: "PAR-Q 任一項答「是」時請上傳醫生證明（PDF 或圖片）",
-      path: ["medical_clearance_file_name"]
-    }
-  );
+  });
 
 export type StudentRegistrationPayload = z.infer<typeof studentRegistrationPayloadSchema>;

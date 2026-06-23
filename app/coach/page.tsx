@@ -164,6 +164,10 @@ export default function CoachDashboardPage() {
     [payments]
   );
 
+  const paymentUrgent = useMemo(() => {
+    return payments.filter((p) => p.payment_status === "Pending" || p.payment_status === "Overdue");
+  }, [payments]);
+
   const bookOccupiedForStudent = useMemo(
     () => occupiedHoursForDay(dayCourses, bookDay, pendingCourseIds),
     [dayCourses, bookDay, pendingCourseIds]
@@ -789,6 +793,24 @@ export default function CoachDashboardPage() {
   return (
     <BackendShell title={`教練 · ${coach.full_name}`} layout="coach">
       <div className="mx-auto max-w-lg px-3 py-4 md:max-w-2xl md:px-4">
+        {paymentUrgent.length > 0 ? (
+          <section className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm">
+            <p className="font-semibold">付款提醒 · {paymentUrgent.length} 位學員待跟進</p>
+            <p className="mt-1 text-xs text-amber-900/85">
+              請主動聯絡以下學員安排付款：
+              {" "}
+              {paymentUrgent.slice(0, 4).map((p) => p.student_name).join("、")}
+              {paymentUrgent.length > 4 ? ` 等 ${paymentUrgent.length} 人` : ""}
+            </p>
+            <button
+              type="button"
+              onClick={() => setTab("payments")}
+              className="mt-2 text-xs font-semibold text-amber-900 underline"
+            >
+              前往收款分頁催款 →
+            </button>
+          </section>
+        ) : null}
         {status ? (
           <p className="mb-3 rounded-lg border border-ink/10 bg-surface px-3 py-2 text-xs text-ink/70">{status}</p>
         ) : null}

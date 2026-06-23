@@ -6,7 +6,7 @@
  */
 
 import type { CourseSaleRow } from "./types/monthly-sales-report";
-import type { ExpenseRowValidated, SessionLedgerEntryValidated } from "./schemas/report";
+import type { ExpenseRowValidated } from "./schemas/report";
 
 export type MockStudent = {
   id: number;
@@ -169,14 +169,7 @@ let coachAttendance: CoachAttendanceRow[] = [
 /** Lesson-level mock rows (same semantics as Postgres coach-attendance GET). */
 let coachAttendanceLessons = [...coachAttendanceLessonsSeed];
 
-let ledger: SessionLedgerEntryValidated[] = [
-  {
-    studentName: "Larry Lo",
-    sessionStartIso: new Date().toISOString(),
-    reason: "attended",
-    notes: "Mock seed · ledger"
-  }
-];
+let checkinCount = 0;
 
 function normalizePhone(p: string): string {
   return p.replace(/\s+/g, "");
@@ -195,8 +188,8 @@ export const mockApiStore = {
   get coachAttendanceLessons() {
     return coachAttendanceLessons;
   },
-  get ledger() {
-    return ledger;
+  get checkinCount() {
+    return checkinCount;
   },
   get sales(): CourseSaleRow[] {
     return seedSales;
@@ -274,15 +267,7 @@ export const mockApiStore = {
       row.id === s!.id ? { ...row, lesson_balance } : row
     );
     const updated = { ...s!, lesson_balance };
-    ledger = [
-      {
-        studentName: updated.full_name,
-        sessionStartIso: new Date().toISOString(),
-        reason: "attended",
-        notes: "Check-in mock · PIN verified"
-      },
-      ...ledger
-    ];
+    checkinCount += 1;
     return updated;
   },
 
@@ -291,9 +276,5 @@ export const mockApiStore = {
     const full = { ...row, id };
     expenses = [...expenses, full];
     return full;
-  },
-
-  appendLedger(entry: SessionLedgerEntryValidated): void {
-    ledger = [entry, ...ledger];
   }
 };

@@ -9,9 +9,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useForm, Controller } from "react-hook-form";
-import SignatureCanvas from "react-signature-canvas";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   onboardingStep1Schema,
@@ -21,6 +20,21 @@ import {
   type StudentRegistrationPayload
 } from "../../lib/schemas/student";
 import { alertApiError, api } from "../../lib/api";
+import { SignaturePad, type SignaturePadHandle } from "./signature-pad";
+
+type CoachOption = { id: number; full_name: string; login_username?: string | null };
+
+/** [F001][S001] Dropdown value = coach login username or alnum slug (matches backend `_default_coach_username`). */
+function coachUsernameValue(coach: CoachOption): string {
+  if (coach.login_username?.trim()) return coach.login_username.trim().toLowerCase();
+  const slug = coach.full_name.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return slug || `coach-${coach.id}`;
+}
+
+const btnPrimaryEnabled =
+  "rounded-md border border-primary/80 bg-primary/90 px-4 py-2 text-sm font-semibold text-ink shadow-sm transition-colors hover:bg-primary";
+const btnPrimaryDisabled =
+  "rounded-md border border-ink/10 bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-400 cursor-not-allowed";
 
 /**
  * [F001][S002]
@@ -82,6 +96,7 @@ const defaults: Partial<StudentRegistrationPayload> = {
   cooling_off_acknowledged: false,
   disclaimer_accepted: false,
   digital_signature: "",
+  coach_username: "",
   coach_id: 0,
   course_category_id: 0,
   renewal_notes: "",
@@ -101,12 +116,15 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   const [showSuccessDialog, setShowSuccessDialog] = useState(false);
   const formRef = useRef<HTMLFormElement | null>(null);
   const parqFileRef = useRef<HTMLInputElement | null>(null);
-  const signatureRef = useRef<SignatureCanvas | null>(null);
+  const parqClearanceFileRef = useRef<File | null>(null);
+  const signatureRef = useRef<SignaturePadHandle | null>(null);
   const router = useRouter();
   const [parqUploadError, setParqUploadError] = useState("");
-  const [coaches, setCoaches] = useState<{ id: number; full_name: string }[]>([]);
+  const [coaches, setCoaches] = useState<CoachOption[]>([]);
   const [coachCategories, setCoachCategories] = useState<{ id: number; name: string }[]>([]);
   const [coachCategoriesLoading, setCoachCategoriesLoading] = useState(false);
+  const [showSignatureErrorModal, setShowSignatureErrorModal] = useState(false);
+  const [signatureHintError, setSignatureHintError] = useState(false);
 
   /**
    * [F001][S001]
@@ -121,18 +139,61 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   });
 
   const selectedCoachId = form.watch("coach_id");
+  const selectedCoachUsername = form.watch("coach_username");
+  const coolingOffWatch = form.watch("cooling_off_acknowledged");
+  const disclaimerWatch = form.watch("disclaimer_accepted");
+  const digitalSignatureWatch = form.watch("digital_signature");
+  const courseCategoryWatch = form.watch("course_category_id");
+  const step1Watch = form.watch([
+    "full_name",
+    "hkid",
+    "phone",
+    "email",
+    "date_of_birth",
+    "emergency_contact_name",
+    "emergency_contact_phone",
+    "form_type"
+  ]);
 
   /**
    * [F001][S002]
    * Feature: Student Onboarding
-   * Step: PAR-Q reactive state — drives medical upload visibility and step-2 “下一步” enablement.
-   * Logic: `step2NextEnabled` when no “yes” OR (filename set and no client upload error).
+   * Step: PAR-Q reactive state — medical upload is optional (候補).
    */
   const parqWatch = form.watch("parq");
   const clearanceNameWatch = form.watch("medical_clearance_file_name");
   const anyParqYesVal = parqAnyYes(parqWatch);
-  const step2NextEnabled =
-    !anyParqYesVal || (String(clearanceNameWatch || "").trim().length > 0 && !parqUploadError);
+
+  const step1Ready = useMemo(() => {
+    const [
+      full_name,
+      hkid,
+      phone,
+      email,
+      date_of_birth,
+      emergency_contact_name,
+      emergency_contact_phone,
+      form_type
+    ] = step1Watch;
+    return onboardingStep1Schema.safeParse({
+      full_name: (full_name || "").trim(),
+      hkid: (hkid || "").trim(),
+      phone: (phone || "").trim(),
+      email: (email ?? "").trim(),
+      date_of_birth,
+      emergency_contact_name: (emergency_contact_name || "").trim(),
+      emergency_contact_phone: (emergency_contact_phone || "").trim(),
+      form_type
+    }).success;
+  }, [step1Watch]);
+
+  const step3SubmitEnabled =
+    Boolean(coolingOffWatch) &&
+    Boolean(disclaimerWatch) &&
+    Boolean((digitalSignatureWatch || "").trim()) &&
+    Boolean((selectedCoachUsername || "").trim()) &&
+    selectedCoachId >= 1 &&
+    courseCategoryWatch >= 1;
 
   /**
    * [F001][S002]
@@ -144,6 +205,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     if (!anyParqYesVal) {
       form.setValue("medical_clearance_file_name", "");
       setParqUploadError("");
+      parqClearanceFileRef.current = null;
       if (parqFileRef.current) parqFileRef.current.value = "";
     }
   }, [anyParqYesVal, form]);
@@ -175,7 +237,10 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
       .publicCoaches()
       .then((rows) => {
         const list = Array.isArray(rows)
-          ? rows.filter((r): r is { id: number; full_name: string } => Boolean(r && typeof r === "object" && "id" in r))
+          ? rows.filter(
+              (r): r is CoachOption =>
+                Boolean(r && typeof r === "object" && "id" in r && "full_name" in r)
+            )
           : [];
         setCoaches(list);
       })
@@ -217,6 +282,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     setParqUploadError("");
     if (!file) {
       form.setValue("medical_clearance_file_name", "");
+      parqClearanceFileRef.current = null;
       return;
     }
     const maxBytes = 3 * 1024 * 1024;
@@ -224,6 +290,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
       setParqUploadError("檔案不可超過 3MB");
       input.value = "";
       form.setValue("medical_clearance_file_name", "");
+      parqClearanceFileRef.current = null;
       return;
     }
     const okType = file.type.startsWith("image/") || file.type === "application/pdf";
@@ -231,8 +298,10 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
       setParqUploadError("請上傳 PDF 或圖片（JPEG、PNG、WebP、GIF）");
       input.value = "";
       form.setValue("medical_clearance_file_name", "");
+      parqClearanceFileRef.current = null;
       return;
     }
+    parqClearanceFileRef.current = file;
     form.setValue("medical_clearance_file_name", file.name);
   }
 
@@ -309,15 +378,6 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         form.setError("parq", { message: "請完成 PAR-Q 問卷" });
         return;
       }
-      if (parqAnyYes(parqVals)) {
-        const fn = (form.getValues("medical_clearance_file_name") || "").trim();
-        if (!fn) {
-          form.setError("medical_clearance_file_name", {
-            message: "請上傳醫生證明（PDF 或圖片，上限 3MB）"
-          });
-          return;
-        }
-      }
       form.clearErrors("parq");
       form.clearErrors("medical_clearance_file_name");
       setStep(3);
@@ -331,15 +391,18 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
    * Step: Final submit — `POST /api/members`; sessionStorage context + success dialog.
    */
   async function onFinalSubmit(values: StudentRegistrationPayload) {
-    const signatureData = signatureRef.current?.isEmpty()
-      ? ""
-      : signatureRef.current?.getTrimmedCanvas().toDataURL("image/png") ?? "";
-    if (!signatureData) {
+    const signatureData =
+      signatureRef.current?.isEmpty() === false
+        ? signatureRef.current?.getDataUrl() ?? values.digital_signature
+        : values.digital_signature;
+    if (!signatureData?.trim()) {
+      setShowSignatureErrorModal(true);
+      setSignatureHintError(true);
       form.setError("digital_signature", { message: "請在簽名框手寫簽署" });
       return;
     }
-    if (!values.coach_id || values.coach_id < 1) {
-      form.setError("coach_id", { message: "請先選擇教練" });
+    if (!values.coach_username?.trim() || !values.coach_id || values.coach_id < 1) {
+      form.setError("coach_username", { message: "請先選擇教練" });
       return;
     }
     if (!values.course_category_id || values.course_category_id < 1) {
@@ -359,9 +422,11 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         emergency_contact_phone: values.emergency_contact_phone,
         parq: values.parq,
         medical_clearance_file_name: (values.medical_clearance_file_name || "").trim(),
+        medical_clearance_file: parqClearanceFileRef.current,
         cooling_off_acknowledged: values.cooling_off_acknowledged,
         disclaimer_accepted: values.disclaimer_accepted,
         digital_signature: signatureData,
+        coach_username: values.coach_username.trim(),
         coach_id: values.coach_id,
         course_category_id: values.course_category_id
       })) as {
@@ -527,8 +592,8 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         {step === 2 && (
           <div className="space-y-4">
             <p className="text-xs leading-relaxed text-ink/80">
-              PAR-Q：請如實勾選；任一項答「是」須上傳醫生證明（PDF 或圖片，<strong>上限 3MB</strong>
-              ），上傳成功後方可按「下一步」。
+              PAR-Q：請如實勾選。若任一項答「是」，可<strong>選擇</strong>上傳醫生證明（PDF 或圖片，上限 3MB）作候補紀錄；<strong>唔會阻礙</strong>
+              進入下一步。
             </p>
             {PARQ_LABELS.map(({ key, label }) => (
               <Controller
@@ -550,7 +615,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
             ))}
             {anyParqYesVal ? (
               <div className="space-y-2 rounded-lg border border-ink/10 bg-canvas/90 p-3">
-                <p className="text-xs font-medium text-ink">醫療／醫生證明上傳（必填）</p>
+                <p className="text-xs font-medium text-ink">醫療／醫生證明上傳（候補 · 選填）</p>
                 <input
                   ref={parqFileRef}
                   data-testid="parq-medical-upload"
@@ -587,22 +652,24 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                 <span className="text-ink/70">負責教練</span>
                 <select
                   className={fieldClass}
-                  value={selectedCoachId && selectedCoachId > 0 ? selectedCoachId : ""}
+                  value={selectedCoachUsername || ""}
                   onChange={(e) => {
-                    const id = e.target.value ? Number(e.target.value) : 0;
-                    form.setValue("coach_id", id, { shouldValidate: true });
+                    const username = e.target.value;
+                    form.setValue("coach_username", username, { shouldValidate: true });
+                    const coach = coaches.find((c) => coachUsernameValue(c) === username);
+                    form.setValue("coach_id", coach?.id ?? 0);
                     form.setValue("course_category_id", 0);
                   }}
                 >
                   <option value="">請先選擇教練</option>
                   {coaches.map((c) => (
-                    <option key={c.id} value={c.id}>
+                    <option key={c.id} value={coachUsernameValue(c)}>
                       {c.full_name}
                     </option>
                   ))}
                 </select>
-                {form.formState.errors.coach_id ? (
-                  <p className="text-xs text-rose-400">{String(form.formState.errors.coach_id.message)}</p>
+                {form.formState.errors.coach_username ? (
+                  <p className="text-xs text-rose-400">{String(form.formState.errors.coach_username.message)}</p>
                 ) : null}
               </label>
               <label className="block space-y-1 text-sm">
@@ -693,28 +760,30 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                   onClick={() => {
                     signatureRef.current?.clear();
                     form.setValue("digital_signature", "");
+                    setSignatureHintError(false);
                   }}
                 >
                   清除
                 </button>
               </div>
               <div className="overflow-hidden rounded-xl border border-ink/15 bg-white shadow-inner">
-                <SignatureCanvas
+                <SignaturePad
                   ref={signatureRef}
-                  penColor="#2d2422"
-                  canvasProps={{
-                    className: "h-40 w-full touch-none",
-                    "aria-label": "電子簽署手寫區"
-                  }}
-                  onEnd={() => {
-                    const data = signatureRef.current?.isEmpty()
-                      ? ""
-                      : signatureRef.current?.getTrimmedCanvas().toDataURL("image/png") ?? "";
+                  onChange={(data) => {
                     form.setValue("digital_signature", data, { shouldDirty: true, shouldValidate: true });
+                    if (data) setSignatureHintError(false);
                   }}
                 />
               </div>
-              <p className="text-xs text-ink/55">請用手指或滑鼠簽署；系統只儲存簽名圖片 URL。</p>
+              <p
+                className={
+                  signatureHintError
+                    ? "text-xs font-medium text-red-500"
+                    : "text-xs text-ink/55"
+                }
+              >
+                請用手指或滑鼠簽署；系統只儲存簽名圖片 URL。
+              </p>
             </div>
             {form.formState.errors.digital_signature && (
               <p className="text-xs text-rose-400">{form.formState.errors.digital_signature.message}</p>
@@ -742,8 +811,8 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
           {step < 3 ? (
             <button
               type="button"
-              disabled={step === 2 && !step2NextEnabled}
-              className="rounded-md border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-medium text-ink shadow-sm hover:bg-primary disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={step === 1 && !step1Ready}
+              className={step === 1 && !step1Ready ? btnPrimaryDisabled : btnPrimaryEnabled}
               onClick={() => void goNext()}
             >
               下一步
@@ -751,13 +820,48 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
           ) : (
             <button
               type="submit"
-              className="rounded-md border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-medium text-ink shadow-sm hover:bg-primary"
+              disabled={!step3SubmitEnabled}
+              className={step3SubmitEnabled ? btnPrimaryEnabled : btnPrimaryDisabled}
+              onClick={(e) => {
+                const sig = form.getValues("digital_signature");
+                if (!sig?.trim() || signatureRef.current?.isEmpty()) {
+                  e.preventDefault();
+                  setShowSignatureErrorModal(true);
+                  setSignatureHintError(true);
+                  form.setError("digital_signature", { message: "請在簽名框手寫簽署" });
+                }
+              }}
             >
               提交登記
             </button>
           )}
         </div>
       </form>
+
+      {showSignatureErrorModal ? (
+        <div
+          className="fixed inset-0 z-[160] flex items-center justify-center bg-black/40 px-4"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="signature-error-title"
+        >
+          <div className="w-full max-w-sm space-y-4 rounded-xl border border-rose-200 bg-surface p-5 text-ink shadow-xl ring-1 ring-rose-500/20">
+            <h2 id="signature-error-title" className="text-lg font-semibold text-rose-700">
+              缺少電子簽署
+            </h2>
+            <p className="text-sm text-ink/80">
+              請在「電子簽署 Signature」框內手寫簽署後，再按「提交登記」。
+            </p>
+            <button
+              type="button"
+              className={btnPrimaryEnabled + " w-full"}
+              onClick={() => setShowSignatureErrorModal(false)}
+            >
+              確定
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {/* [F001][S004] Post-submit success — optional redirect to photo flow via session context */}
       {showSuccessDialog && (

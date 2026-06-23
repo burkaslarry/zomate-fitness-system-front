@@ -24,6 +24,18 @@ export type MemberProfile = {
   current_course_package_status?: string;
   last_checkin_at?: string | null;
   created_at: string;
+  medical_clearance_status?: "not_required" | "pending" | "received";
+  parq_any_yes?: boolean;
+  onboarding_coach_id?: number | null;
+  onboarding_coach_name?: string | null;
+};
+
+export type MedicalClearanceHealth = {
+  parq: Record<string, boolean> | null;
+  parq_any_yes: boolean;
+  medical_clearance_status: "not_required" | "pending" | "received";
+  medical_clearance_path: string | null;
+  medical_clearance_url: string | null;
 };
 
 export type InstallmentSegmentPinDto = {
@@ -40,6 +52,7 @@ export type CourseCheckinPinRow = {
   course_title: string;
   branch_name: string;
   coach_name?: string;
+  coach_id?: number;
   scheduled_start?: string;
   series_end_date?: string | null;
   checkin_pin: string;
@@ -193,8 +206,33 @@ export type CategoryEnrollmentRow = {
   installment_plans?: InstallmentPlanRow[];
 };
 
+export type PaymentRecordRow = {
+  id: string;
+  record_type: "renewal" | "receipt" | "installment";
+  ref_id: number;
+  student_id: number;
+  student_name: string;
+  student_phone: string;
+  amount: number | null;
+  payment_method: string | null;
+  status: "paid" | "outstanding" | "missing_receipt";
+  coach_id?: number | null;
+  coach_name?: string | null;
+  label: string;
+  receipt_id?: number | null;
+  receipt_url?: string | null;
+  installment_no?: number;
+  installment_plan_id?: number;
+  category_enrollment_id?: number;
+  due_date?: string | null;
+  paid_at?: string | null;
+  created_at: string;
+};
+
 export type MemberFull = {
   profile: MemberProfile;
+  health?: MedicalClearanceHealth;
+  payment_records?: PaymentRecordRow[];
   receipts: Array<{
     id: number;
     file_url: string | null;

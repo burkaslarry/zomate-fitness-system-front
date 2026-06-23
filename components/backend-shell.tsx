@@ -30,7 +30,8 @@ const MENU_SECTIONS: { frameClass: string; items: NavItem[] }[] = [
     frameClass: "rounded-xl border-2 border-ink/15 bg-surface/80 p-2.5",
     items: [
       { href: "/admin/students", label: "學生名單" },
-      { href: "/admin/coaches", label: "教練" }
+      { href: "/admin/coaches", label: "教練" },
+      { href: "/admin/payments", label: "付款紀錄" }
     ]
   },
   {
@@ -40,7 +41,6 @@ const MENU_SECTIONS: { frameClass: string; items: NavItem[] }[] = [
       { href: "/coach/calendar", label: "教練日程 · 簽到" },
       { href: "/coach", label: "教練課表" },
       { href: "/admin/attendance/qr-console", label: "QR 簽到中心" },
-      { href: "/admin/attendance/session-ledger", label: "Session Ledger · 扣堂原因" },
       { href: "/student", label: "學生入口" }
     ]
   },

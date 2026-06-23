@@ -3,13 +3,13 @@
 /**
  * [F005][S003]
  * Feature: Balance Sync & Integrations
- * Step: (see Logic)
- * Logic: WhatsApp settings and log viewer for admins.
+ * Step: WhatsApp template editor + sent log viewer
+ * Logic: Admin edits student/coach payment reminder templates; previews placeholders; views sent logs.
  */
 
 import { useCallback, useEffect, useState } from "react";
 import BackendShell from "../../../../components/backend-shell";
-import { api } from "../../../../lib/api";
+import { alertApiError, api } from "../../../../lib/api";
 import { useDemoState } from "../../../../lib/demo-state";
 
 type ApiWaLog = {
@@ -19,27 +19,24 @@ type ApiWaLog = {
   created_at: string;
 };
 
-const TEMPLATE_DRAFTS = [
-  {
-    key: "onboarding",
-    title: "新人 onboarding 確認",
-    body: "Welcome {{name}}, your onboarding is confirmed."
-  },
-  {
-    key: "checkin",
-    title: "簽到成功",
-    body: "Check-in success. Remaining credits: {{credits}}."
-  },
-  {
-    key: "class_reminder",
-    title: "開課前提醒",
-    body: "Your class starts in 30 mins."
-  }
-];
+type WaTemplate = {
+  key: string;
+  audience: string;
+  title: string;
+  body: string;
+  updated_at?: string | null;
+};
+
+const PLACEHOLDER_HINT =
+  "{{course_title}} {{student_name}} {{student_phone}} {{pin}} {{next_lesson_date}} {{lessons_attended}} {{lessons_remaining}} {{payment_status}} {{amount_paid}} {{total_amount}} {{amount_owing}} {{installment_notes}}";
 
 export default function AdminSettingsWhatsappPage() {
   const { whatsappLogs: demoLogs } = useDemoState();
   const [apiLogs, setApiLogs] = useState<ApiWaLog[] | null>(null);
+  const [templates, setTemplates] = useState<WaTemplate[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [status, setStatus] = useState("");
 
   const loadApiLogs = useCallback(() => {
     void api
@@ -51,9 +48,44 @@ export default function AdminSettingsWhatsappPage() {
       .catch(() => setApiLogs([]));
   }, []);
 
+  const loadTemplates = useCallback(() => {
+    void api
+      .whatsappTemplates()
+      .then((raw) => {
+        const rows = Array.isArray(raw) ? (raw as WaTemplate[]) : [];
+        setTemplates(rows);
+        setDrafts(Object.fromEntries(rows.map((t) => [t.key, t.body])));
+        setStatus("");
+      })
+      .catch((err) => {
+        alertApiError(err);
+        setStatus("無法載入 template（請確認已登入後台）。");
+      });
+  }, []);
+
   useEffect(() => {
     loadApiLogs();
-  }, [loadApiLogs]);
+    loadTemplates();
+  }, [loadApiLogs, loadTemplates]);
+
+  async function saveTemplate(key: string) {
+    const body = drafts[key];
+    if (!body?.trim()) {
+      alertApiError(new Error("Template 內容不可為空"));
+      return;
+    }
+    setSavingKey(key);
+    try {
+      await api.updateWhatsappTemplate(key, body.trim());
+      setStatus(`已儲存：${key}`);
+      loadTemplates();
+      loadApiLogs();
+    } catch (err) {
+      alertApiError(err);
+    } finally {
+      setSavingKey(null);
+    }
+  }
 
   const tableRows =
     apiLogs && apiLogs.length > 0
@@ -62,15 +94,57 @@ export default function AdminSettingsWhatsappPage() {
           when: log.created_at,
           recipient: log.recipient,
           message: log.message,
-          status: "✅✅ Delivered"
+          status: "✅ 已記錄"
         }))
       : demoLogs.map((log) => ({
           id: String(log.id),
           when: log.timestamp,
           recipient: log.recipient,
           message: log.message,
-          status: log.status === "Delivered" ? "✅✅ Delivered" : log.status
+          status: log.status === "Delivered" ? "✅ 已記錄" : log.status
         }));
+
+  const studentTemplates = templates.filter((t) => t.audience === "student");
+  const coachTemplates = templates.filter((t) => t.audience === "coach");
+
+  function renderTemplateSection(label: string, rows: WaTemplate[]) {
+    if (rows.length === 0) return null;
+    return (
+      <section className="rounded-xl border border-ink/10 bg-surface p-5 shadow-sm ring-1 ring-ink/[0.04]">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-ink/55">{label}</h3>
+        <p className="mt-1 text-xs text-ink/50">可用變數：{PLACEHOLDER_HINT}</p>
+        <div className="mt-4 grid gap-4">
+          {rows.map((t) => (
+            <div key={t.key} className="rounded-lg border border-ink/10 bg-canvas/80 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium text-ink">{t.title}</p>
+                  <p className="text-xs text-ink/45 font-mono">{t.key}</p>
+                </div>
+                {t.updated_at ? (
+                  <p className="text-[11px] text-ink/45">更新 {new Date(t.updated_at).toLocaleString()}</p>
+                ) : null}
+              </div>
+              <textarea
+                rows={10}
+                value={drafts[t.key] ?? t.body}
+                onChange={(e) => setDrafts((prev) => ({ ...prev, [t.key]: e.target.value }))}
+                className="mt-3 w-full resize-y rounded-lg border border-ink/10 bg-surface px-3 py-2 font-mono text-xs text-ink/85"
+              />
+              <button
+                type="button"
+                disabled={savingKey === t.key}
+                onClick={() => void saveTemplate(t.key)}
+                className="mt-3 rounded-lg bg-primary/90 px-4 py-2 text-xs font-medium text-ink disabled:opacity-50"
+              >
+                {savingKey === t.key ? "儲存中…" : "儲存 template"}
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <BackendShell title="Whatsapp 設定">
@@ -78,58 +152,25 @@ export default function AdminSettingsWhatsappPage() {
         <div>
           <h2 className="text-2xl font-semibold text-ink">Whatsapp 設定</h2>
           <p className="mt-1 text-sm text-ink/60">
-            示範版面：上方為連線與 template 草稿；下方為已發送訊息（優先顯示後端{" "}
-            <code className="rounded bg-canvas px-1 py-0.5 text-xs ring-1 ring-ink/10">GET /api/admin/whatsapp-logs</code>
-            ，無資料時用本機 demo）。
+            編輯付款／收據確認訊息 template（學生、教練）。上傳收據或建立付款紀錄後，系統會依 template 寫入{" "}
+            <code className="rounded bg-canvas px-1 py-0.5 text-xs ring-1 ring-ink/10">zomate_fs_whatsapp_logs</code>
+            ，職員可複製到 WhatsApp 發送。
           </p>
+          {status ? <p className="mt-2 text-sm text-emerald-800">{status}</p> : null}
         </div>
 
-        <section className="rounded-xl border border-ink/10 bg-surface p-5 shadow-sm ring-1 ring-ink/[0.04]">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-ink/55">WhatsApp config（示範）</h3>
-          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-            <div className="rounded-lg border border-ink/10 bg-canvas/80 px-3 py-2">
-              <dt className="text-xs font-medium text-ink/50">Webhook verify token</dt>
-              <dd className="mt-1 font-mono text-xs text-ink">••••••••（未接駁）</dd>
-            </div>
-            <div className="rounded-lg border border-ink/10 bg-canvas/80 px-3 py-2">
-              <dt className="text-xs font-medium text-ink/50">API version</dt>
-              <dd className="mt-1 font-mono text-xs text-ink">Graph API v21.x（預留）</dd>
-            </div>
-            <div className="rounded-lg border border-ink/10 bg-canvas/80 px-3 py-2">
-              <dt className="text-xs font-medium text-ink/50">Business phone ID</dt>
-              <dd className="mt-1 font-mono text-xs text-ink">—</dd>
-            </div>
-            <div className="rounded-lg border border-ink/10 bg-canvas/80 px-3 py-2">
-              <dt className="text-xs font-medium text-ink/50">Sender status</dt>
-              <dd className="mt-1 text-ink/85">Demo · 未連線 production</dd>
-            </div>
-          </dl>
-        </section>
-
-        <section className="rounded-xl border border-ink/10 bg-surface p-5 shadow-sm ring-1 ring-ink/[0.04]">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-ink/55">Template message drafts（示範）</h3>
-          <p className="mt-1 text-xs text-ink/50">之後可對接 WhatsApp Cloud API template 名稱與變數對應。</p>
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
-            {TEMPLATE_DRAFTS.map((t) => (
-              <label key={t.key} className="block space-y-1">
-                <span className="text-xs font-medium text-ink/65">{t.title}</span>
-                <textarea
-                  readOnly
-                  rows={4}
-                  value={t.body}
-                  className="w-full resize-none rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-xs text-ink/85 ring-1 ring-ink/[0.03]"
-                />
-              </label>
-            ))}
-          </div>
-        </section>
+        {renderTemplateSection("Template · 學生", studentTemplates)}
+        {renderTemplateSection("Template · 教練", coachTemplates)}
 
         <section className="space-y-3">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <h3 className="text-lg font-semibold text-ink">已發送訊息</h3>
             <button
               type="button"
-              onClick={() => loadApiLogs()}
+              onClick={() => {
+                loadApiLogs();
+                loadTemplates();
+              }}
               className="rounded-lg border border-ink/15 bg-canvas px-3 py-1.5 text-xs font-medium text-ink hover:bg-surface"
             >
               重新載入
@@ -159,7 +200,7 @@ export default function AdminSettingsWhatsappPage() {
                         {new Date(row.when).toLocaleString()}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 align-top text-ink/80">{row.recipient}</td>
-                      <td className="max-w-md px-4 py-3 align-top text-ink/85">{row.message}</td>
+                      <td className="max-w-md whitespace-pre-wrap px-4 py-3 align-top text-ink/85">{row.message}</td>
                       <td className="whitespace-nowrap px-4 py-3 align-top text-ink/80">{row.status}</td>
                     </tr>
                   ))

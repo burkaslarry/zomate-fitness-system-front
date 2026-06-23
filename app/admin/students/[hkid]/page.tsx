@@ -11,10 +11,28 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import BackendShell from "../../../../components/backend-shell";
+import PaymentRecordsTable from "../../../../components/payment-records-table";
 import { alertApiError, api, apiAssetUrl } from "../../../../lib/api";
-import type { CategoryEnrollmentRow, MemberFull } from "../../../../types/api";
+import { getAuthSession } from "../../../../lib/auth";
+import type { CategoryEnrollmentRow, CoachDto, MemberFull } from "../../../../types/api";
 
-const tabs = ["資料", "課程記錄", "活動紀錄"] as const;
+const PARQ_LABELS: Record<string, string> = {
+  q1_heart_condition: "心臟問題（只宜醫生建議下運動）",
+  q2_chest_pain_activity: "運動時胸痛",
+  q3_chest_pain_rest: "休息時胸痛（過去一個月）",
+  q4_dizziness: "運動後暈眩",
+  q5_bone_joint_problem: "骨骼／關節問題會因運動惡化",
+  q6_blood_pressure_meds: "服用血壓或心臟藥物",
+  q7_other_reason: "其他醫生未建議運動的原因"
+};
+
+function medicalStatusLabel(status: string | undefined): string {
+  if (status === "pending") return "候補（待醫生證明）";
+  if (status === "received") return "已收到證明";
+  return "毋須";
+}
+
+const tabs = ["資料", "課程記錄", "付款紀錄", "活動紀錄"] as const;
 
 type CatRow = { id: number; name: string; is_deleted?: boolean };
 
@@ -24,6 +42,7 @@ function activityTypeLabel(type: string): string {
     member_create: "新會員登記",
     member_profile_update: "更新學生資料",
     member_photo_upload: "上傳學生相片",
+    medical_clearance_upload: "上傳 PAR-Q 醫生證明",
     receipt_upload: "上傳收據／付款憑證",
     renewal_create: "報 Course／續會收費",
     trial_class_create: "試堂／加堂登記",
@@ -103,13 +122,20 @@ export default function AdminStudentDetailPage() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [receiptUploading, setReceiptUploading] = useState(false);
+  const [medicalUploading, setMedicalUploading] = useState(false);
   const [photoFailed, setPhotoFailed] = useState(false);
   const [signatureFailed, setSignatureFailed] = useState(false);
   /** When staff picks an unpaid installment, scroll to receipt form and label it (分期第 N 期). */
   const [receiptInstallmentCtx, setReceiptInstallmentCtx] = useState<{
     installmentNo: number;
     categoryName: string;
+    installmentPlanId: number;
   } | null>(null);
+  const [receiptWaLinks, setReceiptWaLinks] = useState<Array<{ label: string; url: string }>>([]);
+  const [coaches, setCoaches] = useState<CoachDto[]>([]);
+  const [transferBusy, setTransferBusy] = useState<number | null>(null);
+  const [transferCoachPick, setTransferCoachPick] = useState<Record<number, number | "">>({});
+  const isAdmin = getAuthSession()?.role === "ADMIN";
   const receiptSectionRef = useRef<HTMLDivElement | null>(null);
   const studentId = decodeURIComponent(params.hkid);
 
@@ -135,6 +161,29 @@ export default function AdminStudentDetailPage() {
       .then((rows) => setCategories(rows as CatRow[]))
       .catch(alertApiError);
   }, []);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    void api.publicCoaches().then((rows) => setCoaches(Array.isArray(rows) ? (rows as CoachDto[]) : [])).catch(() => {});
+  }, [isAdmin]);
+
+  async function onTransferCoach(courseId: number) {
+    const nextCoachId = transferCoachPick[courseId];
+    if (!nextCoachId) {
+      alertApiError(new Error("請選擇新教練"));
+      return;
+    }
+    setTransferBusy(courseId);
+    try {
+      await api.assignCourseCoach(courseId, Number(nextCoachId));
+      setToast("已轉教練（僅 Admin 可操作）");
+      reload();
+    } catch (e) {
+      alertApiError(e);
+    } finally {
+      setTransferBusy(null);
+    }
+  }
 
   async function onSaveCategoryEnrollment() {
     if (!data?.profile.id || catId === "") {
@@ -173,15 +222,36 @@ export default function AdminStudentDetailPage() {
     const userNote = String(form.get("note") ?? "").trim();
     setReceiptUploading(true);
     try {
-      await api.uploadMemberReceiptById(data.profile.id, {
+      const sendWhatsapp = form.get("send_whatsapp") === "on";
+      const notifyCoach = form.get("notify_coach") === "on";
+      const courseEnrollmentRaw = String(form.get("course_enrollment_id") ?? "").trim();
+      const res = (await api.uploadMemberReceiptById(data.profile.id, {
         file,
         amount: String(form.get("amount") ?? "").trim(),
         payment_method: String(form.get("payment_method") ?? "").trim(),
         note: userNote,
         context,
-        source: "RENEWAL"
-      });
-      setToast("已上傳收據");
+        source: "RENEWAL",
+        installment_no: receiptInstallmentCtx?.installmentNo,
+        installment_plan_id: receiptInstallmentCtx?.installmentPlanId,
+        course_enrollment_id: courseEnrollmentRaw ? Number(courseEnrollmentRaw) : undefined,
+        send_whatsapp: sendWhatsapp,
+        notify_coach: notifyCoach
+      })) as {
+        whatsapp?: {
+          student?: { wa_me_url?: string };
+          coach?: { wa_me_url?: string };
+        };
+      };
+      const links: Array<{ label: string; url: string }> = [];
+      if (res.whatsapp?.student?.wa_me_url) {
+        links.push({ label: "學生 WhatsApp", url: res.whatsapp.student.wa_me_url });
+      }
+      if (res.whatsapp?.coach?.wa_me_url) {
+        links.push({ label: "教練 WhatsApp", url: res.whatsapp.coach.wa_me_url });
+      }
+      setReceiptWaLinks(links);
+      setToast(links.length > 0 ? "已上傳收據並產生 WhatsApp 訊息" : "已上傳收據");
       event.currentTarget.reset();
       setReceiptInstallmentCtx(null);
       reload();
@@ -192,8 +262,35 @@ export default function AdminStudentDetailPage() {
     }
   }
 
-  function focusReceiptForInstallment(payload: { installmentNo: number; categoryName: string }) {
+  async function onUploadMedicalClearance(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!data?.profile.id) return;
+    const form = new FormData(event.currentTarget);
+    const file = form.get("file");
+    if (!(file instanceof File) || file.size === 0) {
+      alertApiError(new Error("請選擇醫生證明 PDF 或圖片"));
+      return;
+    }
+    setMedicalUploading(true);
+    try {
+      await api.uploadMedicalClearanceById(data.profile.id, file);
+      setToast("已上傳醫生證明");
+      event.currentTarget.reset();
+      reload();
+    } catch (e) {
+      alertApiError(e);
+    } finally {
+      setMedicalUploading(false);
+    }
+  }
+
+  function focusReceiptForInstallment(payload: {
+    installmentNo: number;
+    categoryName: string;
+    installmentPlanId: number;
+  }) {
     setReceiptInstallmentCtx(payload);
+    setReceiptWaLinks([]);
     setTab("課程記錄");
   }
 
@@ -445,6 +542,69 @@ export default function AdminStudentDetailPage() {
                   </a>
                 ) : null}
               </div>
+              <div className="space-y-3 rounded-xl border border-ink/10 bg-canvas p-4 md:col-span-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-ink">PAR-Q ／ 醫生證明</h3>
+                  <p className="mt-1 text-xs text-ink/55">
+                    登記問卷與醫生證明狀態。PAR-Q 有任何「是」而未有檔案時為<strong className="text-amber-900">候補</strong>。
+                  </p>
+                </div>
+                <p className="text-sm text-ink">
+                  狀態：
+                  <span
+                    className={
+                      (data.health?.medical_clearance_status ?? data.profile.medical_clearance_status) === "pending"
+                        ? "ml-1 font-medium text-amber-800"
+                        : "ml-1 font-medium text-ink"
+                    }
+                  >
+                    {medicalStatusLabel(data.health?.medical_clearance_status ?? data.profile.medical_clearance_status)}
+                  </span>
+                </p>
+                {data.health?.parq && Object.keys(data.health.parq).length > 0 ? (
+                  <ul className="space-y-1 text-sm text-ink/85">
+                    {Object.entries(data.health.parq).map(([key, yes]) => (
+                      <li key={key} className="flex gap-2">
+                        <span className={yes ? "font-medium text-amber-900" : "text-ink/55"}>{yes ? "是" : "否"}</span>
+                        <span>{PARQ_LABELS[key] ?? key}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : data.profile.parq_any_yes ? (
+                  <p className="text-sm text-ink/70">PAR-Q 有「是」答案（詳細問卷未載入）。</p>
+                ) : (
+                  <p className="text-sm text-ink/55">PAR-Q 全部「否」— 毋須醫生證明。</p>
+                )}
+                {data.health?.medical_clearance_url ? (
+                  <ReceiptThumb
+                    fileUrl={apiAssetUrl(data.health.medical_clearance_url) ?? data.health.medical_clearance_url}
+                    label="醫生證明"
+                  />
+                ) : null}
+                {(data.health?.medical_clearance_status ?? data.profile.medical_clearance_status) === "pending" ||
+                ((data.health?.parq_any_yes ?? data.profile.parq_any_yes) &&
+                  (data.health?.medical_clearance_status ?? data.profile.medical_clearance_status) !== "received") ? (
+                  <form onSubmit={(event) => void onUploadMedicalClearance(event)} className="space-y-3 border-t border-ink/10 pt-3">
+                    <label className="block text-xs text-ink/55">
+                      上傳醫生證明（PDF／圖片，≤3MB）
+                      <input
+                        name="file"
+                        type="file"
+                        accept="image/*,.pdf,application/pdf"
+                        required
+                        className="mt-1 block w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink"
+                      />
+                    </label>
+                    <button
+                      type="submit"
+                      disabled={medicalUploading}
+                      className="rounded-lg bg-primary/90 px-4 py-2 text-sm font-medium text-ink disabled:opacity-50"
+                    >
+                      {medicalUploading ? "上傳中…" : "上傳並標記為已收到"}
+                    </button>
+                  </form>
+                ) : null}
+              </div>
             </div>
           )}
           {tab === "課程記錄" && data && (
@@ -528,6 +688,38 @@ export default function AdminStudentDetailPage() {
                         <div className="mt-2 font-mono text-base font-semibold tracking-wide text-ink">
                           課堂 PIN：{p.checkin_pin}
                         </div>
+                        {isAdmin ? (
+                          <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-ink/10 pt-3">
+                            <label className="text-xs text-ink/55">
+                              轉教練（Admin）
+                              <select
+                                value={transferCoachPick[p.course_id] ?? p.coach_id ?? ""}
+                                onChange={(e) =>
+                                  setTransferCoachPick((prev) => ({
+                                    ...prev,
+                                    [p.course_id]: e.target.value ? Number(e.target.value) : ""
+                                  }))
+                                }
+                                className="mt-1 block rounded-lg border border-ink/15 bg-surface px-2 py-1.5 text-sm"
+                              >
+                                <option value="">選擇教練</option>
+                                {coaches.map((c) => (
+                                  <option key={c.id} value={c.id}>
+                                    {c.full_name}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <button
+                              type="button"
+                              disabled={transferBusy === p.course_id}
+                              onClick={() => void onTransferCoach(p.course_id)}
+                              className="rounded-lg bg-primary/90 px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-50"
+                            >
+                              {transferBusy === p.course_id ? "…" : "確認轉教練"}
+                            </button>
+                          </div>
+                        ) : null}
                       </li>
                     ))}
                   </ul>
@@ -677,7 +869,37 @@ export default function AdminStudentDetailPage() {
                     />
                   </label>
                   <label className="block text-xs text-ink/55 md:col-span-2">
-                    對應 Course / Category（選填）
+                    對應 Course（分期 PIN 解鎖，選填）
+                    <select
+                      name="course_enrollment_id"
+                      className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink"
+                    >
+                      <option value="">不指定（僅 category 分期）</option>
+                      {pins.map((p) => (
+                        <option key={p.course_id} value={String(p.course_id)}>
+                          {p.course_title} · PIN {p.checkin_pin}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-ink/70 md:col-span-2">
+                    <input type="checkbox" name="send_whatsapp" defaultChecked className="rounded border-ink/20" />
+                    上傳後產生 WhatsApp 提醒（學生）
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-ink/70 md:col-span-2">
+                    <input type="checkbox" name="notify_coach" defaultChecked className="rounded border-ink/20" />
+                    同時通知教練
+                  </label>
+                  <label className="block text-xs text-ink/55 md:col-span-2">
+                    備註（選填）
+                    <input
+                      name="note"
+                      placeholder="例如：補回第一期收據"
+                      className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink"
+                    />
+                  </label>
+                  <label className="block text-xs text-ink/55 md:col-span-2">
+                    對應 Course / Category 備註（選填）
                     <select
                       name="context"
                       disabled={receiptInstallmentCtx != null}
@@ -691,14 +913,6 @@ export default function AdminStudentDetailPage() {
                       ))}
                     </select>
                   </label>
-                  <label className="block text-xs text-ink/55 md:col-span-2">
-                    備註（選填）
-                    <input
-                      name="note"
-                      placeholder="例如：補回第一期收據"
-                      className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink"
-                    />
-                  </label>
                   <button
                     type="submit"
                     disabled={receiptUploading}
@@ -707,6 +921,20 @@ export default function AdminStudentDetailPage() {
                     {receiptUploading ? "上傳中…" : "上傳收據"}
                   </button>
                 </form>
+                {receiptWaLinks.length > 0 ? (
+                  <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50/80 p-3 text-xs text-emerald-900">
+                    <p className="font-medium">WhatsApp 快速連結</p>
+                    <ul className="mt-2 space-y-1">
+                      {receiptWaLinks.map((link) => (
+                        <li key={link.label}>
+                          <a href={link.url} target="_blank" rel="noreferrer" className="underline">
+                            {link.label}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
                 {(data.receipts ?? []).length === 0 ? (
                   <p className="text-sm text-ink/55">暫無收據檔案。</p>
                 ) : (
@@ -729,6 +957,15 @@ export default function AdminStudentDetailPage() {
                   </ul>
                 )}
               </div>
+            </div>
+          )}
+          {tab === "付款紀錄" && data && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold text-ink">付款紀錄 Payment Record</h3>
+                <p className="mt-1 text-xs text-ink/55">續會／報 Course、獨立收據、種類分期 — 含缺收據狀態。</p>
+              </div>
+              <PaymentRecordsTable rows={data.payment_records ?? []} />
             </div>
           )}
           {tab === "活動紀錄" && data && (
@@ -758,7 +995,11 @@ function CategoryEnrollmentCard({
   onReceiptForInstallment
 }: {
   row: CategoryEnrollmentRow;
-  onReceiptForInstallment: (payload: { installmentNo: number; categoryName: string }) => void;
+  onReceiptForInstallment: (payload: {
+    installmentNo: number;
+    categoryName: string;
+    installmentPlanId: number;
+  }) => void;
 }) {
   const plans = row.installment_plans ?? [];
   const categoryName = row.category_name;
@@ -798,7 +1039,8 @@ function CategoryEnrollmentCard({
                             onClick={() =>
                               onReceiptForInstallment({
                                 installmentNo: pay.installment_no,
-                                categoryName
+                                categoryName,
+                                installmentPlanId: pl.id
                               })
                             }
                           >

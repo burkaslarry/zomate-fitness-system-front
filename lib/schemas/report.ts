@@ -47,24 +47,3 @@ export const coachAttendanceRowSchema = z.object({
 });
 
 export type CoachAttendanceRowValidated = z.infer<typeof coachAttendanceRowSchema>;
-
-export const sessionLedgerReasonSchema = z.enum(["attended", "late_cancel", "coach_makeup"]);
-
-export const sessionLedgerEntrySchema = z.object({
-  studentName: z.string().min(1),
-  sessionStartIso: z.string(),
-  cancelledAtIso: z.string().optional(),
-  reason: sessionLedgerReasonSchema,
-  notes: z.string().optional()
-});
-
-export type SessionLedgerEntryValidated = z.infer<typeof sessionLedgerEntrySchema>;
-
-/** Late cancellation: within 24h of scheduled session start → invalidates standard refund rules (demo rule flag). */
-export function isLateCancellation(sessionStartIso: string, cancelledAtIso: string): boolean {
-  const start = new Date(sessionStartIso).getTime();
-  const cancel = new Date(cancelledAtIso).getTime();
-  if (Number.isNaN(start) || Number.isNaN(cancel)) return false;
-  const hours = (start - cancel) / (1000 * 60 * 60);
-  return hours >= 0 && hours < 24;
-}

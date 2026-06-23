@@ -89,7 +89,26 @@ function downloadImportTemplateSample(students: MemberProfile[]) {
   URL.revokeObjectURL(href);
 }
 
+function medicalStatusBadge(status: MemberProfile["medical_clearance_status"]) {
+  if (status === "pending") {
+    return (
+      <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-900">
+        候補
+      </span>
+    );
+  }
+  if (status === "received") {
+    return (
+      <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-900">
+        已收證明
+      </span>
+    );
+  }
+  return null;
+}
+
 export default function AdminStudentsPage() {
+  const [medicalPendingOnly, setMedicalPendingOnly] = useState(false);
   const [students, setStudents] = useState<MemberProfile[]>([]);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -109,11 +128,20 @@ export default function AdminStudentsPage() {
     reload();
   }, [reload]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setMedicalPendingOnly(new URLSearchParams(window.location.search).get("medical_pending") === "1");
+  }, []);
+
   const filtered = useMemo(() => {
+    let rows = students;
+    if (medicalPendingOnly) {
+      rows = rows.filter((s) => s.medical_clearance_status === "pending");
+    }
     const q = search.trim().toLowerCase();
-    if (!q) return students;
-    return students.filter((s) => `${s.full_name} ${s.hkid ?? ""} ${s.phone}`.toLowerCase().includes(q));
-  }, [search, students]);
+    if (!q) return rows;
+    return rows.filter((s) => `${s.full_name} ${s.hkid ?? ""} ${s.phone}`.toLowerCase().includes(q));
+  }, [search, students, medicalPendingOnly]);
 
   async function onExport() {
     try {
@@ -158,6 +186,16 @@ export default function AdminStudentsPage() {
             <h2 className="text-2xl font-semibold text-ink">學生名單</h2>
             <p className="mt-1 text-sm text-ink/70">
               點姓名可用學生 ID 開啟會員詳情（毋須 HKID）。名單加入 DOB、剩餘堂數、套餐狀態、註冊日及最後簽到時間，方便即場核對。
+              {medicalPendingOnly ? (
+                <>
+                  {" "}
+                  <strong className="font-medium text-amber-900">目前只顯示 PAR-Q 候補（待醫生證明）學員。</strong>
+                  {" "}
+                  <Link href="/admin/students" className="text-primary underline">
+                    顯示全部
+                  </Link>
+                </>
+              ) : null}
               <strong className="font-medium text-ink">匯出 CSV 範本（首 5 筆）</strong>
               方便對照批次匯入欄位；完整名單請用「匯出 CSV」。
             </p>
@@ -217,8 +255,10 @@ export default function AdminStudentsPage() {
             </p>
           </div>
           <div className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm ring-1 ring-ink/[0.04]">
-            <p className="text-xs text-ink/55">有相片</p>
-            <p className="mt-2 text-3xl font-semibold text-ink">{students.filter((s) => s.photo_path).length}</p>
+            <p className="text-xs text-ink/55">PAR-Q 候補</p>
+            <p className="mt-2 text-3xl font-semibold text-amber-800">
+              {students.filter((s) => s.medical_clearance_status === "pending").length}
+            </p>
           </div>
         </div>
         <input
@@ -239,6 +279,7 @@ export default function AdminStudentsPage() {
                 <th className="px-3 py-2">電話</th>
                 <th className="px-3 py-2">剩餘堂數</th>
                 <th className="px-3 py-2">套餐狀態</th>
+                <th className="px-3 py-2">健康</th>
                 <th className="px-3 py-2">註冊日</th>
                 <th className="px-3 py-2">最後簽到</th>
               </tr>
@@ -267,6 +308,9 @@ export default function AdminStudentsPage() {
                       {student.current_course_package_status ?? (student.is_active ? "Active" : "No active package")}
                     </span>
                   </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {medicalStatusBadge(student.medical_clearance_status) ?? "—"}
+                  </td>
                   <td className="px-3 py-2 whitespace-nowrap">{formatDateOnly(student.created_at)}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{formatDateOnly(student.last_checkin_at)}</td>
                 </tr>
@@ -284,6 +328,9 @@ export default function AdminStudentsPage() {
                     {student.full_name}
                   </Link>
                   <p className="mt-1 text-xs text-ink/60">{student.phone} · HKID {student.hkid ?? "未填"}</p>
+                  {medicalStatusBadge(student.medical_clearance_status) ? (
+                    <p className="mt-1">{medicalStatusBadge(student.medical_clearance_status)}</p>
+                  ) : null}
                 </div>
                 <span className="rounded-full bg-purple-500/15 px-2 py-1 text-xs font-medium text-purple-900">
                   {student.lesson_balance} 堂

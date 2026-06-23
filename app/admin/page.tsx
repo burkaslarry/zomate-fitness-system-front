@@ -23,7 +23,7 @@ function summaryValue(summary: Summary, keys: string[]) {
 }
 
 type DashboardCard =
-  | { kind: "number"; label: string; value: number }
+  | { kind: "number"; label: string; value: number; href?: string }
   | {
       kind: "ratio";
       label: string;
@@ -65,6 +65,8 @@ export default function AdminPage() {
 
   const installmentUnpaid = summaryValue(summary, ["installment_students_unpaid", "students_installment_pending"]);
   const installmentTotal = summaryValue(summary, ["installment_students_total", "students_installment_active"]);
+  const medicalPending = summaryValue(summary, ["medical_clearance_pending"]);
+  const missingReceipts = summaryValue(summary, ["missing_receipt_registrations"]);
 
   const cards: DashboardCard[] = [
     {
@@ -90,6 +92,18 @@ export default function AdminPage() {
       total: installmentTotal,
       ratioHint: "左：仲有分期未俾清 · 右：做緊分期學生人數",
       href: "/admin/finance/sales?installment_enrollment=1"
+    },
+    {
+      kind: "number",
+      label: "PAR-Q 候補（待醫生證明）",
+      value: medicalPending,
+      href: "/admin/students?medical_pending=1"
+    },
+    {
+      kind: "number",
+      label: "缺收據報名",
+      value: missingReceipts,
+      href: "/admin/payments?status=missing_receipt"
     }
   ];
 
@@ -159,6 +173,21 @@ export default function AdminPage() {
               );
             }
 
+            if (card.href) {
+              return (
+                <Link
+                  key={card.label}
+                  href={card.href}
+                  className="rounded-xl border border-ink/10 bg-surface p-5 shadow-sm ring-1 ring-ink/[0.04] transition hover:border-amber-300/60 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                >
+                  {shell}
+                  <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-primary">
+                    <span aria-hidden>→</span> 查看候補名單
+                  </p>
+                </Link>
+              );
+            }
+
             return (
               <article
                 key={card.label}
@@ -206,13 +235,6 @@ export default function AdminPage() {
             >
               教練日程
               <span className="mt-1 block text-xs font-normal text-ink/65">月曆查看課堂與簽到</span>
-            </Link>
-            <Link
-              href="/admin/attendance/session-ledger"
-              className="rounded-xl border border-emerald-200/70 bg-emerald-50/90 px-4 py-3 text-sm font-semibold text-ink shadow-sm ring-1 ring-ink/[0.04] hover:bg-emerald-100/90"
-            >
-              Session Ledger · 扣堂原因
-              <span className="mt-1 block text-xs font-normal text-ink/65">上堂、late cancel、補堂記錄</span>
             </Link>
           </div>
         </section>

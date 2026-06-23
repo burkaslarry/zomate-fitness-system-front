@@ -303,8 +303,46 @@ export const api = {
   /** Full Zod-validated registration (F01). */
   studentsRegisterV1: (payload: Record<string, unknown>) =>
     request("/api/v1/students/register", { method: "POST", body: JSON.stringify(payload) }),
-  createMember: (payload: Record<string, unknown>) =>
-    request("/api/members", { method: "POST", body: JSON.stringify(payload) }),
+  /** [F001][S002] Multipart registration — optional `medical_clearance` file when PAR-Q has「是」. */
+  createMember: (payload: {
+    full_name: string;
+    hkid: string;
+    phone: string;
+    email?: string;
+    date_of_birth: string;
+    emergency_contact_name: string;
+    emergency_contact_phone: string;
+    parq: Record<string, boolean>;
+    medical_clearance_file_name?: string;
+    medical_clearance_file?: File | null;
+    cooling_off_acknowledged: boolean;
+    disclaimer_accepted: boolean;
+    digital_signature: string;
+    coach_username: string;
+    coach_id: number;
+    course_category_id: number;
+  }) => {
+    const form = new FormData();
+    form.append("full_name", payload.full_name);
+    form.append("hkid", payload.hkid);
+    form.append("phone", payload.phone);
+    if (payload.email) form.append("email", payload.email);
+    form.append("date_of_birth", payload.date_of_birth);
+    form.append("emergency_contact_name", payload.emergency_contact_name);
+    form.append("emergency_contact_phone", payload.emergency_contact_phone);
+    form.append("parq", JSON.stringify(payload.parq));
+    form.append("medical_clearance_file_name", payload.medical_clearance_file_name ?? "");
+    form.append("cooling_off_acknowledged", payload.cooling_off_acknowledged ? "true" : "false");
+    form.append("disclaimer_accepted", payload.disclaimer_accepted ? "true" : "false");
+    form.append("digital_signature", payload.digital_signature);
+    form.append("coach_username", payload.coach_username);
+    form.append("coach_id", String(payload.coach_id));
+    form.append("course_category_id", String(payload.course_category_id));
+    if (payload.medical_clearance_file) {
+      form.append("medical_clearance", payload.medical_clearance_file);
+    }
+    return request("/api/members", { method: "POST", body: form });
+  },
   /** F01 步驟 1 — 檢查姓名／簡填 HKID／電話是否已有紀錄（公開，毋須 Bearer）。 */
   memberDuplicateCheck: (payload: { full_name: string; hkid: string; phone: string }) =>
     request("/api/members/duplicate-check", { method: "POST", body: JSON.stringify(payload) }),
@@ -355,7 +393,19 @@ export const api = {
   },
   uploadMemberReceiptById: (
     studentId: number | string,
-    payload: { file: File; amount?: string; payment_method?: string; note?: string; source?: "REGISTER" | "RENEWAL"; context?: string }
+    payload: {
+      file: File;
+      amount?: string;
+      payment_method?: string;
+      note?: string;
+      source?: "REGISTER" | "RENEWAL";
+      context?: string;
+      installment_no?: number;
+      course_enrollment_id?: number;
+      installment_plan_id?: number;
+      send_whatsapp?: boolean;
+      notify_coach?: boolean;
+    }
   ) => {
     const form = new FormData();
     form.append("file", payload.file);
@@ -364,7 +414,25 @@ export const api = {
     if (payload.note) form.append("note", payload.note);
     if (payload.context) form.append("context", payload.context);
     form.append("source", payload.source ?? "RENEWAL");
+    if (payload.installment_no != null) form.append("installment_no", String(payload.installment_no));
+    if (payload.course_enrollment_id != null) {
+      form.append("course_enrollment_id", String(payload.course_enrollment_id));
+    }
+    if (payload.installment_plan_id != null) {
+      form.append("installment_plan_id", String(payload.installment_plan_id));
+    }
+    form.append("send_whatsapp", payload.send_whatsapp === false ? "false" : "true");
+    form.append("notify_coach", payload.notify_coach === false ? "false" : "true");
     return request(`/api/members/by-id/${encodeURIComponent(String(studentId))}/receipts`, { method: "POST", body: form });
+  },
+  /** [F001][S002] Staff follow-up upload for PAR-Q medical clearance (候補 → received). */
+  uploadMedicalClearanceById: (studentId: number | string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return request(`/api/members/by-id/${encodeURIComponent(String(studentId))}/medical-clearance`, {
+      method: "POST",
+      body: form
+    });
   },
   resendPin: (hkid: string) =>
     request(`/api/members/${encodeURIComponent(hkid)}/resend-pin`, { method: "POST" }),
@@ -427,7 +495,36 @@ export const api = {
   studentTodayLessons: (studentId: number) =>
     request(`/api/public/student-today-lessons?student_id=${encodeURIComponent(String(studentId))}`),
   summary: () => request("/api/admin/summary"),
+  paymentRecords: (query?: { status?: string; q?: string }) => {
+    const sp = new URLSearchParams();
+    if (query?.status) sp.set("status", query.status);
+    if (query?.q) sp.set("q", query.q);
+    const qs = sp.toString();
+    return request(`/api/admin/payment-records${qs ? `?${qs}` : ""}`);
+  },
+  missingReceiptRegistrations: () => request("/api/admin/missing-receipt-registrations"),
   whatsappLogs: () => request("/api/admin/whatsapp-logs"),
+  whatsappTemplates: () => request("/api/admin/whatsapp-templates"),
+  updateWhatsappTemplate: (key: string, body: string) =>
+    request(`/api/admin/whatsapp-templates/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      body: JSON.stringify({ body })
+    }),
+  sendPaymentReminder: (
+    studentId: number,
+    payload: {
+      course_enrollment_id?: number;
+      installment_no?: number;
+      installment_plan_id?: number;
+      receipt_confirmed?: boolean;
+      notify_coach?: boolean;
+      amount?: number;
+    }
+  ) =>
+    request(`/api/admin/students/${studentId}/send-payment-reminder`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
   auditLogs: (limit?: number) =>
     request(
       limit != null
@@ -672,8 +769,5 @@ export const api = {
     if (query?.month) sp.set("month", query.month);
     const qs = sp.toString();
     return request(`/api/v1/reports/coach-attendance${qs ? `?${qs}` : ""}`);
-  },
-  sessionLedgerGet: () => request("/api/v1/session-ledger"),
-  sessionLedgerPost: (payload: Record<string, unknown>) =>
-    request("/api/v1/session-ledger", { method: "POST", body: JSON.stringify(payload) })
+  }
 };

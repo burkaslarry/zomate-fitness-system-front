@@ -24,7 +24,7 @@ export async function GET(req: Request) {
   const list = mockApiStore.students;
   const total_students = list.length;
   const active_students = list.filter((s) => s.lesson_balance > 0).length;
-  const total_checkins = mockApiStore.ledger.length;
+  const total_checkins = mockApiStore.checkinCount;
 
   return NextResponse.json({
     total_students,

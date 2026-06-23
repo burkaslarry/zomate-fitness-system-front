@@ -44,7 +44,7 @@ test.describe("F01 onboarding validations", () => {
     await expect(page.getByText("Too small: expected string to have >=8 characters")).toHaveCount(0);
   });
 
-  test("PAR-Q yes answers require medical upload (PDF/image ≤3MB) before next step", async ({ page }) => {
+  test("PAR-Q yes answers allow optional medical upload — next step is not blocked", async ({ page }) => {
     const uniqNum = Number(Date.now().toString().slice(-6));
     const phone8 = String(90000000 + uniqNum).slice(0, 8);
     const emergencyPhone8 = String(60000000 + uniqNum).slice(0, 8);
@@ -53,17 +53,17 @@ test.describe("F01 onboarding validations", () => {
     await page.locator('input[name="full_name"]').fill("Playwright User");
     await page.locator('input[name="hkid"]').fill(`Z${String(uniqNum).slice(-4)}`);
     await page.getByPlaceholder("12345678").fill(phone8);
+    await page.locator('input[type="date"]').fill("1990-01-15");
     await page.locator('input[name="emergency_contact_name"]').fill("Emergency Contact");
     await page.getByPlaceholder("87654321").fill(emergencyPhone8);
 
     await page.getByRole("button", { name: "下一步" }).click();
-    await expect(page.getByRole("heading", { name: "新人入會 · F01" })).toBeVisible();
     await expect(page.getByText("醫生曾說你有心臟問題，只宜於醫生建議下運動？")).toBeVisible();
 
     await page.locator('input[type="checkbox"]').first().check();
 
     const nextBtn = page.getByRole("button", { name: "下一步" });
-    await expect(nextBtn).toBeDisabled();
+    await expect(nextBtn).toBeEnabled();
 
     await page.getByTestId("parq-medical-upload").setInputFiles({
       name: "clearance.pdf",
@@ -71,8 +71,6 @@ test.describe("F01 onboarding validations", () => {
       buffer: Buffer.from("%PDF-1.4 test")
     });
     await expect(page.getByText(/已接收檔案：clearance\.pdf/)).toBeVisible();
-    await expect(nextBtn).toBeEnabled();
-
     await nextBtn.click();
 
     await expect(page.locator("[data-cooling-copy]")).toBeVisible({ timeout: 15_000 });

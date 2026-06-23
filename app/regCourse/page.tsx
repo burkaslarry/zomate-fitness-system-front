@@ -3,17 +3,16 @@
 /**
  * [F002][S001]
  * Feature: Course Entry & Automation
- * Step: Payment-first regCourse flow
- * Logic: Phone lookup → payment/installment confirm → unlock course category selection.
+ * Step: Sequential regCourse — coach → category+lessons → amount → payment (optional receipt)
+ * Logic: Preload onboarding coach; category filtered by coach skills; receipt optional.
  */
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { alertApiError, api } from "../../lib/api";
-import type { MemberProfile, CourseCategoryDto } from "../../types/api";
+import type { CoachDto, CourseCategoryDto, MemberProfile } from "../../types/api";
 import FileUpload from "../../components/forms/file-upload";
 import PaymentMethodRadio from "../../components/forms/payment-method-radio";
-import SelectAsync from "../../components/forms/select-async";
 
 function inputToLookupPhone(raw: string): string {
   const digits = raw.replace(/\D/g, "");
@@ -22,7 +21,6 @@ function inputToLookupPhone(raw: string): string {
   return raw.trim();
 }
 
-/** [F001][S003] Step 2 phone chip: show 8-digit HK local when stored as +852… */
 function displayHongKongPhone(raw: string): string {
   const d = raw.replace(/\D/g, "");
   if (d.length === 11 && d.startsWith("852")) return d.slice(3);
@@ -30,13 +28,18 @@ function displayHongKongPhone(raw: string): string {
   return raw.trim();
 }
 
-/** [F001][S003] 收費必填：非空且為有效正數（可含逗號）。 */
 function isValidRenewalAmount(raw: string): boolean {
   const t = raw.trim().replace(/,/g, "");
   if (!t) return false;
   const n = Number(t);
   return Number.isFinite(n) && n > 0;
 }
+
+function digitsOnlyLessons(raw: string): string {
+  return raw.replace(/\D/g, "").slice(0, 2);
+}
+
+const NEW_STUDENT_CATEGORY_PREFIX = "新學生";
 
 type PurchaseSummary = {
   studentName: string;
@@ -45,41 +48,29 @@ type PurchaseSummary = {
   amountPaid: string;
   remainingBalance: number | null;
   paymentMethod: string;
-  firstSessionHint: string;
+  coachName: string;
 };
 
-/** [F002][S001] Repeat purchases hide the two `新學生*` category names. */
-const NEW_STUDENT_CATEGORY_PREFIX = "新學生";
-
-/** [F011][S001] Load enabled course categories for payment entry. */
-function activeCoursePackageKinds(rows: unknown, member: MemberProfile): CourseCategoryDto[] {
-  if (!Array.isArray(rows)) return [];
-  const hasPaidBefore = member.lesson_balance > 0 || member.current_course_package_status !== "No active package";
-  return rows.filter((r): r is CourseCategoryDto => {
-    if (!r || typeof r !== "object" || !("id" in r) || !("name" in r)) return false;
-    const kind = r as CourseCategoryDto;
-    if (kind.is_active === false) return false;
-    if (hasPaidBefore && kind.name.startsWith(NEW_STUDENT_CATEGORY_PREFIX)) return false;
-    return true;
-  });
-}
+type WizardStep = 0 | 1 | 2 | 3 | 4;
 
 export default function RegCoursePage() {
   const [phone, setPhone] = useState("");
   const [lookupBusy, setLookupBusy] = useState(false);
   const [member, setMember] = useState<MemberProfile | null>(null);
-  const [coursePackageKinds, setCoursePackageKinds] = useState<CourseCategoryDto[]>([]);
+  const [step, setStep] = useState<WizardStep>(0);
+  const [coaches, setCoaches] = useState<CoachDto[]>([]);
+  const [coachId, setCoachId] = useState<number | "">("");
+  const [categories, setCategories] = useState<CourseCategoryDto[]>([]);
+  const [categoryId, setCategoryId] = useState<number | "">("");
+  const [lessonsText, setLessonsText] = useState("10");
   const [amount, setAmount] = useState("");
-  const [totalLessons, setTotalLessons] = useState(10);
   const [lookupHint, setLookupHint] = useState("");
   const [renewalSubmitting, setRenewalSubmitting] = useState(false);
-  const [courseKindId, setCourseKindId] = useState<number | "">("");
   const [purchaseSummary, setPurchaseSummary] = useState<PurchaseSummary | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState("");
-  const [firstSessionHint, setFirstSessionHint] = useState("");
-  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [lastStudentId, setLastStudentId] = useState<number | null>(null);
+  const [paymentWaLinks, setPaymentWaLinks] = useState<Array<{ label: string; url: string }>>([]);
+  const [reminderBusy, setReminderBusy] = useState(false);
 
-  /** [F002][S001] Optional query seed for member detail / deprecated routes that forward into unified payment. */
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
@@ -88,31 +79,25 @@ export default function RegCoursePage() {
   }, []);
 
   useEffect(() => {
-    setAmount("");
-    setPaymentConfirmed(false);
-    setPaymentMethod("");
-    setFirstSessionHint("");
-  }, [member?.id]);
+    void api.publicCoaches().then((rows) => {
+      setCoaches(Array.isArray(rows) ? (rows as CoachDto[]) : []);
+    });
+  }, []);
 
-  function confirmPaymentParams(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const amountRaw = String(form.get("amount") ?? "");
-    if (!isValidRenewalAmount(amountRaw)) {
-      console.error("[F001][S003] Payment confirm blocked: missing or invalid amount.");
-      return;
-    }
-    const method = String(form.get("payment_method") ?? "").trim();
-    if (!method) {
-      console.error("[F001][S003] Payment confirm blocked: payment method required.");
-      return;
-    }
-    setAmount(amountRaw);
-    setPaymentMethod(method);
-    setFirstSessionHint(String(form.get("first_session_hint") ?? "").trim());
-    setPaymentConfirmed(true);
-    console.log("[Demo Track] Payment Locked → Loading Course Menu", { member: member?.full_name, method });
-  }
+  const selectedCoach = useMemo(
+    () => coaches.find((c) => c.id === coachId) ?? null,
+    [coaches, coachId]
+  );
+
+  const filteredCategories = useMemo(() => {
+    if (!member) return [];
+    const hasPaidBefore = member.lesson_balance > 0 || member.current_course_package_status !== "No active package";
+    return categories.filter((kind) => {
+      if (kind.is_active === false) return false;
+      if (hasPaidBefore && kind.name.startsWith(NEW_STUDENT_CATEGORY_PREFIX)) return false;
+      return true;
+    });
+  }, [categories, member]);
 
   async function lookup() {
     const q = inputToLookupPhone(phone);
@@ -123,77 +108,107 @@ export default function RegCoursePage() {
     setLookupBusy(true);
     setLookupHint("");
     try {
-      const [row, catsRaw] = await Promise.all([
-        api.memberLookupByPhone(q) as Promise<MemberProfile>,
-        api.publicCourseCategories().catch(() => [])
-      ]);
+      const row = (await api.memberLookupByPhone(q)) as MemberProfile;
       setMember(row);
-      const kinds = activeCoursePackageKinds(catsRaw, row);
-      setCoursePackageKinds(kinds);
-      setCourseKindId(kinds[0]?.id ?? "");
+      setStep(1);
+      setCoachId(row.onboarding_coach_id ?? "");
+      setCategoryId("");
+      setLessonsText("10");
+      setAmount("");
     } catch (err) {
       setMember(null);
-      setCoursePackageKinds([]);
-      setCourseKindId("");
+      setStep(0);
       alertApiError(err);
     } finally {
       setLookupBusy(false);
     }
   }
 
+  useEffect(() => {
+    if (!coachId || typeof coachId !== "number") {
+      setCategories([]);
+      return;
+    }
+    void api.publicCourseCategories(coachId).then((rows) => {
+      const list = Array.isArray(rows) ? (rows as CourseCategoryDto[]) : [];
+      setCategories(list);
+      setCategoryId((prev) => {
+        if (prev && list.some((c) => c.id === prev)) return prev;
+        return list[0]?.id ?? "";
+      });
+    });
+  }, [coachId]);
+
+  function goCoachNext() {
+    if (!coachId) {
+      alertApiError(new Error("請選擇負責教練"));
+      return;
+    }
+    setStep(2);
+  }
+
+  function goCategoryNext() {
+    const lessons = Number(lessonsText);
+    if (!categoryId) {
+      alertApiError(new Error("請選擇課堂種類"));
+      return;
+    }
+    if (!Number.isFinite(lessons) || lessons < 1 || lessons > 30) {
+      alertApiError(new Error("堂數須為 1–30 的整數"));
+      return;
+    }
+    setStep(3);
+  }
+
+  function goAmountNext() {
+    if (!isValidRenewalAmount(amount)) {
+      alertApiError(new Error("請輸入有效應付金額"));
+      return;
+    }
+    setStep(4);
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!member) return;
-    const selectedKind = coursePackageKinds.find((kind) => kind.id === courseKindId);
-    if (!selectedKind) {
-      console.error("[F002][S001] Payment submit blocked: no course package type selected.");
-      return;
-    }
+    if (!member || !coachId || !categoryId) return;
+    const selectedKind = filteredCategories.find((k) => k.id === categoryId);
+    if (!selectedKind) return;
     const form = new FormData(event.currentTarget);
-    const amountRaw = String(form.get("amount") ?? "");
-    if (!isValidRenewalAmount(amountRaw)) {
-      console.error("[F001][S003] Renewal submit blocked: missing or invalid amount.");
+    const method = String(form.get("payment_method") ?? "").trim();
+    if (!method) {
+      alertApiError(new Error("請選擇付款方式"));
       return;
     }
+    const lessons = Number(lessonsText);
     const receipt = form.get("receipt");
     try {
       setRenewalSubmitting(true);
       setPurchaseSummary(null);
-      const lessons = Number(form.get("total_lessons"));
-      if (!Number.isFinite(lessons) || lessons < 1 || lessons > 30) {
-        console.error("[F002][S001] Payment submit blocked: total_lessons must be 1-30.");
-        return;
-      }
-      const paymentMethod = String(form.get("payment_method") ?? "");
-      const firstSessionHint = String(form.get("first_session_hint") ?? "").trim();
       const payload: Parameters<typeof api.createRenewal>[0] = {
         student_id: member.id,
         total_lessons: lessons,
-        coach_id: Number(form.get("coach_id")) || undefined,
-        branch_id: Number(form.get("branch_id")) || undefined,
-        amount: amountRaw.trim().replace(/,/g, ""),
-        payment_method: paymentMethod,
+        coach_id: Number(coachId),
+        amount: amount.trim().replace(/,/g, ""),
+        payment_method: method,
         transaction_type: selectedKind.name.startsWith(NEW_STUDENT_CATEGORY_PREFIX) ? "new_package" : "renewal",
         course_package_type_code: `cat_${selectedKind.id}`,
         course_package_type_label: selectedKind.name,
-        note: `[${selectedKind.name}] 第一堂：${firstSessionHint || "未安排"} ${String(form.get("note") ?? "")}`.trim(),
+        note: `[${selectedKind.name}] 教練 ${selectedCoach?.full_name ?? coachId}`,
         receipt: receipt instanceof File && receipt.name ? receipt : null
       };
-      if (member.hkid) {
-        payload.member_hkid = member.hkid;
-      }
+      if (member.hkid) payload.member_hkid = member.hkid;
       const res = (await api.createRenewal(payload)) as { member?: { lesson_balance?: number } };
-      const summary: PurchaseSummary = {
+      if (member.id) setLastStudentId(member.id);
+      setPurchaseSummary({
         studentName: member.full_name,
-        packageName: `${lessons} 堂（admin 手動輸入）`,
+        packageName: `${lessons} 堂`,
         coursePackageType: selectedKind.name,
-        amountPaid: amountRaw.trim().replace(/,/g, ""),
+        amountPaid: amount.trim().replace(/,/g, ""),
         remainingBalance: typeof res.member?.lesson_balance === "number" ? res.member.lesson_balance : null,
-        paymentMethod,
-        firstSessionHint: firstSessionHint || "待 Course 套餐開課安排"
-      };
-      console.log("[F002][S003] Checkout Summary loaded successfully", summary);
-      setPurchaseSummary(summary);
+        paymentMethod: method,
+        coachName: selectedCoach?.full_name ?? "—"
+      });
+      setPaymentWaLinks([]);
     } catch (err) {
       alertApiError(err);
     } finally {
@@ -201,182 +216,225 @@ export default function RegCoursePage() {
     }
   }
 
+  async function sendPaymentReminderFromSummary() {
+    if (!lastStudentId) return;
+    setReminderBusy(true);
+    try {
+      const res = (await api.sendPaymentReminder(lastStudentId, {
+        receipt_confirmed: Boolean(purchaseSummary?.amountPaid),
+        notify_coach: true,
+        amount: purchaseSummary?.amountPaid ? Number(purchaseSummary.amountPaid) : undefined
+      })) as {
+        whatsapp?: { student?: { wa_me_url?: string }; coach?: { wa_me_url?: string } };
+      };
+      const links: Array<{ label: string; url: string }> = [];
+      if (res.whatsapp?.student?.wa_me_url) links.push({ label: "學生 WhatsApp", url: res.whatsapp.student.wa_me_url });
+      if (res.whatsapp?.coach?.wa_me_url) links.push({ label: "教練 WhatsApp", url: res.whatsapp.coach.wa_me_url });
+      setPaymentWaLinks(links);
+    } catch (err) {
+      alertApiError(err);
+    } finally {
+      setReminderBusy(false);
+    }
+  }
+
+  const stepLabels = ["查找學員", "負責教練", "課堂種類 · 堂數", "應付金額", "付款方式"];
+
   return (
     <main className="mx-auto min-h-screen max-w-2xl space-y-5 bg-canvas p-6 text-ink">
-      <h1 className="text-2xl font-semibold">Reg Course / Payment First</h1>
+      <h1 className="text-2xl font-semibold">報 Course / 收費</h1>
       <p className="text-sm text-ink/65">
-        先由 admin／文書提交收費、付款方式與分期備註；之後再揀課堂種類與堂數。Course PIN 會喺「Course 套餐開課」按課程產生。
+        依序：教練 → 課堂種類與堂數 → 金額 → 付款方式。收據可候補上傳。
       </p>
-      <section className="rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-5">
-        <p className="mb-3 text-sm text-ink/65">Step 1 · 電話查找（預設香港 +852，可只填八位數字）</p>
-        <div className="flex gap-2">
-          <input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="電話（例如 91234567）"
-            className="flex-1 rounded-lg border border-ink/10 bg-canvas px-3 py-2"
-            autoComplete="tel"
-          />
-          <button
-            type="button"
-            disabled={lookupBusy}
-            onClick={() => void lookup()}
-            className="rounded-md border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-medium text-ink shadow-sm hover:bg-primary disabled:opacity-60"
+
+      <ol className="flex flex-wrap gap-2 text-xs">
+        {stepLabels.map((label, i) => (
+          <li
+            key={label}
+            className={`rounded-full px-3 py-1 ${
+              step === i ? "bg-primary/90 font-semibold text-ink" : step > i ? "bg-emerald-100 text-emerald-900" : "bg-ink/5 text-ink/45"
+            }`}
           >
-            {lookupBusy ? "…" : "搜尋"}
+            {i + 1}. {label}
+          </li>
+        ))}
+      </ol>
+
+      {step === 0 && (
+        <section className="rounded-xl border border-ink/10 bg-surface p-5 shadow-sm">
+          <p className="mb-3 text-sm text-ink/65">以電話查找學員（預設 +852）</p>
+          <div className="flex gap-2">
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="91234567"
+              className="flex-1 rounded-lg border border-ink/10 bg-canvas px-3 py-2"
+              autoComplete="tel"
+            />
+            <button
+              type="button"
+              disabled={lookupBusy}
+              onClick={() => void lookup()}
+              className="rounded-md bg-primary/90 px-4 py-2 text-sm font-medium text-ink disabled:opacity-60"
+            >
+              {lookupBusy ? "…" : "搜尋"}
+            </button>
+          </div>
+          {lookupHint ? <p className="mt-2 text-sm text-amber-800">{lookupHint}</p> : null}
+        </section>
+      )}
+
+      {member && step >= 1 && (
+        <p className="rounded-lg border border-ink/10 bg-surface px-3 py-2 text-sm">
+          學員：<strong>{member.full_name}</strong> · {displayHongKongPhone(member.phone)}
+          {member.onboarding_coach_name ? (
+            <span className="ml-2 text-xs text-ink/55">（入會教練：{member.onboarding_coach_name}）</span>
+          ) : null}
+        </p>
+      )}
+
+      {member && step === 1 && (
+        <section className="space-y-4 rounded-xl border border-ink/10 bg-surface p-5">
+          <h2 className="text-sm font-semibold">Step 1 · 負責教練</h2>
+          <select
+            value={coachId === "" ? "" : String(coachId)}
+            onChange={(e) => setCoachId(e.target.value ? Number(e.target.value) : "")}
+            className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2"
+          >
+            <option value="">請選擇教練</option>
+            {coaches.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.full_name}
+              </option>
+            ))}
+          </select>
+          <button type="button" onClick={goCoachNext} className="w-full rounded-md bg-primary/90 px-4 py-3 text-sm font-semibold text-ink">
+            下一步
           </button>
-        </div>
-        {lookupHint ? <p className="mt-2 text-sm text-amber-800">{lookupHint}</p> : null}
-      </section>
-      {member && !paymentConfirmed && (
-        <form onSubmit={confirmPaymentParams} className="space-y-4 rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-5">
-          <p className="text-sm text-ink/65">
-            Step 2 · Payment first: <strong className="text-ink">{member.full_name}</strong> · {displayHongKongPhone(member.phone)}
-            {member.hkid ? ` · HKID ${member.hkid}` : ""}
-          </p>
+        </section>
+      )}
+
+      {member && step === 2 && (
+        <section className="space-y-4 rounded-xl border border-ink/10 bg-surface p-5">
+          <h2 className="text-sm font-semibold">Step 2 · 課堂種類 · 堂數</h2>
+          <p className="text-xs text-ink/55">種類依 {selectedCoach?.full_name ?? "教練"} 技能篩選</p>
+          <select
+            value={categoryId === "" ? "" : String(categoryId)}
+            onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : "")}
+            className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2"
+          >
+            <option value="">請選擇</option>
+            {filteredCategories.map((k) => (
+              <option key={k.id} value={k.id}>
+                {k.name}
+              </option>
+            ))}
+          </select>
+          <label className="block text-sm">
+            <span className="text-ink/70">堂數（只允許數字）</span>
+            <input
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={lessonsText}
+              onChange={(e) => setLessonsText(digitsOnlyLessons(e.target.value))}
+              className="mt-1 w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2"
+            />
+          </label>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setStep(1)} className="flex-1 rounded-md border border-ink/15 px-4 py-2 text-sm">
+              上一步
+            </button>
+            <button type="button" onClick={goCategoryNext} className="flex-1 rounded-md bg-primary/90 px-4 py-3 text-sm font-semibold text-ink">
+              下一步
+            </button>
+          </div>
+        </section>
+      )}
+
+      {member && step === 3 && (
+        <section className="space-y-4 rounded-xl border border-ink/10 bg-surface p-5">
+          <h2 className="text-sm font-semibold">Step 3 · 應付金額</h2>
           <input
-            name="amount"
-            required
             inputMode="decimal"
-            placeholder="收費 (HKD)"
+            placeholder="HKD"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2"
           />
-          <PaymentMethodRadio />
-          <input
-            name="first_session_hint"
-            placeholder="第一堂時間（例如 2026-05-20 19:00，可稍後 Course 套餐開課正式安排）"
-            className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2"
-          />
-          <FileUpload name="receipt" label="收據 upload（選填，確認付款後可補）" />
-          <button
-            type="submit"
-            disabled={!isValidRenewalAmount(amount)}
-            className="w-full rounded-md border border-emerald-200/80 bg-emerald-50 px-4 py-3 text-sm font-semibold text-ink hover:bg-emerald-100 disabled:opacity-50"
-          >
-            確認付款方式及分期參數
-          </button>
-        </form>
-      )}
-      {member && paymentConfirmed && (
-        <form onSubmit={submit} className="space-y-4 rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] p-5">
-          <p className="text-sm text-ink/65">
-            Step 3 · Course selection unlocked · HKD {amount.replace(/,/g, "")} · {paymentMethod}
-          </p>
-          <input type="hidden" name="amount" value={amount} />
-          <input type="hidden" name="payment_method" value={paymentMethod} />
-          <input type="hidden" name="first_session_hint" value={firstSessionHint} />
-          {/* [F002][S001] Client-approved 6/4 package type selector; repeat purchase hides `新學生*`. */}
-          <label className="block space-y-1 text-sm">
-            <span className="text-ink/70">課堂套餐種類 Course Package Type</span>
-            <select
-              name="course_kind_id"
-              value={courseKindId}
-              onChange={(e) => setCourseKindId(e.target.value ? Number(e.target.value) : "")}
-              className="w-full rounded-lg border border-purple-300 bg-canvas px-3 py-2 text-ink shadow-sm focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
-            >
-              <option value="">請選擇</option>
-              {coursePackageKinds.map((kind) => (
-                <option key={kind.id} value={kind.id}>
-                  {kind.name}
-                </option>
-              ))}
-            </select>
-            <span className="block text-xs text-ink/55">
-              新加入學生可選 6 種；報過堂再續會只顯示「續會」及「自帶」4 種。
-            </span>
-          </label>
-          {coursePackageKinds.length === 0 ? (
-            <p className="text-xs text-amber-800">
-              未能載入課堂套餐種類。請確認 backend 已 seed course categories，或到課堂和分店管理檢查啟用狀態。
-            </p>
-          ) : null}
-          <label className="block space-y-1 text-sm">
-            <span className="text-ink/70">堂數 Total Lessons（admin 自己輸入）</span>
-            <input
-              name="total_lessons"
-              type="number"
-              min={1}
-              max={30}
-              required
-              value={totalLessons}
-              onChange={(e) => setTotalLessons(Number(e.target.value))}
-              className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-ink"
-            />
-            <span className="block text-xs text-ink/55">PIN 跟 payment/package 或分期，不是每堂一個 PIN。</span>
-          </label>
-          <SelectAsync name="coach_id" label="教練" load={api.publicCoaches} />
-          <SelectAsync name="branch_id" label="分店" load={api.publicBranches} defaultFirst />
-          <textarea name="note" rows={3} placeholder="備註" className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2" />
-          <button
-            type="button"
-            onClick={() => setPaymentConfirmed(false)}
-            className="w-full rounded-md border border-ink/15 bg-canvas px-4 py-2 text-sm text-ink"
-          >
-            ← 返回修改付款參數
-          </button>
-          <button
-            type="submit"
-            disabled={renewalSubmitting || coursePackageKinds.length === 0 || courseKindId === ""}
-            className="w-full rounded-md border border-emerald-200/80 bg-emerald-50 px-4 py-3 text-sm font-semibold text-ink hover:bg-emerald-100 disabled:opacity-50"
-          >
-            確認付款並產生 Summary
-          </button>
-        </form>
-      )}
-
-      {/* [F001][S003] Renewal submit — loading overlay */}
-      {renewalSubmitting ? (
-        <div
-          className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 px-4"
-          role="dialog"
-          aria-modal="true"
-          aria-busy="true"
-          aria-live="polite"
-          aria-label="提交中"
-        >
-          <div className="flex w-full max-w-sm flex-col items-center gap-3 rounded-xl border border-ink/10 bg-surface px-6 py-8 shadow-xl ring-1 ring-ink/[0.06]">
-            <span className="h-9 w-9 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden />
-            <p className="text-center text-sm font-medium text-ink">提交中…</p>
-            <p className="text-center text-xs text-ink/55">請稍候，勿關閉頁面。</p>
-          </div>
-        </div>
-      ) : null}
-
-      {/* [F002][S003] Checkout Summary Screen — verify parity before returning home. */}
-      {purchaseSummary ? (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 px-4" role="dialog" aria-modal="true" aria-labelledby="purchase-summary-title">
-          <div className="w-full max-w-md space-y-4 rounded-2xl border border-purple-300 bg-surface p-5 text-ink shadow-xl ring-2 ring-purple-500/25">
-            <h2 id="purchase-summary-title" className="text-lg font-semibold text-purple-700">確認總覽 Purchase Summary</h2>
-            <dl className="grid gap-3 rounded-xl border border-ink/10 bg-canvas p-4 text-sm">
-              <div className="flex justify-between gap-4"><dt className="text-ink/60">Student</dt><dd className="font-medium">{purchaseSummary.studentName}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-ink/60">Package</dt><dd className="font-medium text-right">{purchaseSummary.packageName}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-ink/60">Course Type</dt><dd>{purchaseSummary.coursePackageType}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-ink/60">Method</dt><dd>{purchaseSummary.paymentMethod}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-ink/60">Amount Paid</dt><dd>HKD {purchaseSummary.amountPaid}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-ink/60">First Lesson</dt><dd className="text-right">{purchaseSummary.firstSessionHint}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-ink/60">Remaining Balance</dt><dd>{purchaseSummary.remainingBalance ?? "—"} 堂</dd></div>
-            </dl>
-            <Link
-              href="/admin/course-set"
-              className="block w-full rounded-md bg-purple-600 px-4 py-3 text-center text-sm font-semibold text-white shadow-sm hover:bg-purple-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-500"
-            >
-              Arrange Course & Generate PIN / 安排課程並產生 PIN
-            </Link>
-            <Link
-              href="/admin"
-              className="block w-full rounded-md border border-purple-300 bg-canvas px-4 py-3 text-center text-sm font-semibold text-ink shadow-sm hover:bg-surface"
-            >
-              Back to Home / 返回主頁
-            </Link>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setStep(2)} className="flex-1 rounded-md border border-ink/15 px-4 py-2 text-sm">
+              上一步
+            </button>
             <button
               type="button"
-              className="w-full rounded-md border border-ink/15 bg-canvas px-4 py-3 text-sm font-semibold text-ink shadow-sm hover:bg-surface"
-              onClick={() => setPurchaseSummary(null)}
+              disabled={!isValidRenewalAmount(amount)}
+              onClick={goAmountNext}
+              className="flex-1 rounded-md bg-primary/90 px-4 py-3 text-sm font-semibold text-ink disabled:opacity-50"
             >
-              留在此頁
+              下一步
             </button>
+          </div>
+        </section>
+      )}
+
+      {member && step === 4 && (
+        <form onSubmit={submit} className="space-y-4 rounded-xl border border-ink/10 bg-surface p-5">
+          <h2 className="text-sm font-semibold">Step 4 · 付款方式 · 收據（選填）</h2>
+          <p className="text-xs text-ink/55">
+            HKD {amount.replace(/,/g, "")} · {lessonsText} 堂 · {filteredCategories.find((c) => c.id === categoryId)?.name}
+          </p>
+          <PaymentMethodRadio />
+          <FileUpload name="receipt" label="收據上傳（選填，可候補）" />
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setStep(3)} className="flex-1 rounded-md border border-ink/15 px-4 py-2 text-sm">
+              上一步
+            </button>
+            <button
+              type="submit"
+              disabled={renewalSubmitting}
+              className="flex-1 rounded-md bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {renewalSubmitting ? "提交中…" : "確認報名"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {purchaseSummary ? (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 px-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md space-y-4 rounded-2xl border border-purple-300 bg-surface p-5 shadow-xl">
+            <h2 className="text-lg font-semibold text-purple-700">報名成功</h2>
+            <dl className="grid gap-2 text-sm">
+              <div className="flex justify-between"><dt className="text-ink/60">學員</dt><dd>{purchaseSummary.studentName}</dd></div>
+              <div className="flex justify-between"><dt className="text-ink/60">教練</dt><dd>{purchaseSummary.coachName}</dd></div>
+              <div className="flex justify-between"><dt className="text-ink/60">種類</dt><dd>{purchaseSummary.coursePackageType}</dd></div>
+              <div className="flex justify-between"><dt className="text-ink/60">堂數</dt><dd>{purchaseSummary.packageName}</dd></div>
+              <div className="flex justify-between"><dt className="text-ink/60">金額</dt><dd>HKD {purchaseSummary.amountPaid}</dd></div>
+              <div className="flex justify-between"><dt className="text-ink/60">餘額</dt><dd>{purchaseSummary.remainingBalance ?? "—"} 堂</dd></div>
+            </dl>
+            {paymentWaLinks.length > 0 ? (
+              <ul className="text-xs">
+                {paymentWaLinks.map((l) => (
+                  <li key={l.label}>
+                    <a href={l.url} target="_blank" rel="noreferrer" className="underline">{l.label}</a>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <button
+              type="button"
+              disabled={reminderBusy || !lastStudentId}
+              onClick={() => void sendPaymentReminderFromSummary()}
+              className="w-full rounded-md border px-4 py-2 text-sm"
+            >
+              {reminderBusy ? "…" : "WhatsApp 付款提醒"}
+            </button>
+            <Link href="/admin/course-set" className="block w-full rounded-md bg-purple-600 px-4 py-3 text-center text-sm font-semibold text-white">
+              安排課程並產生 PIN
+            </Link>
+            <Link href="/admin" className="block w-full rounded-md border px-4 py-3 text-center text-sm">
+              返回主頁
+            </Link>
           </div>
         </div>
       ) : null}
