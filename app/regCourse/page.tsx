@@ -317,7 +317,7 @@ export default function RegCoursePage() {
       {member && step === 2 && (
         <section className="space-y-4 rounded-xl border border-ink/10 bg-surface p-5">
           <h2 className="text-sm font-semibold">Step 2 · 課堂種類 · 堂數</h2>
-          <p className="text-xs text-ink/55">種類依 {selectedCoach?.full_name ?? "教練"} 技能篩選</p>
+          <p className="text-xs text-ink/55">所屬教練可授的課堂種類</p>
           <select
             value={categoryId === "" ? "" : String(categoryId)}
             onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : "")}

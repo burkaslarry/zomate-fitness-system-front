@@ -439,7 +439,7 @@ export default function AdminCoachesPage() {
               {!skillsBusy && allCategories.length > 0 ? (
                 <button
                   type="button"
-                  className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+                  className="w-fit border-0 bg-transparent px-0 py-0 text-xs font-medium text-ink underline-offset-2 shadow-none hover:bg-transparent hover:underline"
                   onClick={() => setSelectedSkillIds(new Set(allCategories.map((c) => c.id)))}
                 >
                   全選啟用中課程
