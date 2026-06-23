@@ -17,7 +17,8 @@ export default function SelectAsync({
   load,
   required = false,
   defaultBranchCode,
-  defaultFirst = false
+  defaultFirst = false,
+  defaultValueId
 }: {
   name: string;
   label: string;
@@ -27,9 +28,11 @@ export default function SelectAsync({
   defaultBranchCode?: string;
   /** 若為 true 且無 `defaultBranchCode` 命中，載入後預選第一筆（例如續會分店）。 */
   defaultFirst?: boolean;
+  /** 編輯模式：預選既有 branch / coach id。 */
+  defaultValueId?: number | null;
 }) {
   const [rows, setRows] = useState<Option[]>([]);
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(defaultValueId != null ? String(defaultValueId) : "");
 
   useEffect(() => {
     let cancelled = false;
@@ -38,7 +41,9 @@ export default function SelectAsync({
         const arr = Array.isArray(data) ? (data as Option[]) : [];
         if (cancelled) return;
         setRows(arr);
-        if (defaultBranchCode) {
+        if (defaultValueId != null) {
+          setValue(String(defaultValueId));
+        } else if (defaultBranchCode) {
           const match = arr.find((r) => String(r.code ?? "") === defaultBranchCode);
           if (match) setValue(String(match.id));
         } else if (defaultFirst && arr.length > 0) {
@@ -51,7 +56,7 @@ export default function SelectAsync({
     return () => {
       cancelled = true;
     };
-  }, [load, defaultBranchCode, defaultFirst]);
+  }, [load, defaultBranchCode, defaultFirst, defaultValueId]);
 
   return (
     <label className="block space-y-1 text-sm">

@@ -155,6 +155,7 @@ export type CoachStudentFollowUpDto = {
   student_id: number;
   full_name: string;
   phone: string;
+  courses: string;
   attendance_status: string;
   next_lesson: string;
   payment_reminder: string | null;

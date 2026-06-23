@@ -15,14 +15,6 @@ import { getAuthSession } from "../../../lib/auth";
 import type { CoachDto, CourseCategoryDto } from "../../../types/api";
 import SelectAsync from "../../../components/forms/select-async";
 
-function fmtHireDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
-  if (!m) return iso;
-  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  return d.toLocaleDateString("zh-HK", { dateStyle: "medium" });
-}
-
 type EditForm = {
   full_name: string;
   phone: string;
@@ -95,6 +87,24 @@ export default function AdminCoachesPage() {
     await load();
   }
 
+  async function removeCoach(row: CoachDto) {
+    if (!window.confirm(`確定刪除教練「${row.full_name}」？此操作不可復原（後台列表將不再顯示）。`)) {
+      return;
+    }
+    setStatus("");
+    try {
+      await api.deleteCoach(row.id, false);
+      setStatus(`已刪除教練 ${row.full_name}。`);
+      if (editing?.id === row.id) {
+        setEditing(null);
+        setEditForm(null);
+      }
+      await load();
+    } catch (err) {
+      setStatus(String(err));
+    }
+  }
+
   async function openSkillsModal(row: CoachDto) {
     setSkillsCoach(row);
     setSkillsBusy(true);
@@ -159,11 +169,14 @@ export default function AdminCoachesPage() {
     if (!editing || !editForm) return;
     setStatus("");
     try {
+      const form = new FormData(event.currentTarget);
+      const branchRaw = String(form.get("branch_id") ?? "").trim();
       const payload: Parameters<typeof api.updateCoach>[1] = {
         full_name: editForm.full_name.trim(),
         phone: editForm.phone.trim(),
         specialty: editForm.specialty.trim() || null,
         hire_date: editForm.hire_date.trim() || null,
+        branch_id: branchRaw ? Number(branchRaw) : null,
         login_username: editForm.login_username.trim() || undefined
       };
       if (editForm.password.trim()) {
@@ -264,11 +277,11 @@ export default function AdminCoachesPage() {
               placeholder="電話"
               className="rounded-lg border border-ink/10 px-3 py-2 text-sm"
             />
-            <input
-              value={editForm.specialty}
-              onChange={(e) => setEditForm({ ...editForm, specialty: e.target.value })}
-              placeholder="Specialty"
-              className="rounded-lg border border-ink/10 px-3 py-2 text-sm"
+            <SelectAsync
+              name="branch_id"
+              label="分店"
+              load={api.publicBranches}
+              defaultValueId={editing.branch_id}
             />
             <label className="block space-y-1 text-sm">
               <span className="text-ink/70">入職日期</span>
@@ -279,6 +292,12 @@ export default function AdminCoachesPage() {
                 className="w-full rounded-lg border border-ink/10 px-3 py-2 text-sm"
               />
             </label>
+            <input
+              value={editForm.specialty}
+              onChange={(e) => setEditForm({ ...editForm, specialty: e.target.value })}
+              placeholder="Specialty"
+              className="rounded-lg border border-ink/10 px-3 py-2 text-sm"
+            />
             <input
               value={editForm.login_username}
               onChange={(e) => setEditForm({ ...editForm, login_username: e.target.value })}
@@ -316,24 +335,20 @@ export default function AdminCoachesPage() {
 
         {status && <p className="text-sm text-emerald-800">{status}</p>}
         <div className="max-h-[min(70vh,720px)] overflow-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
-          <table className="min-w-full border-collapse text-left text-sm table-fixed">
+          <table className="min-w-full border-collapse text-left text-sm">
             <colgroup>
               <col className="w-[120px]" />
               <col className="w-[110px]" />
               <col className="w-[100px]" />
-              <col className="w-[100px]" />
-              <col className="w-[100px]" />
-              <col className="w-[72px]" />
+              <col className="w-[88px]" />
               <col className="min-w-[180px]" />
-              <col className="w-[140px]" />
+              <col className="w-[220px]" />
             </colgroup>
             <thead className="sticky top-0 z-10 border-b border-ink/10 bg-surface text-ink/65 shadow-[0_1px_0_rgba(0,0,0,0.06)]">
               <tr>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">姓名</th>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">電話</th>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">登入帳號</th>
-                <th className="whitespace-nowrap px-4 py-3 font-medium">分店</th>
-                <th className="whitespace-nowrap px-4 py-3 font-medium">入職日期</th>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">狀態</th>
                 <th className="px-4 py-3 font-medium">學員</th>
                 <th className="whitespace-nowrap px-4 py-3 text-right font-medium">操作</th>
@@ -345,30 +360,32 @@ export default function AdminCoachesPage() {
                   <td className="px-4 py-3 font-medium text-ink">{row.full_name}</td>
                   <td className="whitespace-nowrap px-4 py-3">{row.phone}</td>
                   <td className="px-4 py-3 text-xs">{row.login_username ?? "—"}</td>
-                  <td className="px-4 py-3">{row.branch_name ?? "—"}</td>
-                  <td className="whitespace-nowrap px-4 py-3">{fmtHireDate(row.hire_date)}</td>
-                  <td className="px-4 py-3 align-top">
+                  <td className="whitespace-nowrap px-4 py-3">
                     {row.active !== false ? (
-                      <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-xs font-medium text-emerald-800">在職</span>
+                      <span className="inline-flex whitespace-nowrap rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium leading-none text-emerald-800">
+                        在職
+                      </span>
                     ) : (
-                      <span className="rounded-full bg-ink/10 px-2 py-1 text-xs text-ink/60">停用</span>
+                      <span className="inline-flex whitespace-nowrap rounded-full bg-ink/10 px-2.5 py-1 text-xs leading-none text-ink/60">
+                        停用
+                      </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 align-top">
+                  <td className="px-4 py-3">
                     <Link
                       href={`/admin/coaches/${row.id}/students`}
-                      className="inline-block rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-ink hover:bg-primary/20"
+                      className="inline-block whitespace-nowrap rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-ink hover:bg-primary/20"
                     >
                       Students
                     </Link>
                   </td>
-                  <td className="px-4 py-3 align-top text-right">
-                    <div className="flex justify-end gap-2">
+                  <td className="whitespace-nowrap px-4 py-3 text-right">
+                    <div className="flex flex-wrap justify-end gap-2">
                       {isAdmin ? (
                         <button
                           type="button"
                           onClick={() => void openSkillsModal(row)}
-                          className="rounded-md border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-ink hover:bg-primary/20"
+                          className="whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-ink hover:bg-primary/20"
                         >
                           課程權限
                         </button>
@@ -376,17 +393,26 @@ export default function AdminCoachesPage() {
                       <button
                         type="button"
                         onClick={() => startEdit(row)}
-                        className="rounded-md border border-ink/15 bg-canvas px-3 py-1 text-xs text-ink hover:border-primary/40"
+                        className="whitespace-nowrap rounded-md border border-ink/15 bg-canvas px-3 py-1 text-xs text-ink hover:border-primary/40"
                       >
                         Edit
                       </button>
                       <button
                         type="button"
                         onClick={() => void deactivate(row.id)}
-                        className="rounded-md border border-ink/15 bg-canvas px-3 py-1 text-xs text-ink hover:border-rose-300/60"
+                        className="whitespace-nowrap rounded-md border border-ink/15 bg-canvas px-3 py-1 text-xs text-ink hover:border-amber-300/60"
                       >
                         Deactivate
                       </button>
+                      {isAdmin ? (
+                        <button
+                          type="button"
+                          onClick={() => void removeCoach(row)}
+                          className="whitespace-nowrap rounded-md border border-rose-200 bg-rose-50 px-3 py-1 text-xs text-rose-800 hover:bg-rose-100"
+                        >
+                          Delete
+                        </button>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
@@ -406,7 +432,19 @@ export default function AdminCoachesPage() {
               <h3 id="coach-skills-title" className="text-lg font-semibold text-ink">
                 教練課程權限分配 · {skillsCoach.full_name}
               </h3>
-              <p className="text-xs text-ink/60">勾選此教練可教授的課程種類（新會員登記時會依此過濾）。</p>
+              <p className="text-xs leading-5 text-ink/60">
+                勾選 = 此教練可教該課程；未勾選 = 新會員／續會選此教練時唔會見到該種類。
+                若要開放全部啟用中課程，請勾選所有項目。
+              </p>
+              {!skillsBusy && allCategories.length > 0 ? (
+                <button
+                  type="button"
+                  className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+                  onClick={() => setSelectedSkillIds(new Set(allCategories.map((c) => c.id)))}
+                >
+                  全選啟用中課程
+                </button>
+              ) : null}
               {skillsBusy && allCategories.length === 0 ? (
                 <p className="text-sm text-ink/50">載入中…</p>
               ) : (

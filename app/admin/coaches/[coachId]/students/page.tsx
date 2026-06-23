@@ -3,7 +3,7 @@
 /**
  * [F003][S008]
  * Feature: Coach student follow-up (admin)
- * Step: Grid of attendance, next lesson, installment payment reminders
+ * Step: Grid of attendance, enrolled courses, next lesson, installment payment reminders
  * Logic: GET /api/admin/coaches/{coach_id}/student-follow-up
  */
 
@@ -69,6 +69,7 @@ export default function AdminCoachStudentsFollowUpPage() {
               <tr>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">學員</th>
                 <th className="whitespace-nowrap px-4 py-3 font-medium">電話</th>
+                <th className="px-4 py-3 font-medium">課程 Class</th>
                 <th className="px-4 py-3 font-medium">上堂狀態 Attendance</th>
                 <th className="px-4 py-3 font-medium">下一堂 Next lesson</th>
                 <th className="px-4 py-3 font-medium">分期催款 Payment reminder</th>
@@ -77,7 +78,7 @@ export default function AdminCoachStudentsFollowUpPage() {
             <tbody>
               {rows.length === 0 && !loading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-ink/50">
+                  <td colSpan={6} className="px-4 py-8 text-center text-ink/50">
                     此教練暫無指派學員。
                   </td>
                 </tr>
@@ -86,6 +87,7 @@ export default function AdminCoachStudentsFollowUpPage() {
                   <tr key={row.student_id} className="border-b border-ink/[0.06] text-ink/85">
                     <td className="px-4 py-3 font-medium text-ink">{row.full_name}</td>
                     <td className="whitespace-nowrap px-4 py-3">{row.phone}</td>
+                    <td className="px-4 py-3 text-xs">{row.courses}</td>
                     <td className="px-4 py-3 text-xs">{row.attendance_status}</td>
                     <td className="px-4 py-3 text-xs">{row.next_lesson}</td>
                     <td className="px-4 py-3 text-xs">
