@@ -8,7 +8,7 @@
  */
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import BackendShell from "../../components/backend-shell";
 import { alertApiError, api, apiAssetUrl } from "../../lib/api";
 import { getAuthSession } from "../../lib/auth";
@@ -34,6 +34,8 @@ type PaymentRow = {
   course_title: string;
   payment_status: string;
   installment_status: string;
+  next_installment_no?: number | null;
+  next_reminder_lesson?: number | null;
   signature_image_url: string | null;
 };
 type CourseRow = {
@@ -152,6 +154,7 @@ export default function CoachDashboardPage() {
   const [bookDuration, setBookDuration] = useState<1 | 2>(1);
   const [bookBusy, setBookBusy] = useState(false);
   const [remindBusy, setRemindBusy] = useState<number | null>(null);
+  const [receiptBusy, setReceiptBusy] = useState<string | null>(null);
 
   const pendingCourseIds = useMemo(() => new Set(pending.map((p) => p.course_id)), [pending]);
   const occupied = useMemo(
@@ -340,6 +343,122 @@ export default function CoachDashboardPage() {
     } finally {
       setRemindBusy(null);
     }
+  }
+
+  async function uploadReceiptForCourse(
+    ev: FormEvent<HTMLFormElement>,
+    target: {
+      student_id: number;
+      course_id: number;
+      course_title: string;
+      next_installment_no?: number | null;
+    }
+  ) {
+    ev.preventDefault();
+    if (!coach) return;
+    const form = ev.currentTarget;
+    const data = new FormData(form);
+    const file = data.get("receipt");
+    if (!(file instanceof File) || !file.name) {
+      setStatus("請先選擇 receipt 檔案。");
+      return;
+    }
+    const kind = String(data.get("payment_kind") || "full");
+    const installmentRaw = Number(data.get("installment_no") || target.next_installment_no || 1);
+    const busyKey = `${target.student_id}-${target.course_id}`;
+    setReceiptBusy(busyKey);
+    setStatus("");
+    try {
+      await api.coachUploadStudentReceipt(target.student_id, {
+        file,
+        amount: String(data.get("amount") || "").trim() || undefined,
+        payment_method: String(data.get("payment_method") || "").trim() || undefined,
+        note: String(data.get("note") || "").trim() || `Coach upload · ${target.course_title}`,
+        course_enrollment_id: target.course_id > 0 ? target.course_id : undefined,
+        installment_no: kind === "installment" ? installmentRaw : undefined,
+        full_payment: kind === "full",
+        send_whatsapp: true,
+        coach_id: coach.id
+      });
+      form.reset();
+      await reloadAll(coach.id);
+      if (selectedStudentId) await loadStudentRecords(selectedStudentId);
+      setStatus("已上傳 receipt；如屬分期或 full payment，系統已同步付款狀態並記錄 WhatsApp。");
+    } catch (e) {
+      alertApiError(e);
+      setStatus(String(e));
+    } finally {
+      setReceiptBusy(null);
+    }
+  }
+
+  function receiptUploadForm(target: {
+    student_id: number;
+    course_id: number;
+    course_title: string;
+    next_installment_no?: number | null;
+    next_reminder_lesson?: number | null;
+  }) {
+    const key = `${target.student_id}-${target.course_id}`;
+    const hasCourse = target.course_id > 0;
+    const nextInstallment = target.next_installment_no ?? 2;
+    return (
+      <form
+        onSubmit={(ev) => void uploadReceiptForCourse(ev, target)}
+        className="mt-2 grid gap-1.5 rounded-lg border border-ink/10 bg-canvas p-2 text-xs sm:grid-cols-[minmax(8rem,1fr)_auto_auto]"
+      >
+        <input
+          name="receipt"
+          type="file"
+          required
+          accept="image/*,.pdf"
+          className="rounded border border-ink/10 bg-surface px-2 py-1 text-ink file:mr-2 file:rounded file:border-0 file:bg-primary/15 file:px-2 file:py-1 file:text-xs file:font-medium"
+        />
+        <select
+          name="payment_kind"
+          defaultValue={hasCourse && target.next_installment_no ? "installment" : "full"}
+          className="rounded border border-ink/10 bg-surface px-2 py-1 text-ink"
+        >
+          <option value="full">Full payment</option>
+          {hasCourse ? <option value="installment">Instalment</option> : null}
+        </select>
+        <select
+          name="installment_no"
+          defaultValue={String(nextInstallment)}
+          disabled={!hasCourse}
+          className="rounded border border-ink/10 bg-surface px-2 py-1 text-ink disabled:opacity-45"
+        >
+          {[1, 2, 3].map((n) => (
+            <option key={n} value={n}>
+              {n}期
+            </option>
+          ))}
+        </select>
+        <input
+          name="amount"
+          inputMode="decimal"
+          placeholder="HKD 金額"
+          className="rounded border border-ink/10 bg-surface px-2 py-1 text-ink"
+        />
+        <input
+          name="payment_method"
+          placeholder="FPS / cash / bank"
+          className="rounded border border-ink/10 bg-surface px-2 py-1 text-ink"
+        />
+        <button
+          type="submit"
+          disabled={receiptBusy === key}
+          className="rounded border border-primary/40 bg-primary/10 px-2 py-1 font-semibold text-ink disabled:opacity-50"
+        >
+          {receiptBusy === key ? "上傳中…" : "上傳 receipt"}
+        </button>
+        {target.next_reminder_lesson ? (
+          <p className="sm:col-span-3 text-[11px] text-ink/55">
+            預設第 {target.next_reminder_lesson} 堂 reminder；receipt 對應期數後會開通該期 PIN。
+          </p>
+        ) : null}
+      </form>
+    );
   }
 
   async function updateMingSignature() {
@@ -580,6 +699,13 @@ export default function CoachDashboardPage() {
                     ) : (
                       <span className="text-xs text-ink/40">—</span>
                     )}
+                    {receiptUploadForm({
+                      student_id: row.student_id,
+                      course_id: row.course_id,
+                      course_title: row.course_title,
+                      next_installment_no: row.next_installment_no,
+                      next_reminder_lesson: row.next_reminder_lesson
+                    })}
                   </td>
                 </tr>
               );
@@ -667,6 +793,13 @@ export default function CoachDashboardPage() {
                       {enr.coach_time_confirmed ? "改期" : "排程"} 1–2h
                     </button>
                   </div>
+                  {receiptUploadForm({
+                    student_id: studentRecords.student_id,
+                    course_id: enr.enrollment_id,
+                    course_title: enr.course_title,
+                    next_installment_no: enr.next_installment_no,
+                    next_reminder_lesson: enr.next_reminder_lesson
+                  })}
                   {bookingEnrollmentId === enr.enrollment_id ? (
                     <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-ink/10 pt-3">
                       <label className="text-xs text-ink/70">

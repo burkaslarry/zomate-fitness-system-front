@@ -45,6 +45,8 @@ export type InstallmentSegmentPinDto = {
   pin: string;
   /** False until staff marks installment paid (scheduled package PIN gating). */
   paid?: boolean;
+  /** Default WhatsApp reminder lesson, e.g. 9 / 19 / 29 for a 30-lesson package. */
+  reminder_lesson?: number | null;
 };
 
 export type CourseCheckinPinRow = {
@@ -133,6 +135,8 @@ export type CoachStudentRecordDto = {
     coach_time_confirmed: boolean;
     payment_status: string;
     installment_status: string;
+    next_installment_no?: number | null;
+    next_reminder_lesson?: number | null;
   }[];
   checkins: { id: number; channel: string; remarks: string | null; created_at: string }[];
   attendance: {

@@ -403,6 +403,7 @@ export const api = {
       installment_no?: number;
       course_enrollment_id?: number;
       installment_plan_id?: number;
+      full_payment?: boolean;
       send_whatsapp?: boolean;
       notify_coach?: boolean;
     }
@@ -421,6 +422,7 @@ export const api = {
     if (payload.installment_plan_id != null) {
       form.append("installment_plan_id", String(payload.installment_plan_id));
     }
+    form.append("full_payment", payload.full_payment ? "true" : "false");
     form.append("send_whatsapp", payload.send_whatsapp === false ? "false" : "true");
     form.append("notify_coach", payload.notify_coach === false ? "false" : "true");
     return request(`/api/members/by-id/${encodeURIComponent(String(studentId))}/receipts`, { method: "POST", body: form });
@@ -601,6 +603,14 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload)
     }),
+  updateCourseInstallmentReminder: (
+    courseId: number,
+    payload: { student_id: number; installment_no: number; reminder_lesson: number }
+  ) =>
+    request(`/api/admin/courses/${courseId}/installment-reminder`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    }),
   deleteCourse: (courseId: number, hard = false) =>
     request(`/api/admin/courses/${courseId}?hard=${hard ? "true" : "false"}`, { method: "DELETE" }),
 
@@ -702,6 +712,34 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload)
     }),
+  coachUploadStudentReceipt: (
+    studentId: number,
+    payload: {
+      file: File;
+      amount?: string;
+      payment_method?: string;
+      note?: string;
+      course_enrollment_id?: number;
+      installment_no?: number;
+      full_payment?: boolean;
+      send_whatsapp?: boolean;
+      coach_id?: number;
+    }
+  ) => {
+    const form = new FormData();
+    form.append("file", payload.file);
+    if (payload.amount) form.append("amount", payload.amount);
+    if (payload.payment_method) form.append("payment_method", payload.payment_method);
+    if (payload.note) form.append("note", payload.note);
+    if (payload.course_enrollment_id != null) {
+      form.append("course_enrollment_id", String(payload.course_enrollment_id));
+    }
+    if (payload.installment_no != null) form.append("installment_no", String(payload.installment_no));
+    form.append("full_payment", payload.full_payment ? "true" : "false");
+    form.append("send_whatsapp", payload.send_whatsapp === false ? "false" : "true");
+    if (payload.coach_id != null) form.append("coach_id", String(payload.coach_id));
+    return request(`/api/coach/students/${studentId}/receipts`, { method: "POST", body: form });
+  },
   coachBookSession: (payload: {
     enrollment_id: number;
     day: string;

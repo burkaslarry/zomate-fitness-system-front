@@ -3,7 +3,7 @@
 /**
  * [F002][S001]
  * Feature: Course Entry & Automation
- * Step: POST ``/api/admin/courses`` (`total_lessons` ≤30, optional `total_installments` PIN tranches); success modal + WhatsApp deeplink.
+ * Step: POST ``/api/admin/courses`` (`total_lessons` 10–30, optional `total_installments` PIN tranches); success modal + WhatsApp deeplink.
  * Logic: Optional first-session fields + weekly series; response enrollments include `installment_segments` when installments > 1.
  */
 
@@ -50,7 +50,8 @@ function buildEnrollmentWhatsAppText(courseTitle: string, rows: CourseEnrollment
         .map((s) => {
           const unpaid = s.paid === false;
           const suffix = unpaid ? "（待標記已付後先可用於簽到）" : "（可簽到）";
-          return `第${s.installment_no}個分期（第${s.lesson_from}–${s.lesson_to}堂）PIN：${s.pin}${suffix}`;
+          const reminder = s.reminder_lesson ? `；第${s.reminder_lesson}堂提醒付款` : "";
+          return `第${s.installment_no}個分期（第${s.lesson_from}–${s.lesson_to}堂${reminder}）PIN：${s.pin}${suffix}`;
         })
         .join("\n");
       return `${e.student_name}（${e.student_phone}）\n${segs}`;
@@ -96,6 +97,7 @@ export default function AdminCourseSetPage() {
   /** Course id returned by POST — used to PATCH installment-paid from success modal */
   const [successCourseId, setSuccessCourseId] = useState<number | null>(null);
   const [submitBusy, setSubmitBusy] = useState(false);
+  const [reminderBusy, setReminderBusy] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -228,6 +230,50 @@ export default function AdminCourseSetPage() {
     }
   }
 
+  async function sendSegmentReminder(studentId: number, installmentNo: number) {
+    if (successCourseId == null) return;
+    const key = `${studentId}-${installmentNo}`;
+    setReminderBusy(key);
+    try {
+      await api.sendPaymentReminder(studentId, {
+        course_enrollment_id: successCourseId,
+        installment_no: installmentNo,
+        receipt_confirmed: false,
+        notify_coach: true
+      });
+      setStatus("已記錄 WhatsApp 催款 reminder，未有標記已付。");
+    } catch (e) {
+      alertApiError(e);
+    } finally {
+      setReminderBusy(null);
+    }
+  }
+
+  async function updateSegmentReminder(studentId: number, installmentNo: number, reminderLesson: number) {
+    if (successCourseId == null || !Number.isFinite(reminderLesson)) return;
+    try {
+      await api.updateCourseInstallmentReminder(successCourseId, {
+        student_id: studentId,
+        installment_no: installmentNo,
+        reminder_lesson: reminderLesson
+      });
+      setSuccessEnrollments((prev) =>
+        prev.map((row) => {
+          if (row.student_id !== studentId || !row.installment_segments?.length) return row;
+          return {
+            ...row,
+            installment_segments: row.installment_segments.map((s) =>
+              s.installment_no === installmentNo ? { ...s, reminder_lesson: reminderLesson } : s
+            )
+          };
+        })
+      );
+      setStatus(`已更新第 ${reminderLesson} 堂 reminder。`);
+    } catch (e) {
+      alertApiError(e);
+    }
+  }
+
   return (
     <BackendShell title="Course 套餐開課">
       <div className="mx-auto max-w-3xl space-y-6">
@@ -235,7 +281,7 @@ export default function AdminCourseSetPage() {
           <h2 className="text-2xl font-semibold text-ink">開課（套餐）</h2>
           <p className="mt-2 text-sm text-ink/65">
             付款／收據先於 Unified Payment 完成；本頁負責安排第一堂時間、課程種類、教練與學生，並產生跟 course 的簽到 PIN。
-            套餐堂數<strong className="text-ink"> 1–30</strong>
+            套餐堂數<strong className="text-ink"> 10–30</strong>
             ，一次付款對應一個 course PIN；若<strong className="font-medium text-ink">分批／分期過數</strong>
             ，可揀「分期數」，系統會按堂數自動拆區間並派<strong className="font-medium text-ink">每個分期一個 PIN</strong>
             （例：30 堂 3 期 → 第 1 期 PIN 對應第 1–10 堂）。
@@ -397,18 +443,19 @@ export default function AdminCourseSetPage() {
                 id="total-lessons-field"
                 type="number"
                 required
-                min={1}
+                min={10}
                 max={30}
                 placeholder="請填上堂數"
                 value={totalLessons}
                 onChange={(e) =>
-                  setTotalLessons(Math.min(30, Math.max(1, Number(e.target.value) || 1)))
+                  setTotalLessons(Math.min(30, Math.max(10, Number(e.target.value) || 10)))
                 }
                 aria-describedby="total-lessons-hint"
                 className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink placeholder:text-ink/35 sm:max-w-[12rem]"
               />
               <p id="total-lessons-hint" className="text-xs text-ink/55">
-                最多 <span className="tabular-nums font-medium text-ink/70">30</span> 堂
+                最少 <span className="tabular-nums font-medium text-ink/70">10</span> 堂，最多{" "}
+                <span className="tabular-nums font-medium text-ink/70">30</span> 堂
               </p>
             </label>
 
@@ -422,12 +469,11 @@ export default function AdminCourseSetPage() {
                 <option value={1}>唔分期（全套 1 個 PIN）</option>
                 <option value={2}>2 期（2 個 PIN，堂數會拆成兩段）</option>
                 <option value={3}>3 期（3 個 PIN）</option>
-                <option value={4}>4 期</option>
-                <option value={5}>5 期</option>
               </select>
               <span className="text-xs text-ink/50">
-                揀 2 或以上即「分期」：每期一個 PIN；<strong className="text-ink">首期預設已可簽到</strong>，第 2 期起要
+                揀 2 或以上即「分期」：每期一個 PIN；最多 3 期。<strong className="text-ink">首期預設已可簽到</strong>，第 2 期起要
                 <strong className="text-ink">標記已付／已找數</strong>先有得用嗰個 PIN 簽到（成功 popup 內可即時按「標記已付」）。
+                30 堂 3 期預設於第 9／19／29 堂出 reminder。
               </span>
             </label>
 
@@ -599,6 +645,9 @@ export default function AdminCourseSetPage() {
                                         第{s.installment_no}個分期：第{s.lesson_from}–{s.lesson_to} 堂 PIN：
                                       </span>{" "}
                                       <span className="font-semibold">{s.pin}</span>
+                                      {s.reminder_lesson ? (
+                                        <span className="ml-1 text-sky-800">（第{s.reminder_lesson}堂 reminder）</span>
+                                      ) : null}
                                       {unpaid ? (
                                         <span className="ml-1 text-amber-900/90">（待付／未開通簽到）</span>
                                       ) : (
@@ -606,21 +655,42 @@ export default function AdminCourseSetPage() {
                                       )}
                                     </span>
                                     {unpaid ? (
-                                      <button
-                                        type="button"
-                                        disabled={successCourseId == null}
-                                        onClick={() => void markSegmentPaid(e.student_id, s.installment_no)}
-                                        className="shrink-0 rounded-md border border-ink/15 bg-surface px-2 py-1 text-[11px] font-semibold text-ink hover:bg-ink/[0.04] disabled:cursor-not-allowed disabled:opacity-40"
-                                      >
-                                        標記此期已付 → 開通簽到
-                                      </button>
+                                      <div className="flex shrink-0 flex-wrap gap-1.5">
+                                        <label className="flex items-center gap-1 rounded-md border border-ink/10 bg-canvas px-2 py-1 text-[11px] font-semibold text-ink/75">
+                                          提醒堂數
+                                          <input
+                                            type="number"
+                                            min={s.lesson_from}
+                                            max={s.lesson_to}
+                                            defaultValue={s.reminder_lesson ?? Math.max(s.lesson_from, s.lesson_to - 1)}
+                                            onBlur={(ev) => {
+                                              const next = Number(ev.currentTarget.value);
+                                              const cur = s.reminder_lesson ?? Math.max(s.lesson_from, s.lesson_to - 1);
+                                              if (next !== cur) {
+                                                void updateSegmentReminder(e.student_id, s.installment_no, next);
+                                              }
+                                            }}
+                                            className="w-14 rounded border border-ink/10 bg-surface px-1 py-0.5 text-center"
+                                          />
+                                        </label>
+                                        <button
+                                          type="button"
+                                          disabled={successCourseId == null || reminderBusy === `${e.student_id}-${s.installment_no}`}
+                                          onClick={() => void sendSegmentReminder(e.student_id, s.installment_no)}
+                                          className="rounded-md border border-sky-600/35 bg-sky-50 px-2 py-1 text-[11px] font-semibold text-sky-900 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                        >
+                                          {reminderBusy === `${e.student_id}-${s.installment_no}` ? "發送中…" : "WhatsApp 催款"}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={successCourseId == null}
+                                          onClick={() => void markSegmentPaid(e.student_id, s.installment_no)}
+                                          className="rounded-md border border-ink/15 bg-surface px-2 py-1 text-[11px] font-semibold text-ink hover:bg-ink/[0.04] disabled:cursor-not-allowed disabled:opacity-40"
+                                        >
+                                          標記此期已付 → 開通簽到
+                                        </button>
+                                      </div>
                                     ) : null}
-                                    {/* TODO [F005][S003]
-                                        Feature: Balance Sync & Integrations
-                                        Step: Manual WhatsApp reminder action
-                                        Logic: Add a separate reminder button for unpaid installments:
-                                        "第 X 期未找數，請付款後開通第 Y-Z 堂 PIN".
-                                        This must not mark the installment `paid`; only payment confirmation should unlock check-in. */}
                                   </div>
                                 </li>
                               );
