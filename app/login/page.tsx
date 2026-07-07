@@ -11,6 +11,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePeriodicHealthPing } from "../../hooks/use-periodic-health-ping";
 import { api } from "../../lib/api";
+import BuildFooter from "../../components/build-footer";
 import { clearAuthSession, getAuthSession, setAuthSession } from "../../lib/auth";
 
 export default function LoginPage() {
@@ -61,7 +62,8 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-white p-6">
+    <main className="flex min-h-screen flex-col bg-white">
+      <div className="flex flex-1 items-center justify-center p-6">
       <form onSubmit={onSubmit} className="w-full max-w-md space-y-4 rounded-lg border border-slate-200 bg-white p-6 shadow">
         <h1 className="text-2xl font-bold text-black">後台登入</h1>
         <p className="text-sm text-black">
@@ -95,6 +97,8 @@ export default function LoginPage() {
           {loading ? "登入中..." : "登入"}
         </button>
       </form>
+      </div>
+      <BuildFooter className="pb-4" />
     </main>
   );
 }

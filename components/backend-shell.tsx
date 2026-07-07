@@ -13,6 +13,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { clearAuthSession, getAuthSession, waitForSessionReplacement, type AuthSession } from "../lib/auth";
 import { api, getResolvedApiBaseUrl, isUsingNextMockApi } from "../lib/api";
 import { PERIODIC_HEALTH_INTERVAL_MS } from "../hooks/use-periodic-health-ping";
+import BuildFooter from "./build-footer";
 
 type NavItem = { href: string; label: string };
 
@@ -353,6 +354,7 @@ export default function BackendShell({
           ) : null}
           {children}
         </main>
+        <BuildFooter className="border-t border-ink/10 px-4 py-2 md:px-6" />
         <nav data-admin-bottom-nav className="hidden" aria-hidden="true" />
       </div>
     </div>
