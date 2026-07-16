@@ -120,7 +120,9 @@ export default function CoachHourlyDayView({
                 }}
               >
                 {enabled && !blocked && !isSelected ? (
-                  <span className="sr-only">{pad2(h)}:00 可排程</span>
+                  <span className="block truncate px-2 text-left text-[11px] font-medium text-primary/85">
+                    {pad2(h)}:00 可排程
+                  </span>
                 ) : null}
               </button>
             );

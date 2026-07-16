@@ -175,7 +175,7 @@ export default function CoachScheduleCalendarNav({
       )}
 
       <p className="text-[11px] text-ink/50">
-        已選 {selectedDay} · 下方為 9:00–19:00 時段視圖
+        已選 {selectedDay} · 揀學員後點日期開啟 9:00–19:00 排程視窗
       </p>
     </div>
   );

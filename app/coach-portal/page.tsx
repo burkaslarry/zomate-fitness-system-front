@@ -10,8 +10,8 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import CoachHourlyDayView from "../../components/coach-hourly-day-view";
 import CoachScheduleCalendarNav, { type CalendarMode } from "../../components/coach-schedule-calendar-nav";
+import CoachScheduleModal from "../../components/coach-schedule-modal";
 import { monthRange, weekRange } from "../../lib/coach-schedule-dates";
 import { alertApiError, api } from "../../lib/api";
 import { getAuthSession } from "../../lib/auth";
@@ -145,8 +145,9 @@ export default function CoachDashboardPage() {
   const [authOk, setAuthOk] = useState(false);
   const [roleDenied, setRoleDenied] = useState(false);
   const [coach, setCoach] = useState<CoachMe | null>(null);
-  const [calendarMode, setCalendarMode] = useState<CalendarMode>("week");
+  const [calendarMode, setCalendarMode] = useState<CalendarMode>("month");
   const [rangeCourses, setRangeCourses] = useState<CourseRow[]>([]);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [pending, setPending] = useState<PendingRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [dayCourses, setDayCourses] = useState<CourseRow[]>([]);
@@ -288,6 +289,7 @@ export default function CoachDashboardPage() {
           setStartHour(9);
           setDurationHours(1);
         }
+        setScheduleModalOpen(true);
       } catch (e) {
         setScheduleStudentId(null);
         alertApiError(e);
@@ -307,18 +309,32 @@ export default function CoachDashboardPage() {
     setScheduleStudentId(selectedPending.student_id);
   }, [selectedPending]);
 
-  /** [F003][S002] Auto-select when only one student — avoids dead-end empty calendar. */
+  /** [F003][S002] Auto-select when only one student — opens schedule modal. */
   useEffect(() => {
     if (!coach || !authOk || pickBusy || selectedPending) return;
     if (pending.length === 1) {
       setSelectedPending(pending[0]);
       setScheduleStudentId(pending[0].student_id);
+      setScheduleModalOpen(true);
       return;
     }
     if (pending.length === 0 && students.length === 1) {
       void pickStudentForSchedule(students[0].student_id);
     }
   }, [coach, authOk, pending, students, selectedPending, pickBusy, pickStudentForSchedule]);
+
+  const handleCalendarDaySelect = useCallback(
+    (dayKey: string) => {
+      setSelectedDay(dayKey);
+      if (selectedPending) setScheduleModalOpen(true);
+    },
+    [selectedPending]
+  );
+
+  const handleSelectPendingRow = useCallback((row: PendingRow) => {
+    setSelectedPending(row);
+    setScheduleModalOpen(true);
+  }, []);
 
   async function confirmSchedule() {
     if (!coach || !selectedPending) return;
@@ -338,6 +354,7 @@ export default function CoachDashboardPage() {
       });
       setSelectedPending(null);
       setScheduleStudentId(null);
+      setScheduleModalOpen(false);
       await reloadAll(coach.id);
       setStatus("已排程。");
     } catch (e) {
@@ -451,7 +468,7 @@ export default function CoachDashboardPage() {
         <p className="mt-1 text-xs text-ink/55">
           {pending.length > 0
             ? `你有 ${pending.length} 位學員待確認上課時間（未付款亦可排程）。`
-            : "點選學員卡片 → 喺下方日曆點時段排程；未付款亦可安排上堂。"}
+            : "點選學員卡片 → 開啟排程視窗揀 9:00–19:00 時段；未付款亦可安排上堂。"}
         </p>
         {pickBusy ? <p className="mt-2 text-xs text-primary">載入學員課程…</p> : null}
         {pending.length === 0 ? (
@@ -486,7 +503,7 @@ export default function CoachDashboardPage() {
               <li key={p.enrollment_id}>
                 <button
                   type="button"
-                  onClick={() => setSelectedPending(p)}
+                  onClick={() => handleSelectPendingRow(p)}
                   className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm transition ${
                     selectedPending?.enrollment_id === p.enrollment_id
                       ? "border-primary bg-primary/10 ring-1 ring-primary/30"
@@ -510,73 +527,27 @@ export default function CoachDashboardPage() {
           selectedDay={selectedDay}
           mode={calendarMode}
           sessionCountsByDay={sessionCountsByDay}
-          onSelectDay={setSelectedDay}
+          onSelectDay={handleCalendarDaySelect}
           onModeChange={setCalendarMode}
-          onNavigate={setSelectedDay}
+          onNavigate={handleCalendarDaySelect}
         />
         {selectedPending ? (
           <p className="mt-2 text-xs text-ink/65">
-            正在為 <strong>{selectedPending.student_name}</strong> 排程 · {selectedPending.course_title} · 點選空白時段（1–2 小時）
-          </p>
-        ) : (
-          <p className="mt-2 text-xs text-ink/50">先揀學員，再喺下方時段視圖點選 1–2 小時空檔。</p>
-        )}
-        <CoachHourlyDayView
-          hours={HOURS}
-          dayCourses={dayCourses}
-          excludeCourseIds={excludeCourseIds}
-          occupied={occupied}
-          selectedStudentName={selectedPending?.student_name ?? null}
-          startHour={startHour}
-          durationHours={durationHours}
-          slotWouldConflict={slotWouldConflict}
-          onPickSlot={(h, dur) => {
-            setStartHour(h);
-            setDurationHours(dur);
-          }}
-        />
-        {selectedPending ? (
-          <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-ink/10 pt-4">
-            <label className="text-xs text-ink/70">
-              開始
-              <select
-                value={startHour}
-                onChange={(e) => setStartHour(Number(e.target.value))}
-                className="mt-1 block rounded-lg border border-ink/15 bg-canvas px-2 py-1.5 text-sm"
-              >
-                {HOURS.filter((h) => !slotWouldConflict(occupied, h, durationHours)).map((h) => (
-                  <option key={h} value={h}>
-                    {pad2(h)}:00
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-xs text-ink/70">
-              時長
-              <select
-                value={durationHours}
-                onChange={(e) => setDurationHours(Number(e.target.value) as 1 | 2)}
-                className="mt-1 block rounded-lg border border-ink/15 bg-canvas px-2 py-1.5 text-sm"
-              >
-                {[1, 2].filter((d) => !slotWouldConflict(occupied, startHour, d)).map((d) => (
-                  <option key={d} value={d}>
-                    {d} 小時
-                  </option>
-                ))}
-              </select>
-            </label>
+            已揀 <strong>{selectedPending.student_name}</strong> · {selectedPending.course_title} ·{" "}
             <button
               type="button"
-              disabled={scheduling || slotWouldConflict(occupied, startHour, durationHours)}
-              onClick={() => void confirmSchedule()}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              onClick={() => setScheduleModalOpen(true)}
+              className="font-semibold text-primary underline-offset-2 hover:underline"
             >
-              {scheduling ? "提交中…" : "確認排程"}
+              開啟排程視窗
             </button>
-          </div>
-        ) : null}
+          </p>
+        ) : (
+          <p className="mt-2 text-xs text-ink/50">先揀學員，再點月曆日期開啟 9:00–19:00 排程視窗。</p>
+        )}
         {dayCourses.filter((c) => !pendingCourseIds.has(c.id)).length > 0 ? (
           <ul className="mt-4 space-y-1 border-t border-ink/10 pt-3 text-xs text-ink/65">
+            <li className="font-medium text-ink/50">{selectedDay} 已排課程</li>
             {dayCourses
               .filter((c) => !pendingCourseIds.has(c.id))
               .map((c) => (
@@ -585,6 +556,29 @@ export default function CoachDashboardPage() {
           </ul>
         ) : null}
       </section>
+
+      <CoachScheduleModal
+        open={scheduleModalOpen && selectedPending != null}
+        studentName={selectedPending?.student_name ?? ""}
+        courseTitle={selectedPending?.course_title ?? ""}
+        selectedDay={selectedDay}
+        dayCourses={dayCourses}
+        excludeCourseIds={excludeCourseIds}
+        occupied={occupied}
+        startHour={startHour}
+        durationHours={durationHours}
+        scheduling={scheduling}
+        onClose={() => setScheduleModalOpen(false)}
+        onDayChange={setSelectedDay}
+        onPickSlot={(h, dur) => {
+          setStartHour(h);
+          setDurationHours(dur);
+        }}
+        onStartHourChange={setStartHour}
+        onDurationChange={setDurationHours}
+        onConfirm={() => void confirmSchedule()}
+        slotWouldConflict={slotWouldConflict}
+      />
     </div>
   );
 
