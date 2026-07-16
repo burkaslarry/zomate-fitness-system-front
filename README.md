@@ -61,6 +61,19 @@ Notes:
 
 ## Deploy to Vercel
 
+**SRAA gate (Security Risk Assessment & Audit):** before every production deploy, run automated dependency remediation and block on high/critical findings.
+
+```bash
+npm run predeploy          # npm audit fix → audit --audit-level=high → next build
+# or
+./scripts/pre-deploy-vercel.sh
+npm run deploy:vercel      # gate + vercel --prod (requires Vercel CLI)
+```
+
+Do **not** use `npm audit fix --force` — it can downgrade Next.js and break the app.
+
+GitHub Actions workflow `.github/workflows/sraa-predeploy.yml` runs the same gate on `main` PRs and pushes.
+
 1. Keep `vercel.json` in this folder.
 2. In Vercel project settings, set:
    - Production: `NEXT_PUBLIC_API_BASE_URL=https://<your-render-service>.onrender.com`
