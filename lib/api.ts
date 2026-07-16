@@ -44,20 +44,19 @@ export function getResolvedApiBaseUrl(): string {
   return API_BASE_URL;
 }
 
-/** Build absolute URL for uploads — same-origin `/api/uploads/...` proxy in production & Docker. */
+/** Build absolute URL for uploads — prefer FastAPI `/uploads` when API base is configured. */
 export function apiAssetUrl(relativeOrAbsolute: string | null | undefined): string | undefined {
   if (!relativeOrAbsolute) return undefined;
   if (relativeOrAbsolute.startsWith("data:")) return relativeOrAbsolute;
   if (/^https?:\/\//i.test(relativeOrAbsolute)) return relativeOrAbsolute;
   let path = relativeOrAbsolute.startsWith("/") ? relativeOrAbsolute : `/${relativeOrAbsolute}`;
-  if (path.startsWith("/uploads/")) {
-    return `/api${path}`;
-  }
-  if (!path.startsWith("/api/uploads/") && !path.includes("://")) {
+  if (!path.startsWith("/uploads/") && !path.startsWith("/api/uploads/") && !path.includes("://")) {
     path = `/uploads/${path.replace(/^\/+/, "")}`;
-    return `/api${path}`;
   }
   const base = API_BASE_URL;
+  if (path.startsWith("/uploads/")) {
+    return base ? `${base}${path}` : `/api${path}`;
+  }
   if (!base) return path;
   return `${base}${path}`;
 }

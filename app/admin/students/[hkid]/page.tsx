@@ -351,6 +351,13 @@ export default function AdminStudentDetailPage() {
   const packages = data?.packages ?? [];
   const packageLessons = packages.reduce((sum, pkg) => sum + (Number(pkg.lessons) || 0), 0);
   const categoryLessons = catEnr.reduce((sum, row) => sum + (Number(row.total_lessons) || 0), 0);
+  const scheduledCourseLessons = pins.reduce(
+    (sum, pin) => sum + (Number((pin as { total_lessons?: number }).total_lessons) || 0),
+    0
+  );
+  const ledgerBalance = data?.profile.lesson_balance ?? 0;
+  const ledgerMismatch =
+    packageLessons > 0 && categoryLessons === 0 && ledgerBalance !== packageLessons;
   const photoSrc = apiAssetUrl(data?.profile.photo_url ?? undefined);
   const signatureSrc = apiAssetUrl(data?.profile.signature_image_url ?? undefined);
   const receiptContexts = [
@@ -456,8 +463,8 @@ export default function AdminStudentDetailPage() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-ink/50">Remaining（ledger 總餘額）</dt>
-                  <dd>{data.profile.lesson_balance} 堂</dd>
+                  <dt className="text-xs text-ink/50">剩餘堂數</dt>
+                  <dd>{ledgerBalance} 堂</dd>
                 </div>
               </dl>
               <form
@@ -527,7 +534,9 @@ export default function AdminStudentDetailPage() {
                     />
                   ) : (
                     <div className="flex min-h-[8rem] items-center justify-center px-4 py-8 text-center text-sm text-ink/45">
-                      {signatureFailed ? "簽名圖載入失敗" : "尚未上傳簽名"}
+                      {signatureFailed
+                        ? "簽名圖載入失敗（可能 Render 重啟後檔案遺失；可請學員重新簽名）"
+                        : "尚未上傳簽名"}
                     </div>
                   )}
                 </div>
@@ -610,24 +619,35 @@ export default function AdminStudentDetailPage() {
           {tab === "課程記錄" && data && (
             <div className="space-y-8">
               <div className="rounded-xl border border-ink/10 bg-canvas p-4">
-                <h3 className="text-sm font-semibold text-ink">堂數來源總覽</h3>
+                <h3 className="text-sm font-semibold text-ink">堂數總覽</h3>
                 <div className="mt-3 grid gap-3 sm:grid-cols-3">
                   <div className="rounded-lg border border-ink/10 bg-surface p-3">
-                    <p className="text-xs text-ink/55">續會／Package</p>
+                    <p className="text-xs text-ink/55">已付款套餐</p>
                     <p className="mt-1 text-2xl font-semibold text-ink">{packageLessons}</p>
                   </div>
                   <div className="rounded-lg border border-ink/10 bg-surface p-3">
-                    <p className="text-xs text-ink/55">種類報讀（帳面）</p>
-                    <p className="mt-1 text-2xl font-semibold text-ink">{categoryLessons}</p>
+                    <p className="text-xs text-ink/55">已開課程（時間表）</p>
+                    <p className="mt-1 text-2xl font-semibold text-ink">
+                      {pins.length === 0 ? "—" : scheduledCourseLessons}
+                    </p>
                   </div>
                   <div className="rounded-lg border border-ink/10 bg-surface p-3">
-                    <p className="text-xs text-ink/55">Ledger 總餘額</p>
-                    <p className="mt-1 text-2xl font-semibold text-primary">{data.profile.lesson_balance}</p>
+                    <p className="text-xs text-ink/55">可扣堂餘額</p>
+                    <p className="mt-1 text-2xl font-semibold text-primary">{ledgerBalance}</p>
                   </div>
                 </div>
-                <p className="mt-2 text-xs text-ink/55">
-                  例如 Wai Lun：Package 10 + 種類報讀 30 = 總餘額 40。扣堂／補堂會再由 ledger 影響總餘額。
-                </p>
+                {categoryLessons > 0 ? (
+                  <p className="mt-2 text-xs text-ink/55">種類報讀帳面：{categoryLessons} 堂（與套餐分開計）</p>
+                ) : null}
+                {ledgerMismatch ? (
+                  <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    餘額（{ledgerBalance}）同已付款套餐（{packageLessons}）唔一致 — 可能重複入帳。請 Admin 用 ledger 修正。
+                  </p>
+                ) : (
+                  <p className="mt-2 text-xs text-ink/55">
+                    報課流程：先記錄付款，再開課派 PIN；可扣堂餘額應等於已付款套餐（扣堂後遞減）。
+                  </p>
+                )}
               </div>
 
               <div>
