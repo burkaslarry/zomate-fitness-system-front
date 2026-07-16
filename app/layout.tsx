@@ -14,8 +14,8 @@ import Providers from "../components/providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Zomate Fitness Demo",
-  description: "Local system integration demo for onboarding/check-in/admin."
+  title: "Zomate Fitness",
+  description: "Zomate PT 管理系統 — 學員登記、報課、簽到與後台管理。"
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
