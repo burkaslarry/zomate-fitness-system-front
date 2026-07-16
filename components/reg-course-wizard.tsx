@@ -10,7 +10,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { alertApiError, api } from "../lib/api";
-import type { CoachDto, CourseCategoryDto, MemberProfile } from "../types/api";
+import type { CoachDto, CourseCategoryDto, InstallmentSegmentPinDto, MemberProfile } from "../types/api";
 import FileUpload from "./forms/file-upload";
 import PaymentMethodRadio from "./forms/payment-method-radio";
 
@@ -39,9 +39,43 @@ function digitsOnlyLessons(raw: string): string {
   return raw.replace(/\D/g, "").slice(0, 2);
 }
 
+function pythonWeekdayFromDate(d: Date): number {
+  return (d.getDay() + 6) % 7;
+}
+
+function buildAutoCoursePayload(opts: {
+  title: string;
+  branchId: number;
+  coachId: number;
+  studentId: number;
+  totalLessons: number;
+  totalInstallments: number;
+  remarks?: string;
+}) {
+  const now = new Date();
+  const start = new Date(now);
+  start.setHours(10, 0, 0, 0);
+  const end = new Date(start);
+  end.setHours(11, 0, 0, 0);
+  return {
+    title: opts.title,
+    branch_id: opts.branchId,
+    coach_id: opts.coachId,
+    scheduled_start: start.toISOString(),
+    scheduled_end: end.toISOString(),
+    student_ids: [opts.studentId],
+    course_start_date: now.toISOString().slice(0, 10),
+    lesson_weekdays: [pythonWeekdayFromDate(now)],
+    total_lessons: opts.totalLessons,
+    total_installments: opts.totalInstallments,
+    coach_schedule_note: opts.remarks?.trim() || undefined
+  };
+}
+
 const NEW_STUDENT_CATEGORY_PREFIX = "新學生";
 
 type PurchaseSummary = {
+  studentId: number;
   studentName: string;
   packageName: string;
   coursePackageType: string;
@@ -50,6 +84,9 @@ type PurchaseSummary = {
   paymentMethod: string;
   coachName: string;
   totalInstallments: number;
+  checkinPin: string;
+  installmentSegments: InstallmentSegmentPinDto[];
+  enrollmentId: number | null;
 };
 
 type WizardStep = 0 | 1 | 2 | 3;
@@ -237,7 +274,7 @@ export default function RegCourseWizard({
     else noteParts.push("一次付清");
     try {
       setRenewalSubmitting(true);
-      const res = (await api.createRenewal({
+      await api.createRenewal({
         student_id: member.id,
         total_lessons: lessons,
         coach_id: Number(coachId),
@@ -248,17 +285,42 @@ export default function RegCourseWizard({
         course_package_type_code: `cat_${selectedKind.id}`,
         course_package_type_label: selectedKind.name,
         note: noteParts.join(" · "),
-        receipt: receipt instanceof File && receipt.name ? receipt : null
-      })) as { member?: { lesson_balance?: number } };
+        receipt: receipt instanceof File && receipt.name ? receipt : null,
+        skip_lesson_ledger: true
+      });
+      const coursePayload = buildAutoCoursePayload({
+        title: selectedKind.name,
+        branchId,
+        coachId: Number(coachId),
+        studentId: member.id,
+        totalLessons: lessons,
+        totalInstallments,
+        remarks
+      });
+      const courseRes = (await (mode === "coach"
+        ? api.coachRegisterCourse(coursePayload)
+        : api.createCourse(coursePayload))) as {
+        id: number;
+        enrollments?: Array<{
+          checkin_pin?: string;
+          installment_segments?: InstallmentSegmentPinDto[];
+        }>;
+      };
+      const enr = courseRes.enrollments?.[0];
+      const balanceRes = (await api.memberLookupByPhone(member.phone)) as MemberProfile;
       setPurchaseSummary({
+        studentId: member.id,
         studentName: member.full_name,
         packageName: `${lessons} 堂`,
         coursePackageType: selectedKind.name,
         amountPaid: amount.trim().replace(/,/g, ""),
-        remainingBalance: typeof res.member?.lesson_balance === "number" ? res.member.lesson_balance : null,
+        remainingBalance: balanceRes.lesson_balance,
         paymentMethod: method,
         coachName: selectedCoach?.full_name ?? "—",
-        totalInstallments
+        totalInstallments,
+        checkinPin: enr?.checkin_pin ?? "—",
+        installmentSegments: enr?.installment_segments ?? [],
+        enrollmentId: courseRes.id ?? null
       });
     } catch (err) {
       alertApiError(err);
@@ -278,8 +340,8 @@ export default function RegCourseWizard({
     <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
       <p className="text-sm text-ink/65">
         {mode === "coach"
-          ? "記錄學員付款；收據可候補。Full pay 開課後出 PIN；分期第 2／3 期未付則簽到頁提示付款。"
-          : "記錄付款後，請到「開課」安排課程並產生 PIN。分期：第 2／3 期須先收款才可簽到。"}
+          ? "記錄付款並產生簽到 PIN（頁內顯示，唔彈窗）。分期：第 2／3 期未付時簽到頁會提示。"
+          : "確認付款後即時開課並顯示 PIN；學生詳情「已開課程」亦會見到。分期第 2／3 期須收款後才可簽到。"}
       </p>
 
       <ol className="flex flex-wrap gap-1.5 text-[11px] sm:gap-2 sm:text-xs">
@@ -497,7 +559,41 @@ export default function RegCourseWizard({
 
       {purchaseSummary ? (
         <section className="space-y-4 rounded-xl border border-emerald-300 bg-emerald-50 p-4 shadow-sm sm:p-5">
-          <h2 className="text-lg font-semibold text-emerald-900">已記錄付款</h2>
+          <h2 className="text-lg font-semibold text-emerald-900">已記錄付款 · 簽到 PIN</h2>
+
+          <div className="rounded-xl border-2 border-emerald-700/30 bg-white px-4 py-5 text-center shadow-sm">
+            <p className="text-xs font-medium uppercase tracking-wide text-ink/55">課堂 PIN</p>
+            <p className="mt-1 font-mono text-3xl font-bold tracking-[0.2em] text-ink sm:text-4xl">
+              {purchaseSummary.checkinPin}
+            </p>
+            {purchaseSummary.totalInstallments > 1 ? (
+              <p className="mt-2 text-xs text-amber-900">
+                分期 {purchaseSummary.totalInstallments} 期 — 第 1 期 PIN 可簽到；第 2／3 期須收款後由櫃台標記已付。
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-emerald-800">一次付清 — 此 PIN 可立即用於簽到。</p>
+            )}
+          </div>
+
+          {purchaseSummary.installmentSegments.length > 1 ? (
+            <ul className="space-y-1.5 text-xs">
+              {purchaseSummary.installmentSegments.map((seg) => (
+                <li
+                  key={seg.installment_no}
+                  className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 ${
+                    seg.paid ? "border-emerald-300 bg-white" : "border-amber-300 bg-amber-50"
+                  }`}
+                >
+                  <span>
+                    第 {seg.installment_no} 期 · 第 {seg.lesson_from}–{seg.lesson_to} 堂
+                  </span>
+                  <span className="font-mono font-semibold text-ink">{seg.pin}</span>
+                  <span className="text-[10px]">{seg.paid ? "可簽到" : "待付款"}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
           <dl className="grid gap-2 text-sm text-emerald-950">
             <div className="flex justify-between gap-2">
               <dt className="text-emerald-800/70">學員</dt>
@@ -516,21 +612,21 @@ export default function RegCourseWizard({
               <dd>{purchaseSummary.remainingBalance ?? "—"} 堂</dd>
             </div>
           </dl>
-          {purchaseSummary.totalInstallments > 1 ? (
-            <p className="text-sm text-emerald-900/90">
-              分期 {purchaseSummary.totalInstallments} 期已記錄。請到開課頁安排課程；第 2／3 期未收款前，對應 PIN 無法簽到。
-            </p>
-          ) : (
-            <p className="text-sm text-emerald-900/90">
-              一次付清已記錄。請到開課頁安排課程並產生 PIN 俾學生簽到。
-            </p>
-          )}
+
+          {mode === "staff" ? (
+            <Link
+              href={`/admin/students/${purchaseSummary.studentId}`}
+              className="block w-full rounded-md bg-ink px-4 py-3 text-center text-sm font-semibold text-white"
+            >
+              查看學生詳情（已開課程 · PIN）
+            </Link>
+          ) : null}
           {mode === "staff" ? (
             <Link
               href="/admin/course-set"
-              className="block w-full rounded-md bg-emerald-700 px-4 py-3 text-center text-sm font-semibold text-white"
+              className="block w-full rounded-md border border-ink/20 bg-white px-4 py-2.5 text-center text-sm font-medium text-ink"
             >
-              安排課程並產生 PIN
+              調整開課時間（選填）
             </Link>
           ) : null}
           <button
