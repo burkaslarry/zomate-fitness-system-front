@@ -23,8 +23,7 @@ const MENU_SECTIONS: { frameClass: string; items: NavItem[] }[] = [
     items: [
       { href: "/admin", label: "後台面板" },
       { href: "/register", label: "+ 新會員" },
-      { href: "/regCourse", label: "+ 報 Course / 收費" },
-      { href: "/trial-class", label: "+ 試堂/加堂" }
+      { href: "/regCourse", label: "+ 報 Course / 收費" }
     ]
   },
   {
@@ -39,8 +38,9 @@ const MENU_SECTIONS: { frameClass: string; items: NavItem[] }[] = [
     frameClass: "rounded-xl border-2 border-primary/25 bg-canvas p-2.5",
     items: [
       { href: "/admin/branches", label: "課堂和分店管理" },
-      { href: "/coach/calendar", label: "教練日程 · 簽到" },
-      { href: "/coach", label: "教練課表" },
+      { href: "/coach/calendar", label: "學生上堂" },
+      { href: "/coach", label: "教練上堂" },
+      { href: "/coach/attendance", label: "教練出勤" },
       { href: "/admin/attendance/qr-console", label: "QR 簽到中心" },
       { href: "/student", label: "學生入口" }
     ]
@@ -48,9 +48,8 @@ const MENU_SECTIONS: { frameClass: string; items: NavItem[] }[] = [
   {
     frameClass: "rounded-xl border-2 border-ink/12 bg-surface/60 p-2.5",
     items: [
-      { href: "/admin/finance/sales", label: "銷售與分期" },
-      { href: "/admin/finance/expenses", label: "支出管理" },
-      { href: "/admin/finance/payroll", label: "薪酬 / 出勤報表" }
+      /** [F004][S001] Expenses + payroll excluded: coaches self-mark attendance. */
+      { href: "/admin/finance/sales", label: "銷售與分期" }
     ]
   },
   {
@@ -72,6 +71,53 @@ function isNavActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+/** [F006][S002] Admin mobile — quick tabs for 教練上堂 section. */
+const ADMIN_MOBILE_COACH_TABS = [
+  { href: "/coach", label: "教練上堂", match: (p: string) => p === "/coach" },
+  {
+    href: "/coach/calendar",
+    label: "學生上堂",
+    match: (p: string) => p.startsWith("/coach/calendar")
+  },
+  {
+    href: "/coach/attendance",
+    label: "教練出勤",
+    match: (p: string) => p.startsWith("/coach/attendance")
+  }
+] as const;
+
+/** [F006][S002] Admin mobile — primary shortcuts for staff on phone. */
+const ADMIN_MOBILE_MAIN_TABS = [
+  { href: "/admin", label: "面板", match: (p: string) => p === "/admin" },
+  {
+    href: "/admin/students",
+    label: "學生",
+    match: (p: string) => p.startsWith("/admin/students")
+  },
+  { href: "/regCourse", label: "報課", match: (p: string) => p === "/regCourse" },
+  {
+    href: "/admin/coaches",
+    label: "教練",
+    match: (p: string) => p.startsWith("/admin/coaches")
+  },
+  {
+    href: "/admin/payments",
+    label: "付款",
+    match: (p: string) => p.startsWith("/admin/payments")
+  }
+] as const;
+
+function isCoachSectionPath(pathname: string): boolean {
+  return pathname === "/coach" || pathname.startsWith("/coach/");
+}
+
+/** Routes that show admin bottom nav on mobile (staff workflows). */
+function isAdminMobileNavPath(pathname: string): boolean {
+  if (isCoachSectionPath(pathname)) return true;
+  if (pathname === "/regCourse") return true;
+  return pathname === "/admin" || pathname.startsWith("/admin/");
+}
+
 export default function BackendShell({
   children,
   title,
@@ -90,6 +136,7 @@ export default function BackendShell({
   const [storedSession, setStoredSession] = useState<AuthSession | null>(null);
   const [apiStatus, setApiStatus] = useState<"checking" | "online" | "offline">("checking");
   const [dbStatus, setDbStatus] = useState<"idle" | "checking" | "ok" | "error" | "na">("idle");
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -167,6 +214,10 @@ export default function BackendShell({
   }, []);
 
   useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
     let cancelled = false;
     const probe = () => {
       void (async () => {
@@ -222,13 +273,40 @@ export default function BackendShell({
   }
 
   const showAdminSidebar = layout === "admin";
+  const showAdminMobileBottomNav = showAdminSidebar && isAdminMobileNavPath(pathname);
+  const showAdminMobileCoachTabs = showAdminSidebar && isCoachSectionPath(pathname);
+  const showAdminMobileMainTabs = showAdminSidebar && showAdminMobileBottomNav && !isCoachSectionPath(pathname);
+
+  const navSections = (
+    <>
+      {MENU_SECTIONS.map((section, si) => (
+        <div key={si} className={section.frameClass}>
+          <div className="space-y-0.5">
+            {section.items.map((item) => {
+              const active = isNavActive(pathname, item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={navLinkClass(active)}
+                  onClick={() => setMobileNavOpen(false)}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </>
+  );
 
   return (
     <div className="flex min-h-screen bg-canvas text-ink">
       {showAdminSidebar ? (
       <aside
         data-admin-sidebar
-        className="sticky top-0 h-screen w-[260px] shrink-0 overflow-y-auto border-r border-ink/10 bg-surface"
+        className="sticky top-0 hidden h-screen w-[260px] shrink-0 overflow-y-auto border-r border-ink/10 bg-surface md:block"
       >
         <div className="flex min-h-full w-[260px] flex-col px-4 pb-5 pt-5">
           <div className="mb-5">
@@ -281,26 +359,7 @@ export default function BackendShell({
               )}
             </div>
           </div>
-          <nav className="flex-1 space-y-3">
-            {MENU_SECTIONS.map((section, si) => (
-              <div key={si} className={section.frameClass}>
-                <div className="space-y-0.5">
-                  {section.items.map((item) => {
-                    const active = isNavActive(pathname, item.href);
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        className={navLinkClass(active)}
-                      >
-                        {item.label}
-                      </Link>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </nav>
+          <nav className="flex-1 space-y-3">{navSections}</nav>
           <button
             type="button"
             onClick={doLogout}
@@ -311,9 +370,51 @@ export default function BackendShell({
         </div>
       </aside>
       ) : null}
+      {showAdminSidebar && mobileNavOpen ? (
+        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="後台選單">
+          <button
+            type="button"
+            className="absolute inset-0 bg-ink/40 backdrop-blur-[1px]"
+            aria-label="關閉選單"
+            onClick={() => setMobileNavOpen(false)}
+          />
+          <aside className="absolute left-0 top-0 flex h-full w-[min(88vw,280px)] flex-col overflow-y-auto border-r border-ink/10 bg-surface px-4 pb-6 pt-5 shadow-xl">
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <h2 className="text-[15px] font-semibold text-ink">Zomate Fitness</h2>
+              <button
+                type="button"
+                onClick={() => setMobileNavOpen(false)}
+                className="rounded-lg border border-ink/15 px-2.5 py-1 text-xs text-ink/70"
+              >
+                關閉
+              </button>
+            </div>
+            <nav className="flex-1 space-y-3">{navSections}</nav>
+            <button
+              type="button"
+              onClick={() => void doLogout()}
+              className="mt-4 rounded-lg border border-ink/15 px-3 py-2.5 text-left text-[13px] text-ink/90"
+            >
+              登出
+            </button>
+          </aside>
+        </div>
+      ) : null}
       <div className="flex min-h-screen min-w-0 flex-1 flex-col bg-canvas">
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-ink/10 bg-canvas/95 px-4 py-3 backdrop-blur-md md:px-6">
-          <h1 className="min-w-0 flex-1 text-[17px] font-semibold tracking-[-0.02em] text-ink md:text-lg">{title}</h1>
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-ink/10 bg-canvas/95 px-3 py-3 backdrop-blur-md md:px-6">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            {showAdminSidebar ? (
+              <button
+                type="button"
+                onClick={() => setMobileNavOpen(true)}
+                className="inline-flex shrink-0 items-center justify-center rounded-lg border border-ink/15 bg-surface px-2.5 py-2 text-xs font-medium text-ink md:hidden"
+                aria-label="開啟選單"
+              >
+                選單
+              </button>
+            ) : null}
+            <h1 className="min-w-0 flex-1 truncate text-[16px] font-semibold tracking-[-0.02em] text-ink md:text-lg">{title}</h1>
+          </div>
           <div className="flex shrink-0 items-center gap-2">
             {layout === "coach" ? (
               <button
@@ -341,7 +442,15 @@ export default function BackendShell({
           </div>
           </div>
         </header>
-        <main className={`relative min-w-0 flex-1 overflow-y-auto ${layout === "coach" ? "p-3 sm:p-4" : "p-4 md:p-6"}`}>
+        <main
+          className={`relative min-w-0 flex-1 overflow-y-auto ${
+            layout === "coach"
+              ? "p-3 sm:p-4"
+              : showAdminMobileBottomNav
+                ? "p-3 pb-24 md:p-6 md:pb-6"
+                : "p-3 pb-6 md:p-6"
+          }`}
+        >
           {verifying ? (
             <div
               className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-canvas/80 backdrop-blur-[2px]"
@@ -354,8 +463,62 @@ export default function BackendShell({
           ) : null}
           {children}
         </main>
-        <BuildFooter className="border-t border-ink/10 px-4 py-2 md:px-6" />
-        <nav data-admin-bottom-nav className="hidden" aria-hidden="true" />
+        <BuildFooter className="border-t border-ink/10 px-3 py-2 md:px-6" />
+        {showAdminMobileCoachTabs ? (
+          <nav
+            data-admin-bottom-nav
+            className="fixed bottom-0 left-0 right-0 z-40 border-t border-ink/10 bg-surface/95 backdrop-blur-md md:hidden"
+          >
+            <div className="mx-auto flex max-w-lg">
+              {ADMIN_MOBILE_COACH_TABS.map((tab) => {
+                const active = tab.match(pathname);
+                return (
+                  <Link
+                    key={tab.href}
+                    href={tab.href}
+                    className={`flex flex-1 flex-col items-center justify-center gap-0.5 py-2.5 text-[11px] font-medium transition ${
+                      active ? "text-primary" : "text-ink/55"
+                    }`}
+                  >
+                    <span
+                      className={`h-1 w-8 rounded-full ${active ? "bg-primary" : "bg-transparent"}`}
+                      aria-hidden
+                    />
+                    {tab.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </nav>
+        ) : showAdminMobileMainTabs ? (
+          <nav
+            data-admin-bottom-nav
+            className="fixed bottom-0 left-0 right-0 z-40 border-t border-ink/10 bg-surface/95 backdrop-blur-md md:hidden"
+          >
+            <div className="mx-auto flex max-w-lg">
+              {ADMIN_MOBILE_MAIN_TABS.map((tab) => {
+                const active = tab.match(pathname);
+                return (
+                  <Link
+                    key={tab.href}
+                    href={tab.href}
+                    className={`flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition sm:text-[11px] ${
+                      active ? "text-primary" : "text-ink/55"
+                    }`}
+                  >
+                    <span
+                      className={`h-1 w-7 rounded-full sm:w-8 ${active ? "bg-primary" : "bg-transparent"}`}
+                      aria-hidden
+                    />
+                    {tab.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </nav>
+        ) : (
+          <nav data-admin-bottom-nav className="hidden" aria-hidden="true" />
+        )}
       </div>
     </div>
   );

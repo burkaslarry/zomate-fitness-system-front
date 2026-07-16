@@ -10,8 +10,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TouchEvent as ReactTouchEvent } from "react";
+import { usePathname } from "next/navigation";
 import BackendShell from "../../../components/backend-shell";
-import { api, getCheckinsWebSocketUrl } from "../../../lib/api";
+import CoachCategoryFilter from "../../../components/coach-category-filter";
+import { alertApiError, api, getCheckinsWebSocketUrl } from "../../../lib/api";
 import { getAuthSession } from "../../../lib/auth";
 
 type CoachOpt = { id: number; full_name: string; phone: string; branch_id: number | null };
@@ -92,8 +94,7 @@ function PinFlowGuide() {
       path: "Admin → 學生名單 → 點姓名 → 課程記錄 → 已開課程",
       href: "/admin/students"
     },
-    { who: "教練 · 本頁／單日課表", path: "月曆或 /coach 課程卡 enrollment 內之 PIN", href: "/coach" },
-    { who: "試堂成功後", path: "trial-class 成功 modal 顯示課程 PIN（若有）", href: "/trial-class" }
+    { who: "職員 · 報 Course", path: "報 Course / 收費 → 開課頁產生 PIN", href: "/regCourse" }
   ];
   return (
     <div className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm ring-1 ring-ink/[0.04]">
@@ -101,7 +102,7 @@ function PinFlowGuide() {
       <p className="mt-2 text-xs leading-relaxed text-ink/55">
         開課時後台會按<strong>上課星期</strong>同首課時間<strong>自動排一系列堂</strong>；如遇唔得閒，教練請喺{" "}
         <Link href="/coach" className="font-medium text-primary underline-offset-2 hover:underline">
-          教練課表
+          教練上堂
         </Link>{" "}
         改該系列的具體日期時間。
       </p>
@@ -124,6 +125,8 @@ function PinFlowGuide() {
 }
 
 export default function CoachCalendarPage() {
+  const pathname = usePathname();
+  const inPortalLayout = pathname.startsWith("/coach-portal");
   /** 須待 client mount 先讀 session；首屏勿用 ``false`` 誤打 ``api.coaches()``（COACH 會 403）。 */
   const [portalResolved, setPortalResolved] = useState(false);
   const [coachPortal, setCoachPortal] = useState(false);
@@ -135,9 +138,10 @@ export default function CoachCalendarPage() {
   const [redeemedPairs, setRedeemedPairs] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
-    setCoachPortal(getAuthSession()?.role === "COACH");
+    const role = getAuthSession()?.role;
+    setCoachPortal(inPortalLayout || role === "COACH");
     setPortalResolved(true);
-  }, []);
+  }, [inPortalLayout]);
   const now = new Date();
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
@@ -151,6 +155,8 @@ export default function CoachCalendarPage() {
   const [wsState, setWsState] = useState<"connecting" | "open" | "closed">("connecting");
   const [filterMyStudents, setFilterMyStudents] = useState(true);
   const [portalCoachNote, setPortalCoachNote] = useState("");
+  const [categoryIds, setCategoryIds] = useState<number[]>([]);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     if (!portalResolved) return;
@@ -204,7 +210,17 @@ export default function CoachCalendarPage() {
     setLoading(true);
     try {
       const c = (await api.coachCourses(Number(coachId), { fromDate: rangeFrom, toDate: rangeTo })) as CourseRow[];
-      setCourses(c);
+      let list = c ?? [];
+      if (categoryIds.length > 0) {
+        const sessions = (await api.coachSessions(Number(coachId), {
+          fromDate: rangeFrom,
+          toDate: rangeTo,
+          categoryIds
+        })) as { enrollment_id: number }[];
+        const allowed = new Set(sessions.map((s) => s.enrollment_id));
+        list = list.filter((row) => allowed.has(row.id));
+      }
+      setCourses(list);
       setStatus("");
     } catch (e) {
       setCourses([]);
@@ -212,7 +228,7 @@ export default function CoachCalendarPage() {
     } finally {
       setLoading(false);
     }
-  }, [portalResolved, coachId, rangeFrom, rangeTo]);
+  }, [portalResolved, coachId, rangeFrom, rangeTo, categoryIds]);
 
   useEffect(() => {
     void loadMonth();
@@ -403,9 +419,30 @@ export default function CoachCalendarPage() {
     }
   };
 
-  return (
-    <BackendShell layout={coachPortal ? "coach" : "admin"} title="教練日程 · 簽到直播">
-      <>
+  async function exportMonth() {
+    if (coachId === "") return;
+    setExporting(true);
+    try {
+      await api.downloadCoachSessionsExport(
+        Number(coachId),
+        {
+          fromDate: rangeFrom,
+          toDate: rangeTo,
+          categoryIds: categoryIds.length ? categoryIds : undefined
+        },
+        `coach-sessions-${rangeFrom}_${rangeTo}.csv`
+      );
+    } catch (e) {
+      alertApiError(e);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  const shellTitle = coachPortal ? "學生上堂" : "學生上堂";
+
+  const pageBody = (
+    <>
         {toastMsg ? (
           <div
             className="pointer-events-none fixed left-3 right-3 top-[4.75rem] z-[120] mx-auto max-w-lg md:left-auto md:right-8 md:mx-0 md:max-w-md"
@@ -418,26 +455,24 @@ export default function CoachCalendarPage() {
           </div>
         ) : null}
       <div
-        className={`touch-pan-y space-y-4 ${coachPortal ? "pb-[5.25rem]" : "pb-8"} ${coachPortal ? "mx-auto max-w-lg px-0" : "mx-auto max-w-6xl space-y-6 px-1 md:px-0"}`}
+        className={`touch-pan-y space-y-4 ${coachPortal ? "pb-[5.25rem]" : "pb-0"} ${coachPortal ? "mx-auto max-w-lg px-0" : "mx-auto max-w-6xl space-y-4 px-0 sm:space-y-6 md:px-0"}`}
         onTouchStart={coachPortal ? coachTouchStart : undefined}
         onTouchEnd={coachPortal ? coachTouchEnd : undefined}
       >
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             {!coachPortal ? (
-              <h1 className="text-xl font-bold tracking-tight text-ink">教練日程 · 簽到直播</h1>
+              <h1 className="text-xl font-bold tracking-tight text-ink">學生上堂</h1>
             ) : null}
             {!coachPortal ? (
               <>
                 <p className="mt-1 max-w-xl text-sm text-ink/55">
-                  月曆顯示堂數；右側 WebSocket 即時顯示學生簽到（與{" "}
-                  <code className="rounded bg-canvas px-1 font-mono text-xs ring-1 ring-ink/10">/ws/checkins</code>{" "}
-                  相同頻道）。可篩選「本月堂上學員」。
+                  月曆顯示堂數；右側 WebSocket 即時顯示學生簽到。可篩選課程類型並匯出 Excel。
                 </p>
                 <Link href="/coach" className="mt-2 inline-block text-sm text-primary hover:text-ink hover:underline">
-                  返回單日課表（改時間）
+                  返回教練上堂（單日）
                 </Link>
-                <div className="mt-4">
+                <div className="mt-4 hidden md:block">
                   <PinFlowGuide />
                 </div>
               </>
@@ -478,8 +513,20 @@ export default function CoachCalendarPage() {
             >
               {loading ? "更新中…" : "重新載入"}
             </button>
+            <button
+              type="button"
+              className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-sm font-medium text-ink disabled:opacity-50"
+              onClick={() => void exportMonth()}
+              disabled={exporting || coachId === ""}
+            >
+              {exporting ? "匯出中…" : "匯出 Excel"}
+            </button>
           </div>
         </div>
+
+        {coachId !== "" ? (
+          <CoachCategoryFilter coachId={coachId} selectedIds={categoryIds} onChange={setCategoryIds} />
+        ) : null}
 
         {portalCoachNote && coachPortal ? (
           <p className="rounded-lg border border-amber-200/80 bg-amber-50 px-3 py-2 text-xs text-amber-950">{portalCoachNote}</p>
@@ -727,6 +774,15 @@ export default function CoachCalendarPage() {
         : null}
       </div>
       </>
+  );
+
+  if (inPortalLayout) {
+    return pageBody;
+  }
+
+  return (
+    <BackendShell layout={coachPortal ? "coach" : "admin"} title={shellTitle}>
+      {pageBody}
     </BackendShell>
   );
 }

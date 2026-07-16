@@ -2,7 +2,7 @@
  * [F004][S001]
  * Feature: Admin Reports & Financials
  * Step: (see Logic)
- * Logic: Finance and reports UI: sales, expenses, payroll.
+ * Logic: Finance index redirects to sales (expenses/payroll excluded from admin reports).
  */
 
 import { redirect } from "next/navigation";

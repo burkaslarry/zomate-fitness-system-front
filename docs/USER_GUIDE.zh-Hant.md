@@ -46,8 +46,9 @@
 
 ### 3.3 課程與出勤（Course & Attendance）
 
-- **教練日程·簽到**（`/coach/calendar`）：教練端日程與簽到相關畫面。
-- **教練課表**（`/coach`）：課表檢視。
+- **教練上堂**（`/coach`；教練端 `/coach-portal`）：職員／教練管理跟進學員上堂日程；可篩選課程類型。
+- **學生上堂**（`/coach/calendar`；教練端 `/coach-portal/calendar`）：月曆與簽到相關畫面。
+- **教練出勤**（`/coach/attendance`；教練端 `/coach-portal/report`）：月份下拉（`yyyy-MM`，預設本月）；表格 Course Type｜Students｜上堂日期；可匯出 Excel。
 - **QR 簽到中心**（`/admin/attendance/qr-console`）：管理／產出 QR 簽到相關流程之控制台。
 - **Session Ledger · 扣堂原因**（`/admin/attendance/session-ledger`）：節數／堂數帳本；可記錄理由類型（例如：實際出席、遲到取消、教練補堂等）。報表支援匯出 Excel。
 - **試堂／開課管理**（`/student/trial`）：試聽課程相關管理（與完整後端整合狀態請以專案 `REQUIREMENTS.md` 為準）。
@@ -55,9 +56,8 @@
 
 ### 3.4 財務與行政（Finance & Admin）
 
-- **銷售與分期**（`/admin/finance/sales`）：月銷售報表、分期欄位等；可匯出 Excel／CSV（與畫面表格一致）。
-- **支出管理**（`/admin/finance/expenses`）：支出／單據類資料；可新增與匯出。
-- **薪酬／出勤輔表**（`/admin/finance/payroll`）：會籍與教練出勤相關報表；可匯出 Excel／CSV。
+- **銷售與分期**（`/admin/finance/sales`）：月銷售報表、分期欄位等；可匯出 Excel／CSV（與畫面表格一致）。側欄財務區僅保留此項。
+- **支出管理**、**薪酬／出勤報表**：已自管理報表排除（教練自行記出勤）；舊路徑 `/admin/finance/expenses`、`/admin/finance/payroll` 會重新導向至銷售頁。
 - 側欄已不再提供「財務總覽」入口；若開啟 **`/admin/finance`**，會自動 **重新導向** 至 **`/admin/finance/sales`**。
 
 ### 3.5 系統設定（System Settings）

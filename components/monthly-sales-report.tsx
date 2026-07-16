@@ -706,7 +706,50 @@ function MonthlySalesReportImpl() {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <div className="space-y-3 p-3 md:hidden">
+              {filteredEmpty ? (
+                <p className="rounded-xl border border-ink/10 bg-surface px-4 py-8 text-center text-sm text-ink/55">
+                  No rows match 「{globalFilter}」.
+                </p>
+              ) : (
+                table.getRowModel().rows.map((row) => {
+                  const r = row.original as CourseSaleRow;
+                  return (
+                    <article
+                      key={row.id}
+                      className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-semibold text-ink">{r.clientName}</p>
+                          <p className="text-xs text-ink/55">{r.date}</p>
+                        </div>
+                        <p className="text-sm font-semibold tabular-nums text-ink">HKD {r.amount}</p>
+                      </div>
+                      <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-ink/70">
+                        <div>
+                          <dt className="text-ink/45">Course</dt>
+                          <dd>{r.courseType}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-ink/45">Coach</dt>
+                          <dd>{r.coachName}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-ink/45">Status</dt>
+                          <dd>{r.paymentStatus}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-ink/45">Installment</dt>
+                          <dd>{r.installmentStatus ?? "—"}</dd>
+                        </div>
+                      </dl>
+                    </article>
+                  );
+                })
+              )}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
               <table className="min-w-full border-collapse text-left text-sm">
                 <thead>
                   {table.getHeaderGroups().map((hg) => (

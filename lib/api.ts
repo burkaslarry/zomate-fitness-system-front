@@ -455,6 +455,8 @@ export const api = {
     course_package_type_code?: string;
     course_package_type_label?: string;
     note?: string;
+    /** When true, lesson credit is deferred to course enrollment (avoids double ledger). */
+    skip_lesson_ledger?: boolean;
     receipt?: File | null;
   }) => {
     const form = new FormData();
@@ -470,6 +472,7 @@ export const api = {
     if (payload.course_package_type_code) form.append("course_package_type_code", payload.course_package_type_code);
     if (payload.course_package_type_label) form.append("course_package_type_label", payload.course_package_type_label);
     if (payload.note) form.append("note", payload.note);
+    if (payload.skip_lesson_ledger) form.append("skip_lesson_ledger", "true");
     if (payload.receipt) form.append("receipt", payload.receipt);
     return request("/api/renewals", { method: "POST", body: form });
   },
@@ -598,6 +601,9 @@ export const api = {
     }),
   createCourse: (payload: Record<string, unknown>) =>
     request("/api/admin/courses", { method: "POST", body: JSON.stringify(payload) }),
+  /** [F002][S003] Coach-scoped course registration after payment (issues PIN). */
+  coachRegisterCourse: (payload: Record<string, unknown>) =>
+    request("/api/coach/register-course", { method: "POST", body: JSON.stringify(payload) }),
   markCourseInstallmentPaid: (courseId: number, payload: { student_id: number; installment_no: number }) =>
     request(`/api/admin/courses/${courseId}/installment-paid`, {
       method: "PATCH",
@@ -775,6 +781,41 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload)
     }),
+  /** [F008][S002] Filtered coach session rows (calendar / day / report). */
+  coachSessions: (
+    coachId: number,
+    query?: {
+      day?: string;
+      fromDate?: string;
+      toDate?: string;
+      categoryIds?: number[];
+    }
+  ) => {
+    const sp = new URLSearchParams({ coach_id: String(coachId) });
+    if (query?.day) sp.set("day", query.day);
+    if (query?.fromDate) sp.set("from_date", query.fromDate);
+    if (query?.toDate) sp.set("to_date", query.toDate);
+    if (query?.categoryIds?.length) sp.set("category_ids", query.categoryIds.join(","));
+    return request(`/api/coach/sessions?${sp.toString()}`);
+  },
+  /** [F008][S003] Coach-scoped session export (Excel-compatible CSV). */
+  downloadCoachSessionsExport: (
+    coachId: number,
+    query?: {
+      day?: string;
+      fromDate?: string;
+      toDate?: string;
+      categoryIds?: number[];
+    },
+    filename = "coach-sessions.csv"
+  ) => {
+    const sp = new URLSearchParams({ coach_id: String(coachId) });
+    if (query?.day) sp.set("day", query.day);
+    if (query?.fromDate) sp.set("from_date", query.fromDate);
+    if (query?.toDate) sp.set("to_date", query.toDate);
+    if (query?.categoryIds?.length) sp.set("category_ids", query.categoryIds.join(","));
+    return downloadCsv(`/api/coach/sessions/export.xlsx?${sp.toString()}`, filename);
+  },
   qrcodePdfUrl: (kind: string, origin?: string, payload?: string) => {
     const params = new URLSearchParams({ kind });
     if (origin) params.set("origin", origin);
@@ -802,6 +843,16 @@ export const api = {
   reportsExpenses: () => request("/api/v1/reports/expenses"),
   postExpenseEntry: (payload: Record<string, unknown>) =>
     request("/api/v1/reports/expenses", { method: "POST", body: JSON.stringify(payload) }),
+  /** [F008][S004] Monthly Course Type | Students | 上堂日期 rollup. */
+  coachAttendanceReport: (
+    coachId: number,
+    query?: { month?: string; categoryIds?: number[] }
+  ) => {
+    const sp = new URLSearchParams({ coach_id: String(coachId) });
+    if (query?.month) sp.set("month", query.month);
+    if (query?.categoryIds?.length) sp.set("category_ids", query.categoryIds.join(","));
+    return request(`/api/coach/attendance-report?${sp.toString()}`);
+  },
   reportsCoachAttendance: (query?: { month?: string }) => {
     const sp = new URLSearchParams();
     if (query?.month) sp.set("month", query.month);

@@ -56,16 +56,16 @@ export default function AdminPaymentsPage() {
     <BackendShell title="付款紀錄">
       <div className="mx-auto max-w-6xl space-y-5">
         <div>
-          <h2 className="text-2xl font-semibold text-ink">付款紀錄 Payment Records</h2>
+          <h2 className="text-xl font-semibold text-ink sm:text-2xl">付款紀錄 Payment Records</h2>
           <p className="mt-1 text-sm text-ink/65">
             全館學員交易、續會、收據與分期紀錄。可篩選缺收據／待付／已付。
           </p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            className="rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-ink/15 bg-surface px-3 py-2.5 text-sm sm:w-auto"
           >
             {STATUS_OPTIONS.map((o) => (
               <option key={o.value || "all"} value={o.value}>
@@ -77,12 +77,12 @@ export default function AdminPaymentsPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="搜尋學員姓名 / 電話 / 項目"
-            className="min-w-[220px] flex-1 rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm"
+            className="min-w-0 flex-1 rounded-lg border border-ink/15 bg-surface px-3 py-2.5 text-base sm:text-sm"
           />
           <button
             type="button"
             onClick={() => void reload()}
-            className="rounded-lg bg-primary/90 px-4 py-2 text-sm font-semibold text-ink"
+            className="w-full rounded-lg bg-primary/90 px-4 py-2.5 text-sm font-semibold text-ink sm:w-auto"
           >
             搜尋
           </button>

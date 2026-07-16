@@ -197,7 +197,7 @@ export default function AdminCoachesPage() {
   return (
     <BackendShell title="教練管理">
       <div className="mx-auto max-w-5xl space-y-5">
-        <h2 className="text-2xl font-semibold text-ink">教練管理</h2>
+        <h2 className="text-xl font-semibold text-ink sm:text-2xl">教練管理</h2>
 
         <div className="flex flex-wrap items-end gap-3 rounded-xl border border-ink/10 bg-surface p-4 shadow-sm ring-1 ring-ink/[0.04]">
           <label className="space-y-1 text-sm">
@@ -334,7 +334,59 @@ export default function AdminCoachesPage() {
         )}
 
         {status && <p className="text-sm text-emerald-800">{status}</p>}
-        <div className="max-h-[min(70vh,720px)] overflow-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
+
+        <div className="space-y-3 md:hidden">
+          {rows.map((row) => (
+            <article key={row.id} className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-semibold text-ink">{row.full_name}</p>
+                  <p className="text-xs text-ink/55">{row.phone}</p>
+                  <p className="mt-1 text-xs text-ink/50">@{row.login_username ?? "—"}</p>
+                </div>
+                {row.active !== false ? (
+                  <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-800">在職</span>
+                ) : (
+                  <span className="rounded-full bg-ink/10 px-2 py-0.5 text-xs text-ink/60">停用</span>
+                )}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {isAdmin ? (
+                  <button
+                    type="button"
+                    onClick={() => void openSkillsModal(row)}
+                    className="rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-ink"
+                  >
+                    課程權限
+                  </button>
+                ) : null}
+                <Link
+                  href={`/admin/coaches/${row.id}/students`}
+                  className="rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-ink"
+                >
+                  Students
+                </Link>
+                <button type="button" onClick={() => startEdit(row)} className="rounded-md border border-ink/15 px-3 py-1.5 text-xs">
+                  Edit
+                </button>
+                <button type="button" onClick={() => void deactivate(row.id)} className="rounded-md border border-ink/15 px-3 py-1.5 text-xs">
+                  Deactivate
+                </button>
+                {isAdmin ? (
+                  <button
+                    type="button"
+                    onClick={() => void removeCoach(row)}
+                    className="rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs text-rose-800"
+                  >
+                    Delete
+                  </button>
+                ) : null}
+              </div>
+            </article>
+          ))}
+        </div>
+
+        <div className="hidden max-h-[min(70vh,720px)] overflow-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] md:block">
           <table className="min-w-full border-collapse text-left text-sm">
             <colgroup>
               <col className="w-[120px]" />

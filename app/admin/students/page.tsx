@@ -183,7 +183,7 @@ export default function AdminStudentsPage() {
       <div className="mx-auto max-w-6xl space-y-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="max-w-3xl">
-            <h2 className="text-2xl font-semibold text-ink">學生名單</h2>
+            <h2 className="text-xl font-semibold text-ink sm:text-2xl">學生名單</h2>
             <p className="mt-1 text-sm text-ink/70">
               點姓名可用學生 ID 開啟會員詳情（毋須 HKID）。名單加入 DOB、剩餘堂數、套餐狀態、註冊日及最後簽到時間，方便即場核對。
               {medicalPendingOnly ? (

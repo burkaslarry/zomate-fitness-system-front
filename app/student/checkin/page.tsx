@@ -15,7 +15,7 @@
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { alertApiError, api, getCheckinsWebSocketUrl } from "../../../lib/api";
+import { alertApiError, api, formatApiError, getCheckinsWebSocketUrl } from "../../../lib/api";
 import { useDemoState } from "../../../lib/demo-state";
 import { usePeriodicHealthPing } from "../../../hooks/use-periodic-health-ping";
 import { useWhatsAppLog } from "../../../hooks/use-whatsapp-log";
@@ -44,6 +44,18 @@ type TodayLesson = {
   scheduled_start: string;
   scheduled_end: string;
 };
+
+function inputToLookupPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length === 8) return `+852${digits}`;
+  if (digits.length === 11 && digits.startsWith("852")) return `+${digits}`;
+  return raw.trim();
+}
+
+function isHongKongPhoneQuery(raw: string): boolean {
+  const digits = raw.replace(/\D/g, "");
+  return digits.length >= 8;
+}
 
 function formatLessonWindow(isoStart: string, isoEnd: string): string {
   const opt: Intl.DateTimeFormatOptions = {
@@ -74,6 +86,7 @@ export default function StudentCheckinPage() {
   const [fbPhone, setFbPhone] = useState("");
   const [fbPin, setFbPin] = useState("");
   const [pinPadError, setPinPadError] = useState(false);
+  const [installmentPrompt, setInstallmentPrompt] = useState("");
   const { markCheckin } = useDemoState();
   const { logCheckinSuccess } = useWhatsAppLog();
 
@@ -99,10 +112,27 @@ export default function StudentCheckinPage() {
       setResults([]);
       return;
     }
+    if (!isHongKongPhoneQuery(t)) {
+      setResults([]);
+      return;
+    }
     setSearching(true);
     try {
-      const rows = (await api.studentSearch(t)) as SearchRow[];
-      setResults(rows);
+      const phone = inputToLookupPhone(t);
+      try {
+        const row = (await api.memberLookupByPhone(phone)) as SearchRow;
+        setResults([
+          {
+            id: row.id,
+            full_name: row.full_name,
+            phone: row.phone,
+            lesson_balance: row.lesson_balance
+          }
+        ]);
+      } catch {
+        const rows = (await api.studentSearch(phone.replace(/\D/g, "").slice(-8))) as SearchRow[];
+        setResults(rows.filter((r) => r.phone.replace(/\D/g, "").endsWith(phone.replace(/\D/g, "").slice(-8))));
+      }
     } catch {
       setResults([]);
     } finally {
@@ -139,6 +169,7 @@ export default function StudentCheckinPage() {
     setStatus("扣堂中…");
     setLastBalance(null);
     setPinPadError(false);
+    setInstallmentPrompt("");
     try {
       const res = (await api.checkin({
         student_id: selected.id,
@@ -155,9 +186,17 @@ export default function StudentCheckinPage() {
       setSearchQ("");
       setResults([]);
     } catch (err) {
+      const msg = formatApiError(err);
       setPinPadError(true);
       setStatus("");
-      alertApiError(err);
+      if (msg.includes("分期 PIN 尚未啟用") || msg.includes("該期付款")) {
+        setInstallmentPrompt(
+          "此 PIN 對應的分期尚未付款。請先完成第 2 / 第 3 期付款，並由櫃台確認收款後再試簽到。"
+        );
+      } else {
+        setInstallmentPrompt("");
+        alertApiError(err);
+      }
     }
   }
 
@@ -165,6 +204,7 @@ export default function StudentCheckinPage() {
     e.preventDefault();
     setStatus("扣堂中…");
     setPinPadError(false);
+    setInstallmentPrompt("");
     try {
       const res = (await api.checkin({
         phone: fbPhone.trim(),
@@ -178,9 +218,17 @@ export default function StudentCheckinPage() {
       setFbPin("");
       setFbPhone("");
     } catch (err) {
+      const msg = formatApiError(err);
       setPinPadError(true);
       setStatus("");
-      alertApiError(err);
+      if (msg.includes("分期 PIN 尚未啟用") || msg.includes("該期付款")) {
+        setInstallmentPrompt(
+          "此 PIN 對應的分期尚未付款。請先完成第 2 / 第 3 期付款，並由櫃台確認收款後再試簽到。"
+        );
+      } else {
+        setInstallmentPrompt("");
+        alertApiError(err);
+      }
     }
   }
 
@@ -206,15 +254,23 @@ export default function StudentCheckinPage() {
 
       <p className="text-sm text-zinc-400">
         店內簽到 QR／PDF 會連到本頁（可加 <code className="text-zinc-300">?from=qr</code>
-        ）。請輸入<strong>英文全名</strong>或<strong>電話號碼</strong>，按右側搜尋鍵；揀學員 → 確認今日課堂 → 揀一堂 → 輸入課堂 PIN 扣堂。
+        ）。請輸入<strong>電話號碼</strong>（8 位香港手機），按搜尋；揀學員 → 確認今日課堂 → 揀一堂 → 輸入課堂 PIN 扣堂。
       </p>
 
+      {installmentPrompt ? (
+        <section className="rounded-lg border border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p className="font-semibold">分期付款提醒</p>
+          <p className="mt-1">{installmentPrompt}</p>
+        </section>
+      ) : null}
+
       <section className="space-y-3 rounded-lg bg-white p-4 shadow [color-scheme:light] text-slate-900">
-        <h2 className="font-semibold text-slate-900">步驟 2 · 搜尋姓名或電話</h2>
+        <h2 className="font-semibold text-slate-900">步驟 2 · 搜尋電話</h2>
         <div className="flex gap-2">
               <input
                 className="min-w-0 flex-1"
-                placeholder="英文全名或電話號碼…"
+                placeholder="91234567（8 位手機）"
+                inputMode="tel"
                 value={searchQ}
                 onChange={(e) => setSearchQ(e.target.value)}
                 onKeyDown={(e) => {
@@ -240,7 +296,9 @@ export default function StudentCheckinPage() {
               {results.length === 0 && searchQ.trim().length >= 1 && !searching && (
                 <li className="space-y-2 p-2">
                   <p className="text-sm text-ink/50">
-                    請輸入英文全名或電話號碼，然後按搜尋按鈕。
+                    {isHongKongPhoneQuery(searchQ)
+                      ? "找不到此電話的學員。"
+                      : "請輸入至少 8 位數字的手機號碼，然後按搜尋。"}
                   </p>
                   <Link
                     href={`/student/onboard?quickName=${encodeURIComponent(searchQ.trim())}`}

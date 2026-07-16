@@ -100,7 +100,28 @@ export default function AdminBranchesPage() {
 
         <section className="space-y-3">
           <h3 className="text-lg font-semibold text-ink">分店列表</h3>
-          <div className="overflow-x-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
+          <div className="space-y-3 md:hidden">
+            {branches.map((b) => (
+              <article key={b.id} className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-semibold text-ink">{b.name}</p>
+                  {b.active !== false ? (
+                    <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-800">啟用</span>
+                  ) : (
+                    <span className="rounded-full bg-ink/10 px-2 py-0.5 text-xs text-ink/55">停用</span>
+                  )}
+                </div>
+                <p className="mt-1 font-mono text-xs text-ink/50">{b.code}</p>
+                <p className="mt-2 text-xs text-ink/70">{b.address}</p>
+                <p className="mt-1 text-xs text-ink/55">
+                  {b.business_start_time && b.business_end_time
+                    ? `${b.business_start_time}–${b.business_end_time}`
+                    : "—"}
+                </p>
+              </article>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] md:block">
             <table className="min-w-full border-collapse text-left text-sm">
               <thead className="border-b border-ink/10 bg-canvas/50 text-ink/65">
                 <tr>
@@ -166,7 +187,39 @@ export default function AdminBranchesPage() {
           </form>
 
           {status ? <p className="text-sm text-emerald-800">{status}</p> : null}
-          <div className="overflow-x-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04]">
+          <div className="space-y-3 md:hidden">
+            {categories.map((row) => (
+              <article key={row.id} className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
+                <p className="font-medium text-ink">{row.name}</p>
+                <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                  {row.is_deleted ? (
+                    <span className="rounded-full bg-ink/10 px-2 py-0.5 text-ink/55">隱藏</span>
+                  ) : (
+                    <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 font-medium text-emerald-800">顯示</span>
+                  )}
+                  <span className="text-ink/55">{row.is_active ? "已啟用" : "未啟用"}</span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={Boolean(row.is_deleted)}
+                    onClick={() => void toggleCategoryActive(row, !row.is_active)}
+                    className="rounded-lg border border-ink/15 px-3 py-1.5 text-xs font-semibold"
+                  >
+                    {row.is_active ? "停用" : "啟用"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void toggleCategoryHidden(row)}
+                    className="rounded-lg border border-ink/15 px-3 py-1.5 text-xs"
+                  >
+                    {row.is_deleted ? "恢復" : "隱藏"}
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto rounded-xl border border-ink/10 bg-surface shadow-sm ring-1 ring-ink/[0.04] md:block">
             <table className="min-w-full border-collapse text-left text-sm">
               <thead className="border-b border-ink/10 bg-canvas/50 text-ink/65">
                 <tr>

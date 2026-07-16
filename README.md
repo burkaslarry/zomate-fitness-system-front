@@ -9,7 +9,7 @@ Next.js + Tailwind UI for:
 - Student onboarding and PAR-Q / disclaimer flow (F01)
 - Trial purchase, course creation, course categories, and lesson balance updates (F02)
 - QR + **course-specific PIN** check-in (F03)
-- Admin finance reports, expenses, payroll, and Excel export surfaces (F04)
+- Admin finance reports (sales) and Excel export surfaces (F04); expenses & payroll excluded from admin reports
 - Admin summary + WhatsApp/SMS simulation logs
 
 ## Local run
@@ -30,9 +30,9 @@ New management routes include:
 
 - `/register` → member form, photo, receipt, PIN success
 - `/renewal` → HKID lookup + package renewal + receipt
-- `/trial-class` → trial/add-on class record
+- `/regCourse` → course registration / payment
 - `/admin/students`, `/admin/students/[hkid]`, `/admin/coaches`, `/admin/branches`
-- `/admin/finance/sales`, `/admin/finance/expenses`, `/admin/finance/payroll`（`/admin/finance` 會重新導向至銷售與分期）
+- `/admin/finance/sales`（側欄僅此項；`/admin/finance`、`expenses`、`payroll` 均重新導向至銷售與分期）
 - `/admin/settings/whatsapp`（Whatsapp 設定；舊路徑 `/admin/whatsapp` 亦會導向此頁）
 - `/admin/students/[hkid]` → student profile, course-specific check-in PINs, category lesson enrollment, coach trial quota
 
@@ -51,12 +51,12 @@ What is covered:
 - **F01**: student registration / onboarding API, PAR-Q fields, membership expiry, public search.
 - **F02**: trial purchase, admin course creation, default dynamic course categories.
 - **F03**: check-in with class PIN only; duplicate same-day course check-in returns conflict.
-- **F04**: sales report, expenses entry, coach attendance, session ledger.
+- **F04**: sales report (admin nav); expenses & payroll excluded; session ledger.
 
 Notes:
 
 - The top bar shows only the current page title and the logged-in staff user.
-- Quick actions (`+ 新會員`, `+ 續會`, `+ 試堂/加堂`) live in the left menu.
+- Quick actions (`+ 新會員`, `+ 報 Course / 收費`) live in the left menu.
 - The UI uses a single warm theme from Tailwind tokens; no light/dark toggle.
 
 ## Deploy to Vercel
