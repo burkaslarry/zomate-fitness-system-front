@@ -25,35 +25,7 @@ function randomPin(): string {
   return String(Math.floor(10000 + Math.random() * 90000));
 }
 
-const seedSales: CourseSaleRow[] = [
-  {
-    date: "2026-04-02",
-    clientName: "Chan Tai Man",
-    courseType: "PT 10",
-    amount: 8800,
-    coachName: "Coach A",
-    paymentStatus: "PAID_FULL",
-    installmentStatus: "NONE"
-  },
-  {
-    date: "2026-04-18",
-    clientName: "Lee Siu Ming",
-    courseType: "PT 30",
-    amount: 22800,
-    coachName: "Coach B",
-    paymentStatus: "INSTALLMENT_ACTIVE",
-    installmentStatus: "ACTIVE"
-  },
-  {
-    date: "2026-04-22",
-    clientName: "Wong Ka Yan",
-    courseType: "Trial → PT 10",
-    amount: 1280,
-    coachName: "Coach A",
-    paymentStatus: "PENDING",
-    installmentStatus: "NONE"
-  }
-];
+const seedSales: CourseSaleRow[] = [];
 
 const exp = new Date();
 exp.setMonth(exp.getMonth() + 3);

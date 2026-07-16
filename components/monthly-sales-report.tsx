@@ -8,6 +8,7 @@
  */
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   type ColumnDef,
@@ -31,13 +32,13 @@ import {
 } from "../lib/types/monthly-sales-report";
 
 const COLUMN_LABELS: Record<SalesReportColumnId, string> = {
-  date: "Date",
-  clientName: "Client",
-  courseType: "Course",
-  amount: "Amount (HKD)",
-  coachName: "Coach",
-  paymentStatus: "Status",
-  installmentStatus: "Installment"
+  date: "日期",
+  clientName: "學員",
+  courseType: "課程",
+  amount: "金額 (HKD)",
+  coachName: "教練",
+  paymentStatus: "狀態",
+  installmentStatus: "分期"
 };
 
 /** Checkbox rows in the export-columns modal (visual grouping). */
@@ -61,9 +62,10 @@ function rowHasInstallmentEnrollment(r: CourseSaleRow): boolean {
   const inst = String(r.installmentStatus ?? "")
     .trim()
     .toUpperCase();
-  if (inst && inst !== "NONE" && inst !== "—" && inst !== "-") return true;
+  if (inst && inst !== "NONE" && inst !== "—" && inst !== "-" && inst !== "無") return true;
   const pay = String(r.paymentStatus ?? "").toUpperCase();
-  if (pay.includes("INSTALLMENT")) return true;
+  if (pay.includes("INSTALLMENT") || pay.includes("分期")) return true;
+  if (String(r.installmentStatus ?? "").includes("期")) return true;
   return false;
 }
 
@@ -128,10 +130,10 @@ function visibleSalesColumnIds(table: Table<CourseSaleRow>): SalesReportColumnId
 
 function statusBadgeClass(status: string) {
   const s = status.toUpperCase();
-  if (s.includes("PAID") || s.includes("COMPLETE")) {
+  if (s.includes("PAID") || s.includes("COMPLETE") || status.includes("已付")) {
     return "border-emerald-500/40 bg-emerald-500/10 text-emerald-800";
   }
-  if (s.includes("PEND") || s.includes("PARTIAL")) {
+  if (s.includes("PEND") || s.includes("PARTIAL") || status.includes("待付") || status.includes("缺收據")) {
     return "border-amber-500/40 bg-amber-500/10 text-amber-900";
   }
   if (s.includes("OVERDUE") || s.includes("FAIL")) {
@@ -530,31 +532,31 @@ function MonthlySalesReportImpl() {
       ) : null}
 
       <div className="space-y-4 border-b border-ink/10 pb-5">
-        <div className="space-y-1">
-          <h2 className="text-xl font-semibold text-ink [html.light_&]:text-slate-900">
-            Monthly sales report{" "}
-            <span className="ml-2 rounded-md border border-amber-500/50 bg-amber-500/15 px-2 py-0.5 text-sm font-semibold uppercase tracking-wide text-amber-900 [html.light_&]:border-amber-600/50 [html.light_&]:bg-amber-50 [html.light_&]:text-amber-900">
-              (DEMO)
-            </span>
-          </h2>
-          <p className="text-sm text-ink/55 [html.light_&]:text-slate-600">
-            撳 <strong className="text-ink/70 [html.light_&]:text-slate-800">Columns to export</strong>{" "}
-            或表頭 <strong className="text-ink/70 [html.light_&]:text-slate-800">Course</strong> /{" "}
-            <strong className="text-ink/70 [html.light_&]:text-slate-800">Installment</strong> 可揀欄（後兩者會多顯示該欄 sort）。
-            Sort / visibility sync to{" "}
-            <code className="rounded bg-canvas px-1 py-0.5 text-xs text-ink/70 ring-1 ring-ink/10">/api/v1/reports/sales</code>
-            ，Excel／CSV 與目前表格一致。
-          </p>
+        <div className="space-y-2">
+          <h2 className="text-xl font-semibold text-ink">銷售報表</h2>
+          <div className="rounded-lg border border-ink/10 bg-canvas px-4 py-3 text-sm text-ink/75">
+            <p className="font-medium text-ink">用法</p>
+            <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs leading-relaxed text-ink/65">
+              <li>
+                撳 <strong className="text-ink/85">選擇匯出欄位</strong> 勾選要顯示／匯出嘅欄（至少保留一欄）。
+              </li>
+              <li>搜尋框可 filter 學員、課程、教練、狀態或分期關鍵字。</li>
+              <li>
+                表頭 <strong className="text-ink/85">課程</strong> 或 <strong className="text-ink/85">分期</strong>{" "}
+                撳落去，除揀欄外亦可為該欄排序（A→Z / Z→A）。
+              </li>
+              <li>其他表頭撳一下即可排序；Excel／CSV 匯出內容同目前表格一致。</li>
+            </ol>
+          </div>
         </div>
 
-        {/* Columns trigger first — highest local stacking so it stays above the grid while interacting */}
-        <div className="relative z-[100] flex flex-col gap-3">
+        <div className="flex flex-col gap-3">
           <button
             type="button"
-            className="inline-flex w-full items-center justify-center rounded-lg border-2 border-amber-400/80 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-950 shadow-sm transition hover:border-amber-500 hover:bg-amber-100 hover:shadow-md active:scale-[0.99] [html.light_&]:border-amber-500/70"
+            className="inline-flex w-full items-center justify-center rounded-lg border border-primary/40 bg-primary/15 px-4 py-2.5 text-sm font-semibold text-ink shadow-sm transition hover:bg-primary/25 md:w-auto"
             onClick={() => openVisibleColumnsModal(null)}
           >
-            Columns to export
+            選擇匯出欄位
           </button>
 
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2 md:gap-3">
@@ -568,7 +570,7 @@ function MonthlySalesReportImpl() {
                 type="search"
                 className="w-full min-w-0 rounded-lg border border-ink/15 bg-canvas py-2 pr-3 pl-[2.25rem] text-sm text-ink shadow-sm ring-1 ring-ink/[0.04] placeholder:text-ink/45 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/35"
                 placeholder={
-                  installmentEnrollmentOnlyActive ? "再配合搜尋：客戶、課種、Coach、分期⋯" : "Search clients, courses, coaches…"
+                  installmentEnrollmentOnlyActive ? "再配合搜尋：學員、課程、教練、分期⋯" : "搜尋學員、課程、教練⋯"
                 }
                 value={globalFilter}
                 onChange={(e) => setGlobalFilter(e.target.value)}
@@ -581,7 +583,7 @@ function MonthlySalesReportImpl() {
               onClick={() => void exportExcel()}
               className="inline-flex min-h-[2.75rem] w-full items-center justify-center rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm font-medium text-ink shadow-sm ring-1 ring-ink/[0.04] hover:border-primary/40 hover:bg-canvas enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Export Excel (table view)
+              匯出 Excel
             </button>
             <button
               type="button"
@@ -589,102 +591,98 @@ function MonthlySalesReportImpl() {
               onClick={() => exportCsv()}
               className="inline-flex min-h-[2.75rem] w-full items-center justify-center rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm font-medium text-ink shadow-sm ring-1 ring-ink/[0.04] hover:border-primary/40 hover:bg-canvas enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Export CSV (table view)
+              匯出 CSV
             </button>
           </div>
         </div>
       </div>
 
-      {visibleColumnsModalOpen ? (
-        <div
-          className="fixed inset-0 z-[10050] flex items-center justify-center bg-ink/45 p-4"
-          role="presentation"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) closeVisibleColumnsModal();
-          }}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="visible-columns-dialog-title"
-            className="w-[min(92vw,26rem)] max-w-none rounded-xl border border-ink/15 bg-surface p-5 text-left text-sm text-ink shadow-lg ring-1 ring-ink/[0.04]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <header className="space-y-3">
-              <h3 id="visible-columns-dialog-title" className="text-base font-semibold text-ink [html.light_&]:text-slate-900">
-                Columns to export
-              </h3>
-              <div className="space-y-2 text-xs leading-relaxed text-ink/55 [html.light_&]:text-slate-600">
-                <p>Select at least one column. These columns will appear in the Excel / CSV export.</p>
-                <p>
-                  勾選會顯示喺表同 Excel／CSV；至少保留一欄。由 Course 或 Installment 表頭開窗時，下面可為該欄排序。
-                </p>
-              </div>
-            </header>
+      {visibleColumnsModalOpen && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[20000] flex items-center justify-center bg-ink/50 p-4"
+              role="presentation"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) closeVisibleColumnsModal();
+              }}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="visible-columns-dialog-title"
+                className="w-[min(92vw,26rem)] max-w-none rounded-xl border border-ink/15 bg-surface p-5 text-left text-sm text-ink shadow-2xl ring-1 ring-ink/[0.04]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <header className="space-y-2">
+                  <h3 id="visible-columns-dialog-title" className="text-base font-semibold text-ink">
+                    選擇匯出欄位
+                  </h3>
+                  <p className="text-xs leading-relaxed text-ink/55">
+                    勾選要顯示喺表格同 Excel／CSV 嘅欄，至少保留一欄。由「課程」或「分期」表頭開啟時，下面可順便排序。
+                  </p>
+                </header>
 
-            <div className="mt-5 space-y-3" role="presentation">
-              <span className="block text-xs font-semibold tracking-wide text-ink/60 [html.light_&]:text-slate-700">
-                Show
-              </span>
-              {EXPORT_COLUMN_ROWS.map((rowIds, rowIdx) => (
-                <div
-                  key={rowIds.join("-")}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-2.5"
-                  role="group"
-                  aria-label={
-                    rowIdx === 0 ? "Columns to show — date, client, course, amount" : "Columns to show — coach, status, installment"
-                  }
-                >
-                  {rowIds.map((id) => (
-                    <label
-                      key={id}
-                      className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-ink/80 hover:bg-canvas"
+                <div className="mt-5 space-y-3" role="presentation">
+                  <span className="block text-xs font-semibold tracking-wide text-ink/60">顯示欄位</span>
+                  {EXPORT_COLUMN_ROWS.map((rowIds, rowIdx) => (
+                    <div
+                      key={rowIds.join("-")}
+                      className="flex flex-wrap items-center gap-x-3 gap-y-2.5"
+                      role="group"
+                      aria-label={rowIdx === 0 ? "日期、學員、課程、金額" : "教練、狀態、分期"}
                     >
-                      <input
-                        type="checkbox"
-                        className="rounded border-ink/20 bg-canvas text-primary focus:ring-primary/40"
-                        checked={columnVisibility[id] !== false}
-                        onChange={(e) => setSalesColumnVisible(id, e.target.checked)}
-                      />
-                      <span className="whitespace-nowrap font-medium">{COLUMN_LABELS[id]}</span>
-                    </label>
+                      {rowIds.map((id) => (
+                        <label
+                          key={id}
+                          className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-ink/80 hover:bg-canvas"
+                        >
+                          <input
+                            type="checkbox"
+                            className="rounded border-ink/20 bg-canvas text-primary focus:ring-primary/40"
+                            checked={columnVisibility[id] !== false}
+                            onChange={(e) => setSalesColumnVisible(id, e.target.checked)}
+                          />
+                          <span className="whitespace-nowrap font-medium">{COLUMN_LABELS[id]}</span>
+                        </label>
+                      ))}
+                    </div>
                   ))}
                 </div>
-              ))}
-            </div>
-            {columnPickerSource ? (
-              <div className="mt-4 flex flex-wrap gap-2 border-t border-ink/[0.08] pt-4 [html.light_&]:border-slate-200">
-                <span className="mr-1 shrink-0 self-center text-xs text-ink/50 [html.light_&]:text-slate-600">
-                  Sort 「{COLUMN_LABELS[columnPickerSource]}」:
-                </span>
-                <button
-                  type="button"
-                  className="rounded-md border border-ink/15 bg-surface px-2.5 py-1 text-xs font-medium text-ink hover:bg-canvas"
-                  onClick={() => sortPickerSourceColumn(false)}
-                >
-                  A → Z
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md border border-ink/15 bg-surface px-2.5 py-1 text-xs font-medium text-ink hover:bg-canvas"
-                  onClick={() => sortPickerSourceColumn(true)}
-                >
-                  Z → A
-                </button>
+                {columnPickerSource ? (
+                  <div className="mt-4 flex flex-wrap gap-2 border-t border-ink/[0.08] pt-4">
+                    <span className="mr-1 shrink-0 self-center text-xs text-ink/50">
+                      排序「{COLUMN_LABELS[columnPickerSource]}」：
+                    </span>
+                    <button
+                      type="button"
+                      className="rounded-md border border-ink/15 bg-surface px-2.5 py-1 text-xs font-medium text-ink hover:bg-canvas"
+                      onClick={() => sortPickerSourceColumn(false)}
+                    >
+                      A → Z
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-md border border-ink/15 bg-surface px-2.5 py-1 text-xs font-medium text-ink hover:bg-canvas"
+                      onClick={() => sortPickerSourceColumn(true)}
+                    >
+                      Z → A
+                    </button>
+                  </div>
+                ) : null}
+                <div className="mt-6 flex justify-end border-t border-ink/[0.06] pt-4">
+                  <button
+                    type="button"
+                    className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary"
+                    onClick={closeVisibleColumnsModal}
+                  >
+                    完成
+                  </button>
+                </div>
               </div>
-            ) : null}
-            <div className="mt-6 flex justify-start border-t border-ink/[0.06] pt-4 [html.light_&]:border-slate-200">
-              <button
-                type="button"
-                className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary"
-                onClick={closeVisibleColumnsModal}
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+            </div>,
+            document.body
+          )
+        : null}
 
       {error ? (
         <div className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
@@ -701,8 +699,8 @@ function MonthlySalesReportImpl() {
           </div>
         ) : totallyEmpty ? (
           <div className="px-6 py-16 text-center">
-            <p className="text-base font-medium text-ink/80">No sales for this period</p>
-            <p className="mt-2 text-sm text-ink/50">Try another month on the backend or adjust filters.</p>
+            <p className="text-base font-medium text-ink/80">暫無銷售紀錄</p>
+            <p className="mt-2 text-sm text-ink/50">報課／續會後會喺此顯示。</p>
           </div>
         ) : (
           <>
@@ -728,19 +726,19 @@ function MonthlySalesReportImpl() {
                       </div>
                       <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-ink/70">
                         <div>
-                          <dt className="text-ink/45">Course</dt>
+                          <dt className="text-ink/45">課程</dt>
                           <dd>{r.courseType}</dd>
                         </div>
                         <div>
-                          <dt className="text-ink/45">Coach</dt>
+                          <dt className="text-ink/45">教練</dt>
                           <dd>{r.coachName}</dd>
                         </div>
                         <div>
-                          <dt className="text-ink/45">Status</dt>
+                          <dt className="text-ink/45">狀態</dt>
                           <dd>{r.paymentStatus}</dd>
                         </div>
                         <div>
-                          <dt className="text-ink/45">Installment</dt>
+                          <dt className="text-ink/45">分期</dt>
                           <dd>{r.installmentStatus ?? "—"}</dd>
                         </div>
                       </dl>
@@ -794,16 +792,7 @@ function MonthlySalesReportImpl() {
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-ink/10 px-4 py-3 text-xs text-ink/50">
               <span>
-                Showing {filteredEmpty ? 0 : rowCount} of {data.length} loaded row{data.length === 1 ? "" : "s"}
-              </span>
-              <span className="tabular-nums">
-                Sort: <span className="text-ink/70">{sortQuery ?? "default"}</span>
-                {columnsQuery ? (
-                  <>
-                    {" · "}
-                    Columns: <span className="text-ink/70">{columnsQuery}</span>
-                  </>
-                ) : null}
+                顯示 {filteredEmpty ? 0 : rowCount} / {data.length} 筆
               </span>
             </div>
           </>
