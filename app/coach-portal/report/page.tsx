@@ -109,7 +109,7 @@ export default function CoachPortalReportPage() {
   if (!coach) return <p className="text-sm text-ink/50">載入教練資料…</p>;
 
   return (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4">
       <section className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
         <h2 className="text-sm font-semibold text-ink">教練出勤 · {coach.full_name}</h2>
         <p className="mt-1 text-xs text-ink/55">

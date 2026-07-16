@@ -8,8 +8,11 @@
  */
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import CoachHourlyDayView from "../../components/coach-hourly-day-view";
+import CoachScheduleCalendarNav, { type CalendarMode } from "../../components/coach-schedule-calendar-nav";
+import { monthRange, weekRange } from "../../lib/coach-schedule-dates";
 import { alertApiError, api } from "../../lib/api";
 import { getAuthSession } from "../../lib/auth";
 import type { CoachStudentBriefDto, CoachStudentRecordDto, CoachRemindPaymentDto } from "../../types/api";
@@ -131,11 +134,19 @@ function slotWouldConflict(
   return startHour + durationHours > 19;
 }
 
+function tabFromParams(raw: string | null): Tab {
+  if (raw === "students" || raw === "payments") return raw;
+  return "schedule";
+}
+
 export default function CoachDashboardPage() {
+  const searchParams = useSearchParams();
+  const tab = tabFromParams(searchParams.get("tab"));
   const [authOk, setAuthOk] = useState(false);
   const [roleDenied, setRoleDenied] = useState(false);
   const [coach, setCoach] = useState<CoachMe | null>(null);
-  const [tab, setTab] = useState<Tab>("schedule");
+  const [calendarMode, setCalendarMode] = useState<CalendarMode>("week");
+  const [rangeCourses, setRangeCourses] = useState<CourseRow[]>([]);
   const [pending, setPending] = useState<PendingRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [dayCourses, setDayCourses] = useState<CourseRow[]>([]);
@@ -228,6 +239,24 @@ export default function CoachDashboardPage() {
       .then((c) => setDayCourses((c ?? []) as CourseRow[]))
       .catch((e) => setStatus(String(e)));
   }, [coach, selectedDay]);
+
+  useEffect(() => {
+    if (!coach) return;
+    const range = calendarMode === "week" ? weekRange(selectedDay) : monthRange(selectedDay);
+    void api
+      .coachSchedule(coach.id, { fromDate: range.from, toDate: range.to })
+      .then((c) => setRangeCourses((c ?? []) as CourseRow[]))
+      .catch(() => setRangeCourses([]));
+  }, [coach, calendarMode, selectedDay]);
+
+  const sessionCountsByDay = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const c of rangeCourses) {
+      const key = localDateKey(c.scheduled_start);
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts;
+  }, [rangeCourses]);
 
   const pickStudentForSchedule = useCallback(
     async (studentId: number) => {
@@ -416,7 +445,7 @@ export default function CoachDashboardPage() {
   }
 
   const schedulePanel = (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4">
       <section className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
         <h2 className="text-sm font-semibold text-ink">學員排程</h2>
         <p className="mt-1 text-xs text-ink/55">
@@ -476,21 +505,21 @@ export default function CoachDashboardPage() {
       </section>
 
       <section className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-ink">日曆 · 9:00–19:00</h2>
-          <input
-            type="date"
-            value={selectedDay}
-            onChange={(e) => setSelectedDay(e.target.value)}
-            className="rounded-lg border border-ink/15 bg-canvas px-2 py-1 text-sm text-ink"
-          />
-        </div>
+        <h2 className="text-sm font-semibold text-ink">日曆 · 9:00–19:00</h2>
+        <CoachScheduleCalendarNav
+          selectedDay={selectedDay}
+          mode={calendarMode}
+          sessionCountsByDay={sessionCountsByDay}
+          onSelectDay={setSelectedDay}
+          onModeChange={setCalendarMode}
+          onNavigate={setSelectedDay}
+        />
         {selectedPending ? (
           <p className="mt-2 text-xs text-ink/65">
             正在為 <strong>{selectedPending.student_name}</strong> 排程 · {selectedPending.course_title} · 點選空白時段（1–2 小時）
           </p>
         ) : (
-          <p className="mt-2 text-xs text-ink/50">Google Calendar 日視圖 — 先揀學員，再點時段。</p>
+          <p className="mt-2 text-xs text-ink/50">先揀學員，再喺下方時段視圖點選 1–2 小時空檔。</p>
         )}
         <CoachHourlyDayView
           hours={HOURS}
@@ -560,7 +589,7 @@ export default function CoachDashboardPage() {
   );
 
   const paymentsPanel = (
-    <div className="space-y-4 pb-24 md:hidden">
+    <div className="space-y-4 md:hidden">
       <section>
         <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/50">待跟進</h3>
         {unpaidPayments.length === 0 ? (
@@ -609,7 +638,7 @@ export default function CoachDashboardPage() {
   );
 
   const paymentsPanelDesktop = (
-    <div className="hidden space-y-6 pb-24 md:block">
+    <div className="hidden space-y-6 md:block">
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/50">待跟進</h3>
         <div className="overflow-x-auto">
@@ -690,7 +719,7 @@ export default function CoachDashboardPage() {
   );
 
   const studentsPanel = (
-    <div className="space-y-4 pb-24">
+    <div className="space-y-4">
       <section className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
@@ -859,7 +888,7 @@ export default function CoachDashboardPage() {
   );
 
   return (
-    <div className="mx-auto max-w-lg px-3 py-4 pb-24 md:max-w-2xl md:px-4">
+    <div className="mx-auto max-w-lg px-3 py-4 md:max-w-2xl md:px-4">
         {paymentUrgent.length > 0 ? (
           <section className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm">
             <p className="font-semibold">付款提醒 · {paymentUrgent.length} 位學員待跟進</p>
@@ -869,13 +898,14 @@ export default function CoachDashboardPage() {
               {paymentUrgent.slice(0, 4).map((p) => p.student_name).join("、")}
               {paymentUrgent.length > 4 ? ` 等 ${paymentUrgent.length} 人` : ""}
             </p>
-            <button
-              type="button"
-              onClick={() => setTab("students")}
-              className="mt-2 text-xs font-semibold text-amber-900 underline"
-            >
-              前往學員分頁 WhatsApp 催款 →
-            </button>
+            <div className="mt-2 flex flex-wrap gap-3 text-xs font-semibold">
+              <Link href="/coach-portal?tab=payments" className="text-amber-900 underline">
+                前往已付分頁 →
+              </Link>
+              <Link href="/coach-portal?tab=students" className="text-amber-900 underline">
+                學員 · WhatsApp 催款 →
+              </Link>
+            </div>
           </section>
         ) : null}
         {status ? (
@@ -890,36 +920,6 @@ export default function CoachDashboardPage() {
             {paymentsPanelDesktop}
           </>
         ) : null}
-
-        <nav
-          className="mt-4 grid grid-cols-3 gap-1 rounded-xl border border-ink/10 bg-surface p-1.5"
-          aria-label="教練工作台"
-        >
-          {(
-            [
-              { id: "schedule" as Tab, label: "排程", icon: "▣" },
-              { id: "students" as Tab, label: "學員", icon: "👤" },
-              { id: "payments" as Tab, label: "付款", icon: "◎" }
-            ] as const
-          ).map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              aria-current={tab === item.id ? "page" : undefined}
-              onClick={() => setTab(item.id)}
-              className={`flex flex-col items-center justify-center gap-0.5 rounded-lg py-2 text-[11px] font-semibold ${
-                tab === item.id
-                  ? "bg-primary/15 text-ink ring-1 ring-primary/30"
-                  : "text-ink/65 hover:bg-canvas"
-              }`}
-            >
-              <span className="text-[16px] leading-none" aria-hidden>
-                {item.icon}
-              </span>
-              {item.label}
-            </button>
-          ))}
-        </nav>
       </div>
   );
 }

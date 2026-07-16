@@ -38,7 +38,7 @@ export default function CoachPortalRegCoursePage() {
   }
 
   return (
-    <div className="px-3 py-4 pb-28 md:px-4">
+    <div className="px-3 py-4 md:px-4">
       <h1 className="mb-3 text-lg font-semibold text-ink sm:text-xl">替學員報 Course</h1>
       <RegCourseWizard
         mode="coach"
