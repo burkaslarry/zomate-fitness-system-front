@@ -4,7 +4,7 @@
  * [F008][S005]
  * Feature: Coach Session Management
  * Step: Coach portal bottom tab navigation
- * Logic: Mobile-first tabs — 教練上堂 | 學生上堂 | 教練出勤.
+ * Logic: Mobile-first tabs — 教練上堂 (hourly schedule) | 報Course | 教練出勤.
  */
 
 import Link from "next/link";
@@ -13,12 +13,7 @@ import { ReactNode } from "react";
 import BackendShell from "./backend-shell";
 
 const TABS = [
-  { href: "/coach-portal", label: "教練上堂", match: (p: string) => p === "/coach-portal" },
-  {
-    href: "/coach-portal/calendar",
-    label: "學生上堂",
-    match: (p: string) => p.startsWith("/coach-portal/calendar")
-  },
+  { href: "/coach-portal", label: "教練上堂", match: (p: string) => p === "/coach-portal" || p.startsWith("/coach-portal/calendar") },
   {
     href: "/coach-portal/reg-course",
     label: "報Course",

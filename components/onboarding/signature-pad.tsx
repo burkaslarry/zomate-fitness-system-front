@@ -111,14 +111,14 @@ export const SignaturePad = forwardRef<SignaturePadHandle, Props>(function Signa
       (window as unknown as { __zomateSeedSignature?: () => void }).__zomateSeedSignature = () => {
         const sig = sigRef.current;
         if (!sig) throw new Error("Signature canvas not ready");
-        const demo: StrokeData = [
+        const sampleStrokes: StrokeData = [
           [
             { x: 20, y: 20, time: Date.now() },
             { x: 120, y: 80, time: Date.now() + 16 }
           ]
         ];
-        sig.fromData(demo as Parameters<SignatureCanvas["fromData"]>[0]);
-        strokeDataRef.current = demo;
+        sig.fromData(sampleStrokes as Parameters<SignatureCanvas["fromData"]>[0]);
+        strokeDataRef.current = sampleStrokes;
         setHasStroke(true);
         if (!sig.isEmpty()) {
           onChange?.(sig.getTrimmedCanvas().toDataURL("image/png"));

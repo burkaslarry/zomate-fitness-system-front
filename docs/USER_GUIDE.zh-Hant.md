@@ -22,7 +22,7 @@
 2. 輸入帳號、密碼後送出。
 3. 登入成功後會進入後台（預設導向 `/admin`）。
 
-**內建示範帳號（開發／示範環境）：**
+**內建種子帳號（開發／本機環境）：**
 
 - **管理員（ADMIN）**：`masterzoe` / `12345678`
 - **櫃台（CLERK）**：`worker` / `12347890`
@@ -62,7 +62,7 @@
 
 ### 3.5 系統設定（System Settings）
 
-- **Whatsapp 設定**（`/admin/settings/whatsapp`）：示範用連線欄位、**template 訊息草稿**，以及 **已發送訊息** 列表（優先顯示後端 `GET /api/admin/whatsapp-logs`，無資料時用前端 demo）。舊路徑 **`/admin/whatsapp`** 會導向此頁。
+- **Whatsapp 設定**（`/admin/settings/whatsapp`）：連線欄位、**template 訊息草稿**，以及 **已發送訊息** 列表（`GET /api/admin/whatsapp-logs`）。舊路徑 **`/admin/whatsapp`** 會導向此頁。
 
 ---
 

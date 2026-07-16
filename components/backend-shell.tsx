@@ -9,6 +9,7 @@
 
 import Link from "next/link";
 import { ReactNode, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { clearAuthSession, getAuthSession, waitForSessionReplacement, type AuthSession } from "../lib/auth";
 import { api, getResolvedApiBaseUrl, isUsingNextMockApi } from "../lib/api";
@@ -137,6 +138,7 @@ export default function BackendShell({
   const [apiStatus, setApiStatus] = useState<"checking" | "online" | "offline">("checking");
   const [dbStatus, setDbStatus] = useState<"idle" | "checking" | "ok" | "error" | "na">("idle");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -214,8 +216,21 @@ export default function BackendShell({
   }, []);
 
   useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  useEffect(() => {
     setMobileNavOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileNavOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -301,6 +316,38 @@ export default function BackendShell({
     </>
   );
 
+  const mobileNavDrawer =
+    showAdminSidebar && mobileNavOpen ? (
+      <div className="fixed inset-0 z-[180] md:hidden" role="dialog" aria-modal="true" aria-label="後台選單">
+        <button
+          type="button"
+          className="absolute inset-0 bg-ink/40 backdrop-blur-[1px]"
+          aria-label="關閉選單"
+          onClick={() => setMobileNavOpen(false)}
+        />
+        <aside className="absolute left-0 top-0 z-10 flex h-full w-[min(88vw,280px)] flex-col overflow-y-auto border-r border-ink/10 bg-surface px-4 pb-6 pt-5 shadow-xl">
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <h2 className="text-[15px] font-semibold text-ink">Zomate Fitness</h2>
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen(false)}
+              className="rounded-lg border border-ink/15 px-2.5 py-1 text-xs text-ink/70"
+            >
+              關閉
+            </button>
+          </div>
+          <nav className="flex-1 space-y-3">{navSections}</nav>
+          <button
+            type="button"
+            onClick={() => void doLogout()}
+            className="mt-4 rounded-lg border border-ink/15 px-3 py-2.5 text-left text-[13px] text-ink/90"
+          >
+            登出
+          </button>
+        </aside>
+      </div>
+    ) : null;
+
   return (
     <div className="flex min-h-screen bg-canvas text-ink">
       {showAdminSidebar ? (
@@ -369,36 +416,6 @@ export default function BackendShell({
           </button>
         </div>
       </aside>
-      ) : null}
-      {showAdminSidebar && mobileNavOpen ? (
-        <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="後台選單">
-          <button
-            type="button"
-            className="absolute inset-0 bg-ink/40 backdrop-blur-[1px]"
-            aria-label="關閉選單"
-            onClick={() => setMobileNavOpen(false)}
-          />
-          <aside className="absolute left-0 top-0 flex h-full w-[min(88vw,280px)] flex-col overflow-y-auto border-r border-ink/10 bg-surface px-4 pb-6 pt-5 shadow-xl">
-            <div className="mb-4 flex items-center justify-between gap-2">
-              <h2 className="text-[15px] font-semibold text-ink">Zomate Fitness</h2>
-              <button
-                type="button"
-                onClick={() => setMobileNavOpen(false)}
-                className="rounded-lg border border-ink/15 px-2.5 py-1 text-xs text-ink/70"
-              >
-                關閉
-              </button>
-            </div>
-            <nav className="flex-1 space-y-3">{navSections}</nav>
-            <button
-              type="button"
-              onClick={() => void doLogout()}
-              className="mt-4 rounded-lg border border-ink/15 px-3 py-2.5 text-left text-[13px] text-ink/90"
-            >
-              登出
-            </button>
-          </aside>
-        </div>
       ) : null}
       <div className="flex min-h-screen min-w-0 flex-1 flex-col bg-canvas">
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-ink/10 bg-canvas/95 px-3 py-3 backdrop-blur-md md:px-6">
@@ -520,6 +537,7 @@ export default function BackendShell({
           <nav data-admin-bottom-nav className="hidden" aria-hidden="true" />
         )}
       </div>
+      {portalReady && mobileNavDrawer ? createPortal(mobileNavDrawer, document.body) : null}
     </div>
   );
 }

@@ -360,6 +360,7 @@ export default function AdminStudentDetailPage() {
     packageLessons > 0 && categoryLessons === 0 && ledgerBalance !== packageLessons;
   const photoSrc = apiAssetUrl(data?.profile.photo_url ?? undefined);
   const signatureSrc = apiAssetUrl(data?.profile.signature_image_url ?? undefined);
+  const hasPhoto = Boolean(photoSrc && !photoFailed);
   const receiptContexts = [
     ...pins.map((p) => `Course：${p.course_title}`),
     ...catEnr.map((c) => `Category：${c.category_name}`),
@@ -417,8 +418,12 @@ export default function AdminStudentDetailPage() {
         <section className="rounded-xl border border-ink/15 bg-surface p-5 text-ink">
           {tab === "資料" && data && (
             <div className="grid gap-5 md:grid-cols-[220px_1fr]">
-              <div className="aspect-square overflow-hidden rounded-xl border border-ink/10 bg-canvas">
-                {photoSrc && !photoFailed ? (
+              <div
+                className={`aspect-square overflow-hidden rounded-xl border border-ink/10 bg-canvas${
+                  hasPhoto ? "" : " hidden md:block"
+                }`}
+              >
+                {hasPhoto ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={photoSrc}

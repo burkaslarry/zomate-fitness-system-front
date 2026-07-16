@@ -9,16 +9,14 @@
 
 /*
  * Advanced block: phone + PIN fallback calls the same API with `{ phone, pin_code }`
- * (no ``student_id``). WhatsApp hooks update demo counters only.
+ * (no ``student_id``).
  */
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { alertApiError, api, formatApiError, getCheckinsWebSocketUrl } from "../../../lib/api";
-import { useDemoState } from "../../../lib/demo-state";
 import { usePeriodicHealthPing } from "../../../hooks/use-periodic-health-ping";
-import { useWhatsAppLog } from "../../../hooks/use-whatsapp-log";
 
 type Ack = {
   event: string;
@@ -87,8 +85,6 @@ export default function StudentCheckinPage() {
   const [fbPin, setFbPin] = useState("");
   const [pinPadError, setPinPadError] = useState(false);
   const [installmentPrompt, setInstallmentPrompt] = useState("");
-  const { markCheckin } = useDemoState();
-  const { logCheckinSuccess } = useWhatsAppLog();
 
   useEffect(() => {
     const wsUrl = getCheckinsWebSocketUrl();
@@ -177,9 +173,7 @@ export default function StudentCheckinPage() {
       })) as { student?: { lesson_balance?: number } };
       const bal = res.student?.lesson_balance;
       if (typeof bal === "number") setLastBalance(bal);
-      markCheckin(selected.full_name, bal);
-      logCheckinSuccess(selected.full_name, selected.phone, bal);
-      setStatus("簽到成功！學生 WhatsApp：上堂通知 + 剩餘堂數；教練 WhatsApp：學生已簽到（示範 log）。");
+      setStatus("簽到成功！已透過 WhatsApp 通知學生及教練。");
       setPin("");
       setSelectedLesson(null);
       setSelected(null);
@@ -212,8 +206,6 @@ export default function StudentCheckinPage() {
       })) as { student?: { lesson_balance?: number } };
       const bal = res.student?.lesson_balance;
       if (typeof bal === "number") setLastBalance(bal);
-      markCheckin(fbPhone.trim(), bal);
-      logCheckinSuccess("Phone User", fbPhone.trim(), bal);
       setStatus("簽到成功！");
       setFbPin("");
       setFbPhone("");

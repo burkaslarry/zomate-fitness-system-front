@@ -95,7 +95,7 @@ export default function AdminQrConsolePage() {
             下載 attendance 範本（後端）
           </button>
           <label className="cursor-pointer rounded-md border border-ink/15 bg-surface px-3 py-2 text-sm text-ink shadow-sm hover:bg-canvas">
-            匯入 CSV（Demo 預覽）
+            匯入 CSV（預覽）
             <input
               type="file"
               accept=".csv,text/csv"
@@ -105,7 +105,7 @@ export default function AdminQrConsolePage() {
                 if (!file) return;
                 const text = await file.text();
                 const count = Math.max(0, text.split("\n").length - 1);
-                setStatus(`已讀取 ${count} 筆出勤資料（前端 Demo；批次匯入後端尚未開放）。`);
+                setStatus(`已讀取 ${count} 筆出勤資料（批次匯入後端尚未開放）。`);
                 ev.target.value = "";
               }}
             />

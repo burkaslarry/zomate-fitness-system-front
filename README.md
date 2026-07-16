@@ -1,4 +1,4 @@
-# Zomate Fitness Frontend Demo
+# Zomate Fitness Frontend
 
 Feature code **F015** (`Features F015:AdminChromeFrontend -- …`) is documented in `components/backend-shell.tsx` for the bilingual admin chrome. Backend codes **F001–F014** and verifier **F016** are summarized in `../zomate-fitness-system-back/README.md`.
 

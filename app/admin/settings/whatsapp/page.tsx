@@ -10,7 +10,6 @@
 import { useCallback, useEffect, useState } from "react";
 import BackendShell from "../../../../components/backend-shell";
 import { alertApiError, api } from "../../../../lib/api";
-import { useDemoState } from "../../../../lib/demo-state";
 
 type ApiWaLog = {
   id: number;
@@ -31,7 +30,6 @@ const PLACEHOLDER_HINT =
   "{{course_title}} {{student_name}} {{student_phone}} {{pin}} {{next_lesson_date}} {{lessons_attended}} {{lessons_remaining}} {{payment_status}} {{amount_paid}} {{total_amount}} {{amount_owing}} {{installment_notes}}";
 
 export default function AdminSettingsWhatsappPage() {
-  const { whatsappLogs: demoLogs } = useDemoState();
   const [apiLogs, setApiLogs] = useState<ApiWaLog[] | null>(null);
   const [templates, setTemplates] = useState<WaTemplate[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -88,21 +86,13 @@ export default function AdminSettingsWhatsappPage() {
   }
 
   const tableRows =
-    apiLogs && apiLogs.length > 0
-      ? apiLogs.map((log) => ({
-          id: String(log.id),
-          when: log.created_at,
-          recipient: log.recipient,
-          message: log.message,
-          status: "✅ 已記錄"
-        }))
-      : demoLogs.map((log) => ({
-          id: String(log.id),
-          when: log.timestamp,
-          recipient: log.recipient,
-          message: log.message,
-          status: log.status === "Delivered" ? "✅ 已記錄" : log.status
-        }));
+    apiLogs?.map((log) => ({
+      id: String(log.id),
+      when: log.created_at,
+      recipient: log.recipient,
+      message: log.message,
+      status: "✅ 已記錄"
+    })) ?? [];
 
   const studentTemplates = templates.filter((t) => t.audience === "student");
   const coachTemplates = templates.filter((t) => t.audience === "coach");

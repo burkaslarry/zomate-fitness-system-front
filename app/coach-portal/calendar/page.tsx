@@ -3,7 +3,16 @@
 /**
  * [F008][S005]
  * Feature: Coach Session Management
- * Step: Coach portal calendar alias — 學生上堂
+ * Step: Redirect legacy month calendar — coaches use hourly schedule on /coach-portal
  */
 
-export { default } from "../../coach/calendar/page";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+export default function CoachPortalCalendarRedirectPage() {
+  const router = useRouter();
+  useEffect(() => {
+    router.replace("/coach-portal");
+  }, [router]);
+  return null;
+}

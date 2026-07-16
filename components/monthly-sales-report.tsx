@@ -188,7 +188,7 @@ function MonthlySalesReportImpl() {
   const [globalFilter, setGlobalFilter] = useState("");
   const [sorting, setSorting] = useState<SortingState>([{ id: "clientName", desc: false }]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
-  /** Native <dialog> proved flaky; use fixed overlay so demo always shows on localhost + prod. */
+  /** Native <dialog> proved flaky; use fixed overlay so the picker always shows on localhost + prod. */
   const [visibleColumnsModalOpen, setVisibleColumnsModalOpen] = useState(false);
   const [columnPickerSource, setColumnPickerSource] = useState<"courseType" | "installmentStatus" | null>(null);
 

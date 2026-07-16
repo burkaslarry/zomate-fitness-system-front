@@ -11,7 +11,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import BackendShell from "../../components/backend-shell";
 import { api } from "../../lib/api";
-import { useDemoState } from "../../lib/demo-state";
 
 type Summary = Record<string, number>;
 
@@ -37,7 +36,6 @@ type DashboardCard =
 export default function AdminPage() {
   const [summary, setSummary] = useState<Summary>({});
   const [status, setStatus] = useState("");
-  const { students, checkinsCount } = useDemoState();
   const [origin, setOrigin] = useState("");
 
   useEffect(() => {
@@ -72,17 +70,17 @@ export default function AdminPage() {
     {
       kind: "number",
       label: "學生總數",
-      value: Math.max(summaryValue(summary, ["students_total", "total_students", "students"]), students.length)
+      value: summaryValue(summary, ["students_total", "total_students", "students"])
     },
     {
       kind: "number",
       label: "活躍學生",
-      value: Math.max(summaryValue(summary, ["active_students", "students_active"]), students.filter((s) => s.remainingCredits > 0).length)
+      value: summaryValue(summary, ["active_students", "students_active"])
     },
     {
       kind: "number",
       label: "簽到次數",
-      value: Math.max(summaryValue(summary, ["checkins_total", "checkins", "checkins_count"]), checkinsCount)
+      value: summaryValue(summary, ["checkins_total", "checkins", "checkins_count"])
     },
     {
       kind: "ratio",
@@ -137,23 +135,27 @@ export default function AdminPage() {
           <p className="rounded-lg border border-amber-200/80 bg-amber-50 px-3 py-2 text-sm text-ink">{status}</p>
         )}
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+        <section className="grid grid-cols-2 gap-2.5 sm:gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
           {cards.map((card) => {
+            const cardClass =
+              "min-h-[5.5rem] rounded-xl border border-ink/10 bg-surface p-3 shadow-sm ring-1 ring-ink/[0.04] sm:min-h-0 sm:p-5";
             const shell = (
               <>
-                <p className="text-[12px] tracking-[0.02em] text-ink/60">{card.label}</p>
+                <p className="text-[11px] leading-4 tracking-[0.02em] text-ink/60 sm:text-[12px]">{card.label}</p>
                 {card.kind === "number" ? (
-                  <p className="mt-2 text-[30px] font-semibold leading-none tracking-[-0.02em] text-ink">{card.value}</p>
+                  <p className="mt-1.5 text-[22px] font-semibold leading-none tracking-[-0.02em] text-ink sm:mt-2 sm:text-[30px]">
+                    {card.value}
+                  </p>
                 ) : (
                   <>
-                    <p className="mt-2 text-[28px] font-semibold tabular-nums leading-none tracking-[-0.02em] text-ink">
+                    <p className="mt-1.5 text-[22px] font-semibold tabular-nums leading-none tracking-[-0.02em] text-ink sm:mt-2 sm:text-[28px]">
                       <span>{card.unpaid}</span>
-                      <span className="mx-1.5 font-normal text-ink/35">/</span>
+                      <span className="mx-1 font-normal text-ink/35">/</span>
                       <span>{card.total}</span>
                     </p>
-                    <p className="mt-2 text-[11px] leading-4 text-ink/55">{card.ratioHint}</p>
-                    <p className="mt-1 text-[11px] leading-4 text-ink/45">{card.detail}</p>
-                    <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-primary">
+                    <p className="mt-1.5 hidden text-[11px] leading-4 text-ink/55 sm:block">{card.ratioHint}</p>
+                    <p className="mt-1 hidden text-[11px] leading-4 text-ink/45 sm:block">{card.detail}</p>
+                    <p className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary sm:mt-2 sm:text-[11px]">
                       <span aria-hidden>→</span> 銷售與分期
                     </p>
                   </>
@@ -166,7 +168,7 @@ export default function AdminPage() {
                 <Link
                   key={card.label}
                   href={card.href}
-                  className={`rounded-xl border border-ink/10 bg-surface p-5 shadow-sm ring-1 ring-ink/[0.04] transition hover:border-primary/45 hover:ring-primary/20 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary`}
+                  className={`${cardClass} col-span-2 transition hover:border-primary/45 hover:ring-primary/20 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary xl:col-span-1`}
                 >
                   {shell}
                 </Link>
@@ -178,21 +180,20 @@ export default function AdminPage() {
                 <Link
                   key={card.label}
                   href={card.href}
-                  className="rounded-xl border border-ink/10 bg-surface p-5 shadow-sm ring-1 ring-ink/[0.04] transition hover:border-amber-300/60 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                  className={`${cardClass} transition hover:border-amber-300/60 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary`}
                 >
                   {shell}
-                  <p className="mt-2 flex items-center gap-1 text-[11px] font-medium text-primary">
-                    <span aria-hidden>→</span> 查看候補名單
+                  <p className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary sm:mt-2 sm:text-[11px]">
+                    <span aria-hidden>→</span>
+                    <span className="sm:hidden">候補</span>
+                    <span className="hidden sm:inline">查看候補名單</span>
                   </p>
                 </Link>
               );
             }
 
             return (
-              <article
-                key={card.label}
-                className="rounded-xl border border-ink/10 bg-surface p-5 shadow-sm ring-1 ring-ink/[0.04]"
-              >
+              <article key={card.label} className={cardClass}>
                 {shell}
               </article>
             );
@@ -214,27 +215,27 @@ export default function AdminPage() {
               {summaryValue(summary, ["courses", "courses_total", "total_courses"])} courses
             </span>
           </div>
-          <div className="mt-5 grid gap-3 md:grid-cols-3">
+          <div className="mt-4 grid grid-cols-2 gap-2.5 sm:mt-5 sm:gap-3 md:grid-cols-3">
             <Link
               href="/admin/branches"
-              className="rounded-xl border border-amber-200/70 bg-amber-50/90 px-4 py-3 text-sm font-semibold text-ink shadow-sm ring-1 ring-ink/[0.04] hover:bg-amber-100/90"
+              className="rounded-xl border border-amber-200/70 bg-amber-50/90 px-3 py-2.5 text-xs font-semibold text-ink shadow-sm ring-1 ring-ink/[0.04] hover:bg-amber-100/90 sm:px-4 sm:py-3 sm:text-sm"
             >
               課堂和分店管理
-              <span className="mt-1 block text-xs font-normal text-ink/65">分店、Course 種類（試堂／開課共用）</span>
+              <span className="mt-1 block text-[10px] font-normal leading-4 text-ink/65 sm:text-xs">分店、Course 種類</span>
             </Link>
             <Link
               href="/admin/course-set"
-              className="rounded-xl border border-violet-200/70 bg-violet-50/90 px-4 py-3 text-sm font-semibold text-ink shadow-sm ring-1 ring-ink/[0.04] hover:bg-violet-100/90"
+              className="rounded-xl border border-violet-200/70 bg-violet-50/90 px-3 py-2.5 text-xs font-semibold text-ink shadow-sm ring-1 ring-ink/[0.04] hover:bg-violet-100/90 sm:px-4 sm:py-3 sm:text-sm"
             >
               Course 套餐開課
-              <span className="mt-1 block text-xs font-normal text-ink/65">堂數 1–10、星期 tick、計算最後一堂日期</span>
+              <span className="mt-1 block text-[10px] font-normal leading-4 text-ink/65 sm:text-xs">堂數、星期、最後一堂</span>
             </Link>
             <Link
               href="/coach/calendar"
-              className="rounded-xl border border-sky-200/70 bg-sky-50/90 px-4 py-3 text-sm font-semibold text-ink shadow-sm ring-1 ring-ink/[0.04] hover:bg-sky-100/90"
+              className="col-span-2 rounded-xl border border-sky-200/70 bg-sky-50/90 px-3 py-2.5 text-xs font-semibold text-ink shadow-sm ring-1 ring-ink/[0.04] hover:bg-sky-100/90 sm:px-4 sm:py-3 sm:text-sm md:col-span-1"
             >
               教練日程
-              <span className="mt-1 block text-xs font-normal text-ink/65">月曆查看課堂與簽到</span>
+              <span className="mt-1 block text-[10px] font-normal leading-4 text-ink/65 sm:text-xs">月曆查看課堂與簽到</span>
             </Link>
           </div>
         </section>

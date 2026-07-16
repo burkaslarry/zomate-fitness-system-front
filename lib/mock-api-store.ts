@@ -66,7 +66,7 @@ let students: MockStudent[] = [
   },
   {
     id: 4,
-    full_name: "Demo Student",
+    full_name: "Sample Student",
     phone: "+85290000001",
     hkid: "D4567890",
     date_of_birth: "1998-01-15",
@@ -179,7 +179,7 @@ export const mockApiStore = {
   },
 
   /**
-   * [F003][S001] Mock today's lessons (Asia/Hong_Kong calendar). Student id 4 has none for empty-state demos.
+   * [F003][S001] Mock today's lessons (Asia/Hong_Kong calendar). Student id 4 has none for empty-state UI.
    */
   todayLessonsForStudent(studentId: number): Array<{
     course_id: number;

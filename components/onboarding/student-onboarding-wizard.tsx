@@ -253,7 +253,6 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
       return;
     }
     setCoachCategoriesLoading(true);
-    console.log("[Demo Track] Coach Selected → Updating Categories", { coach_id: selectedCoachId });
     void api
       .publicCourseCategories(selectedCoachId)
       .then((rows) => {

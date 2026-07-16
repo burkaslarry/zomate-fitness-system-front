@@ -73,10 +73,10 @@ function remindPayWaLink(phone: string, name: string, courseTitle: string): stri
   return `https://wa.me/${hk}?text=${text}`;
 }
 
-function occupiedHoursForDay(courses: CourseRow[], day: string, pendingCourseIds: Set<number>): Set<number> {
+function occupiedHoursForDay(courses: CourseRow[], day: string, excludeCourseIds: Set<number>): Set<number> {
   const occupied = new Set<number>();
   for (const c of courses) {
-    if (pendingCourseIds.has(c.id)) continue;
+    if (excludeCourseIds.has(c.id)) continue;
     if (localDateKey(c.scheduled_start) !== day) continue;
     const startH = new Date(c.scheduled_start).getHours();
     let endH = new Date(c.scheduled_end).getHours();
@@ -84,6 +84,39 @@ function occupiedHoursForDay(courses: CourseRow[], day: string, pendingCourseIds
     for (let h = startH; h < endH; h++) occupied.add(h);
   }
   return occupied;
+}
+
+function formatCourseSlotLine(c: CourseRow): string {
+  const time = new Date(c.scheduled_start).toLocaleTimeString("zh-HK", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+  const names = c.enrollments.map((e) => e.student_name).join("、");
+  return `${time} — ${c.title}, name: ${names}`;
+}
+
+function pendingFromEnrollment(
+  studentId: number,
+  studentName: string,
+  studentPhone: string,
+  enr: {
+    enrollment_id: number;
+    course_title: string;
+    scheduled_start: string;
+    total_lessons: number;
+  }
+): PendingRow {
+  return {
+    enrollment_id: enr.enrollment_id,
+    course_id: enr.enrollment_id,
+    student_id: studentId,
+    student_name: studentName,
+    student_phone: studentPhone,
+    course_title: enr.course_title,
+    branch_name: "",
+    total_lessons: enr.total_lessons,
+    placeholder_start: enr.scheduled_start
+  };
 }
 
 function slotWouldConflict(
@@ -123,9 +156,14 @@ export default function CoachDashboardPage() {
   const [remindBusy, setRemindBusy] = useState<number | null>(null);
 
   const pendingCourseIds = useMemo(() => new Set(pending.map((p) => p.course_id)), [pending]);
+  const excludeCourseIds = useMemo(() => {
+    const ids = new Set(pendingCourseIds);
+    if (selectedPending) ids.add(selectedPending.enrollment_id);
+    return ids;
+  }, [pendingCourseIds, selectedPending]);
   const occupied = useMemo(
-    () => occupiedHoursForDay(dayCourses, selectedDay, pendingCourseIds),
-    [dayCourses, selectedDay, pendingCourseIds]
+    () => occupiedHoursForDay(dayCourses, selectedDay, excludeCourseIds),
+    [dayCourses, selectedDay, excludeCourseIds]
   );
 
   const paymentUrgent = useMemo(() => {
@@ -135,18 +173,15 @@ export default function CoachDashboardPage() {
   const paidPayments = useMemo(() => payments.filter((p) => p.payment_status === "Paid"), [payments]);
 
   const bookOccupiedForStudent = useMemo(
-    () => occupiedHoursForDay(dayCourses, bookDay, pendingCourseIds),
-    [dayCourses, bookDay, pendingCourseIds]
+    () =>
+      occupiedHoursForDay(
+        dayCourses,
+        bookDay,
+        bookingEnrollmentId ? new Set([...pendingCourseIds, bookingEnrollmentId]) : pendingCourseIds
+      ),
+    [dayCourses, bookDay, pendingCourseIds, bookingEnrollmentId]
   );
 
-  const reloadCoachSchedule = useCallback(async (coachId: number) => {
-    const [pList, cList] = await Promise.all([
-      api.coachPendingStudents(coachId) as Promise<PendingRow[]>,
-      api.coachSchedule(coachId, selectedDay) as Promise<CourseRow[]>
-    ]);
-    setPending(pList ?? []);
-    setDayCourses(cList ?? []);
-  }, [selectedDay]);
 
   const reloadAll = useCallback(async (coachId: number) => {
     const [pList, payList, cList, sList] = await Promise.all([
@@ -212,11 +247,7 @@ export default function CoachDashboardPage() {
         coach_id: coach.id
       });
       setSelectedPending(null);
-      console.log("[Demo Track] Schedule Confirmed → Local Coach Calendar Hydrating", {
-        coach_id: coach.id,
-        day: selectedDay
-      });
-      await reloadCoachSchedule(coach.id);
+      await reloadAll(coach.id);
       setStatus("已排程。");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -231,6 +262,34 @@ export default function CoachDashboardPage() {
     }
   }
 
+  async function pickStudentForSchedule(studentId: number) {
+    if (!coach) return;
+    setStatus("");
+    try {
+      const rec = (await api.coachStudentRecords(studentId, coach.id)) as CoachStudentRecordDto;
+      const target = rec.enrollments.find((e) => !e.coach_time_confirmed) ?? rec.enrollments[0];
+      if (!target) {
+        setStatus("此學員暫無可排程課程。");
+        return;
+      }
+      setSelectedPending(
+        pendingFromEnrollment(studentId, rec.full_name, rec.phone, {
+          enrollment_id: target.enrollment_id,
+          course_title: target.course_title,
+          scheduled_start: target.scheduled_start,
+          total_lessons: target.total_lessons
+        })
+      );
+      if (target.coach_time_confirmed) {
+        setSelectedDay(localDateKey(target.scheduled_start));
+        setStartHour(new Date(target.scheduled_start).getHours());
+      }
+    } catch (e) {
+      alertApiError(e);
+      setStatus(String(e));
+    }
+  }
+
   async function loadStudentRecords(studentId: number) {
     if (!coach) return;
     setSelectedStudentId(studentId);
@@ -240,7 +299,6 @@ export default function CoachDashboardPage() {
     try {
       const rec = (await api.coachStudentRecords(studentId, coach.id)) as CoachStudentRecordDto;
       setStudentRecords(rec);
-      console.log("[Demo Track] Student Records Loaded", { student_id: studentId, checkins: rec.checkins.length });
     } catch (e) {
       alertApiError(e);
       setStatus(String(e));
@@ -251,7 +309,11 @@ export default function CoachDashboardPage() {
 
   async function bookEnrollment(enrollmentId: number, confirmed: boolean) {
     if (!coach) return;
-    const bookOccupied = occupiedHoursForDay(dayCourses, bookDay, pendingCourseIds);
+    const bookOccupied = occupiedHoursForDay(
+      dayCourses,
+      bookDay,
+      new Set([...pendingCourseIds, enrollmentId])
+    );
     if (slotWouldConflict(bookOccupied, bookStartHour, bookDuration)) {
       setStatus("此時段已被佔用或超出 19:00，請另選。");
       return;
@@ -265,11 +327,6 @@ export default function CoachDashboardPage() {
         start_hour: bookStartHour,
         duration_hours: bookDuration,
         coach_id: coach.id
-      });
-      console.log("[Demo Track] Coach Booking Confirmed", {
-        enrollment_id: enrollmentId,
-        confirmed,
-        day: bookDay
       });
       await reloadAll(coach.id);
       if (selectedStudentId) await loadStudentRecords(selectedStudentId);
@@ -297,7 +354,6 @@ export default function CoachDashboardPage() {
         course_id: courseId,
         coach_id: coach.id
       })) as CoachRemindPaymentDto;
-      console.log("[Demo Track] WhatsApp Payment Reminder Logged", { student_id: studentId, course_id: courseId });
       window.open(res.wa_link, "_blank", "noopener,noreferrer");
       setStatus("已記錄 WhatsApp 催款訊息，並開啟 WhatsApp。");
     } catch (e) {
@@ -328,14 +384,38 @@ export default function CoachDashboardPage() {
   const schedulePanel = (
     <div className="space-y-4 pb-24">
       <section className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
-        <h2 className="text-sm font-semibold text-ink">待排程學員</h2>
+        <h2 className="text-sm font-semibold text-ink">學員排程</h2>
         <p className="mt-1 text-xs text-ink/55">
           {pending.length > 0
-            ? `你有 ${pending.length} 位學生未約第一堂時間`
-            : "Admin 已指派給你、尚未確認上課時間的學員。"}
+            ? `你有 ${pending.length} 位學員待確認上課時間（未付款亦可排程）。`
+            : "揀選學員後在下方時段排程；未付款亦可安排上堂。"}
         </p>
         {pending.length === 0 ? (
-          <p className="mt-3 text-sm text-ink/50">目前沒有待排程學員。</p>
+          students.length === 0 ? (
+            <p className="mt-3 text-sm text-ink/50">目前沒有指派學員。</p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {students.map((s) => (
+                <li key={s.student_id}>
+                  <button
+                    type="button"
+                    onClick={() => void pickStudentForSchedule(s.student_id)}
+                    className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm transition ${
+                      selectedPending?.student_id === s.student_id
+                        ? "border-primary bg-primary/10 ring-1 ring-primary/30"
+                        : "border-ink/10 bg-canvas hover:border-primary/40"
+                    }`}
+                  >
+                    <div className="font-medium text-ink">{s.full_name}</div>
+                    <div className="mt-0.5 text-xs text-ink/60">
+                      餘 {s.lesson_balance} 堂 · {s.enrollment_count} 課程
+                      {s.pending_schedule ? " · 待排程" : " · 可改期"}
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )
         ) : (
           <ul className="mt-3 space-y-2">
             {pending.map((p) => (
@@ -371,10 +451,10 @@ export default function CoachDashboardPage() {
           />
         </div>
         {!selectedPending ? (
-          <p className="mt-3 text-sm text-ink/50">請先從上方揀一位待排程學員，再點選時段。</p>
+          <p className="mt-3 text-sm text-ink/50">請先從上方揀一位學員，再點選時段。</p>
         ) : (
           <p className="mt-2 text-xs text-ink/65">
-            正在為 <strong>{selectedPending.student_name}</strong> 排程 · 時段 1–2 小時
+            正在為 <strong>{selectedPending.student_name}</strong> 排程 · {selectedPending.course_title} · 時段 1–2 小時
           </p>
         )}
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
@@ -454,12 +534,7 @@ export default function CoachDashboardPage() {
             {dayCourses
               .filter((c) => !pendingCourseIds.has(c.id))
               .map((c) => (
-                <li key={c.id}>
-                  {new Date(c.scheduled_start).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
-                  {" — "}
-                  {c.title}
-                  {c.enrollments.map((e) => e.student_name).join("、")}
-                </li>
+                <li key={c.id}>{formatCourseSlotLine(c)}</li>
               ))}
           </ul>
         ) : null}
