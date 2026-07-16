@@ -1,14 +1,14 @@
 import { readFileSync } from "node:fs";
+import { resolveBuildDateHkt, resolveProdVersionLabel } from "./scripts/resolve-prod-version.mjs";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
-const buildDate =
-  process.env.NEXT_PUBLIC_BUILD_DATE?.trim() ||
-  new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Hong_Kong" });
+const buildDate = resolveBuildDateHkt();
+const prodVersion = resolveProdVersionLabel(`v${pkg.version}`);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   env: {
-    NEXT_PUBLIC_APP_VERSION: pkg.version,
+    NEXT_PUBLIC_APP_VERSION: prodVersion,
     NEXT_PUBLIC_BUILD_DATE: buildDate
   },
   typedRoutes: false,
