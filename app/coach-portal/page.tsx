@@ -8,7 +8,8 @@
  */
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import CoachHourlyDayView from "../../components/coach-hourly-day-view";
 import { alertApiError, api } from "../../lib/api";
 import { getAuthSession } from "../../lib/auth";
 import type { CoachStudentBriefDto, CoachStudentRecordDto, CoachRemindPaymentDto } from "../../types/api";
@@ -154,6 +155,8 @@ export default function CoachDashboardPage() {
   const [bookDuration, setBookDuration] = useState<1 | 2>(1);
   const [bookBusy, setBookBusy] = useState(false);
   const [remindBusy, setRemindBusy] = useState<number | null>(null);
+  const [scheduleStudentId, setScheduleStudentId] = useState<number | null>(null);
+  const [pickBusy, setPickBusy] = useState(false);
 
   const pendingCourseIds = useMemo(() => new Set(pending.map((p) => p.course_id)), [pending]);
   const excludeCourseIds = useMemo(() => {
@@ -166,9 +169,11 @@ export default function CoachDashboardPage() {
     [dayCourses, selectedDay, excludeCourseIds]
   );
 
-  const paymentUrgent = useMemo(() => {
+  const unpaidPayments = useMemo(() => {
     return payments.filter((p) => p.payment_status === "Pending" || p.payment_status === "Overdue");
   }, [payments]);
+
+  const paymentUrgent = unpaidPayments;
 
   const paidPayments = useMemo(() => payments.filter((p) => p.payment_status === "Paid"), [payments]);
 
@@ -224,11 +229,67 @@ export default function CoachDashboardPage() {
       .catch((e) => setStatus(String(e)));
   }, [coach, selectedDay]);
 
+  const pickStudentForSchedule = useCallback(
+    async (studentId: number) => {
+      if (!coach) return;
+      setScheduleStudentId(studentId);
+      setPickBusy(true);
+      setStatus("");
+      try {
+        const rec = (await api.coachStudentRecords(studentId, coach.id)) as CoachStudentRecordDto;
+        const target = rec.enrollments.find((e) => !e.coach_time_confirmed) ?? rec.enrollments[0];
+        if (!target) {
+          setScheduleStudentId(null);
+          setStatus("此學員暫無可排程課程。");
+          return;
+        }
+        setSelectedPending(
+          pendingFromEnrollment(studentId, rec.full_name, rec.phone, {
+            enrollment_id: target.enrollment_id,
+            course_title: target.course_title,
+            scheduled_start: target.scheduled_start,
+            total_lessons: target.total_lessons
+          })
+        );
+        if (target.coach_time_confirmed) {
+          setSelectedDay(localDateKey(target.scheduled_start));
+          setStartHour(new Date(target.scheduled_start).getHours());
+        } else {
+          setSelectedDay(todayKey());
+          setStartHour(9);
+          setDurationHours(1);
+        }
+      } catch (e) {
+        setScheduleStudentId(null);
+        alertApiError(e);
+        setStatus(String(e));
+      } finally {
+        setPickBusy(false);
+      }
+    },
+    [coach]
+  );
+
   useEffect(() => {
-    if (!selectedPending) return;
-    setStartHour(9);
-    setDurationHours(1);
+    if (!selectedPending) {
+      setScheduleStudentId(null);
+      return;
+    }
+    setScheduleStudentId(selectedPending.student_id);
   }, [selectedPending]);
+
+  /** [F003][S002] Auto-select when only one student — avoids dead-end empty calendar. */
+  useEffect(() => {
+    if (!coach || !authOk || pickBusy || selectedPending) return;
+    if (pending.length === 1) {
+      setSelectedPending(pending[0]);
+      setScheduleStudentId(pending[0].student_id);
+      return;
+    }
+    if (pending.length === 0 && students.length === 1) {
+      void pickStudentForSchedule(students[0].student_id);
+    }
+  }, [coach, authOk, pending, students, selectedPending, pickBusy, pickStudentForSchedule]);
 
   async function confirmSchedule() {
     if (!coach || !selectedPending) return;
@@ -247,6 +308,7 @@ export default function CoachDashboardPage() {
         coach_id: coach.id
       });
       setSelectedPending(null);
+      setScheduleStudentId(null);
       await reloadAll(coach.id);
       setStatus("已排程。");
     } catch (e) {
@@ -259,34 +321,6 @@ export default function CoachDashboardPage() {
       }
     } finally {
       setScheduling(false);
-    }
-  }
-
-  async function pickStudentForSchedule(studentId: number) {
-    if (!coach) return;
-    setStatus("");
-    try {
-      const rec = (await api.coachStudentRecords(studentId, coach.id)) as CoachStudentRecordDto;
-      const target = rec.enrollments.find((e) => !e.coach_time_confirmed) ?? rec.enrollments[0];
-      if (!target) {
-        setStatus("此學員暫無可排程課程。");
-        return;
-      }
-      setSelectedPending(
-        pendingFromEnrollment(studentId, rec.full_name, rec.phone, {
-          enrollment_id: target.enrollment_id,
-          course_title: target.course_title,
-          scheduled_start: target.scheduled_start,
-          total_lessons: target.total_lessons
-        })
-      );
-      if (target.coach_time_confirmed) {
-        setSelectedDay(localDateKey(target.scheduled_start));
-        setStartHour(new Date(target.scheduled_start).getHours());
-      }
-    } catch (e) {
-      alertApiError(e);
-      setStatus(String(e));
     }
   }
 
@@ -388,8 +422,9 @@ export default function CoachDashboardPage() {
         <p className="mt-1 text-xs text-ink/55">
           {pending.length > 0
             ? `你有 ${pending.length} 位學員待確認上課時間（未付款亦可排程）。`
-            : "揀選學員後在下方時段排程；未付款亦可安排上堂。"}
+            : "點選學員卡片 → 喺下方日曆點時段排程；未付款亦可安排上堂。"}
         </p>
+        {pickBusy ? <p className="mt-2 text-xs text-primary">載入學員課程…</p> : null}
         {pending.length === 0 ? (
           students.length === 0 ? (
             <p className="mt-3 text-sm text-ink/50">目前沒有指派學員。</p>
@@ -401,9 +436,9 @@ export default function CoachDashboardPage() {
                     type="button"
                     onClick={() => void pickStudentForSchedule(s.student_id)}
                     className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm transition ${
-                      selectedPending?.student_id === s.student_id
-                        ? "border-primary bg-primary/10 ring-1 ring-primary/30"
-                        : "border-ink/10 bg-canvas hover:border-primary/40"
+                      scheduleStudentId === s.student_id || selectedPending?.student_id === s.student_id
+                        ? "border-primary bg-primary/10 ring-2 ring-primary/35"
+                        : "border-ink/10 bg-canvas hover:border-primary/40 active:scale-[0.99]"
                     }`}
                   >
                     <div className="font-medium text-ink">{s.full_name}</div>
@@ -450,45 +485,27 @@ export default function CoachDashboardPage() {
             className="rounded-lg border border-ink/15 bg-canvas px-2 py-1 text-sm text-ink"
           />
         </div>
-        {!selectedPending ? (
-          <p className="mt-3 text-sm text-ink/50">請先從上方揀一位學員，再點選時段。</p>
-        ) : (
+        {selectedPending ? (
           <p className="mt-2 text-xs text-ink/65">
-            正在為 <strong>{selectedPending.student_name}</strong> 排程 · {selectedPending.course_title} · 時段 1–2 小時
+            正在為 <strong>{selectedPending.student_name}</strong> 排程 · {selectedPending.course_title} · 點選空白時段（1–2 小時）
           </p>
+        ) : (
+          <p className="mt-2 text-xs text-ink/50">Google Calendar 日視圖 — 先揀學員，再點時段。</p>
         )}
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-          {HOURS.map((h) => {
-            const blocked = occupied.has(h);
-            const can1 = !slotWouldConflict(occupied, h, 1);
-            const can2 = !slotWouldConflict(occupied, h, 2);
-            const disabled = !selectedPending || (!can1 && !can2);
-            return (
-              <button
-                key={h}
-                type="button"
-                disabled={disabled || (blocked && !can1 && !can2)}
-                onClick={() => {
-                  if (!selectedPending) return;
-                  setStartHour(h);
-                  setDurationHours(can1 ? 1 : 2);
-                }}
-                className={`rounded-lg border px-2 py-3 text-center text-xs font-medium transition ${
-                  blocked
-                    ? "cursor-not-allowed border-ink/10 bg-ink/5 text-ink/35 line-through"
-                    : startHour === h && selectedPending
-                      ? "border-primary bg-primary/15 text-ink"
-                      : disabled
-                        ? "border-ink/10 bg-canvas text-ink/40"
-                        : "border-ink/15 bg-canvas text-ink hover:border-primary/50"
-                }`}
-              >
-                {pad2(h)}:00
-                {blocked ? " 已佔" : ""}
-              </button>
-            );
-          })}
-        </div>
+        <CoachHourlyDayView
+          hours={HOURS}
+          dayCourses={dayCourses}
+          excludeCourseIds={excludeCourseIds}
+          occupied={occupied}
+          selectedStudentName={selectedPending?.student_name ?? null}
+          startHour={startHour}
+          durationHours={durationHours}
+          slotWouldConflict={slotWouldConflict}
+          onPickSlot={(h, dur) => {
+            setStartHour(h);
+            setDurationHours(dur);
+          }}
+        />
         {selectedPending ? (
           <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-ink/10 pt-4">
             <label className="text-xs text-ink/70">
@@ -543,60 +560,132 @@ export default function CoachDashboardPage() {
   );
 
   const paymentsPanel = (
-    <div className="space-y-3 pb-24 md:hidden">
-      {paidPayments.length === 0 ? (
-        <p className="rounded-xl border border-ink/10 bg-surface px-4 py-6 text-center text-sm text-ink/50">暫無已付款記錄。</p>
-      ) : (
-        paidPayments.map((row) => (
-          <article key={`${row.student_id}-${row.course_id}`} className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
-            <div className="font-medium text-ink">{row.student_name}</div>
-            <div className="text-xs text-ink/50">{row.student_phone}</div>
-            <div className="mt-2 text-sm text-ink/80">{row.course_title}</div>
-            <div className="mt-2 flex flex-wrap gap-2 text-xs">
-              <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800">Paid</span>
-              <span className="text-ink/70">{row.installment_status}</span>
-            </div>
-          </article>
-        ))
-      )}
+    <div className="space-y-4 pb-24 md:hidden">
+      <section>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/50">待跟進</h3>
+        {unpaidPayments.length === 0 ? (
+          <p className="mt-2 rounded-xl border border-ink/10 bg-surface px-4 py-4 text-center text-sm text-ink/50">
+            暫無待付款／缺收據記錄。
+          </p>
+        ) : (
+          <div className="mt-2 space-y-2">
+            {unpaidPayments.map((row) => (
+              <article key={`unpaid-${row.student_id}-${row.course_id}`} className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 shadow-sm">
+                <div className="font-medium text-ink">{row.student_name}</div>
+                <div className="text-xs text-ink/50">{row.student_phone}</div>
+                <div className="mt-2 text-sm text-ink/80">{row.course_title}</div>
+                <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                  <span className="rounded-full bg-amber-200 px-2 py-0.5 font-medium text-amber-950">Pending</span>
+                  <span className="text-ink/70">{row.installment_status}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+      <section>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/50">已付款</h3>
+        {paidPayments.length === 0 ? (
+          <p className="mt-2 rounded-xl border border-ink/10 bg-surface px-4 py-4 text-center text-sm text-ink/50">
+            暫無已付款記錄。
+          </p>
+        ) : (
+          <div className="mt-2 space-y-2">
+            {paidPayments.map((row) => (
+              <article key={`paid-${row.student_id}-${row.course_id}`} className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
+                <div className="font-medium text-ink">{row.student_name}</div>
+                <div className="text-xs text-ink/50">{row.student_phone}</div>
+                <div className="mt-2 text-sm text-ink/80">{row.course_title}</div>
+                <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800">Paid</span>
+                  <span className="text-ink/70">{row.installment_status}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 
   const paymentsPanelDesktop = (
-    <div className="hidden overflow-x-auto pb-24 md:block">
-      <table className="min-w-full text-left text-sm">
-        <thead>
-          <tr className="border-b border-ink/10 text-xs text-ink/55">
-            <th className="px-2 py-2 font-medium">學員</th>
-            <th className="px-2 py-2 font-medium">課程</th>
-            <th className="px-2 py-2 font-medium">付款</th>
-            <th className="px-2 py-2 font-medium">分期</th>
-          </tr>
-        </thead>
-        <tbody>
-          {paidPayments.length === 0 ? (
-            <tr>
-              <td colSpan={4} className="px-2 py-6 text-center text-ink/50">
-                暫無已付款記錄。
-              </td>
-            </tr>
-          ) : (
-            paidPayments.map((row) => (
-              <tr key={`${row.student_id}-${row.course_id}`} className="border-b border-ink/[0.06]">
-                <td className="px-2 py-2.5">
-                  <div className="font-medium text-ink">{row.student_name}</div>
-                  <div className="text-xs text-ink/50">{row.student_phone}</div>
-                </td>
-                <td className="px-2 py-2.5 text-ink/80">{row.course_title}</td>
-                <td className="px-2 py-2.5">
-                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Paid</span>
-                </td>
-                <td className="px-2 py-2.5 text-xs text-ink/70">{row.installment_status}</td>
+    <div className="hidden space-y-6 pb-24 md:block">
+      <section>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/50">待跟進</h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-ink/10 text-xs text-ink/55">
+                <th className="px-2 py-2 font-medium">學員</th>
+                <th className="px-2 py-2 font-medium">課程</th>
+                <th className="px-2 py-2 font-medium">付款</th>
+                <th className="px-2 py-2 font-medium">分期</th>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            </thead>
+            <tbody>
+              {unpaidPayments.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-2 py-4 text-center text-ink/50">
+                    暫無待付款／缺收據記錄。
+                  </td>
+                </tr>
+              ) : (
+                unpaidPayments.map((row) => (
+                  <tr key={`unpaid-${row.student_id}-${row.course_id}`} className="border-b border-ink/[0.06]">
+                    <td className="px-2 py-2.5">
+                      <div className="font-medium text-ink">{row.student_name}</div>
+                      <div className="text-xs text-ink/50">{row.student_phone}</div>
+                    </td>
+                    <td className="px-2 py-2.5 text-ink/80">{row.course_title}</td>
+                    <td className="px-2 py-2.5">
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">Pending</span>
+                    </td>
+                    <td className="px-2 py-2.5 text-xs text-ink/70">{row.installment_status}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/50">已付款</h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-ink/10 text-xs text-ink/55">
+                <th className="px-2 py-2 font-medium">學員</th>
+                <th className="px-2 py-2 font-medium">課程</th>
+                <th className="px-2 py-2 font-medium">付款</th>
+                <th className="px-2 py-2 font-medium">分期</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paidPayments.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-2 py-4 text-center text-ink/50">
+                    暫無已付款記錄。
+                  </td>
+                </tr>
+              ) : (
+                paidPayments.map((row) => (
+                  <tr key={`paid-${row.student_id}-${row.course_id}`} className="border-b border-ink/[0.06]">
+                    <td className="px-2 py-2.5">
+                      <div className="font-medium text-ink">{row.student_name}</div>
+                      <div className="text-xs text-ink/50">{row.student_phone}</div>
+                    </td>
+                    <td className="px-2 py-2.5 text-ink/80">{row.course_title}</td>
+                    <td className="px-2 py-2.5">
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Paid</span>
+                    </td>
+                    <td className="px-2 py-2.5 text-xs text-ink/70">{row.installment_status}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 
@@ -810,7 +899,7 @@ export default function CoachDashboardPage() {
             [
               { id: "schedule" as Tab, label: "排程", icon: "▣" },
               { id: "students" as Tab, label: "學員", icon: "👤" },
-              { id: "payments" as Tab, label: "已付", icon: "◎" }
+              { id: "payments" as Tab, label: "付款", icon: "◎" }
             ] as const
           ).map((item) => (
             <button
