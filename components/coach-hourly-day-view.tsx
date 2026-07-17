@@ -7,6 +7,15 @@
  * Logic: Vertical hour rows; occupied blocks from dayCourses; tap free slot to pick start time.
  */
 
+import {
+  COACH_SLOT_DURATIONS,
+  type CoachSlotDuration,
+  type HourRange,
+  firstFittingDuration,
+  formatTimeRange,
+  slotWouldConflict
+} from "../lib/coach-schedule-duration";
+
 const ROW_PX = 52;
 
 export type CoachDayCourse = {
@@ -20,42 +29,35 @@ export type CoachDayCourse = {
 type Props = {
   hours: readonly number[];
   dayCourses: CoachDayCourse[];
-  excludeCourseIds: Set<number>;
-  occupied: Set<number>;
+  occupiedRanges: HourRange[];
   selectedStudentName: string | null;
   startHour: number;
-  durationHours: 1 | 2;
-  onPickSlot: (hour: number, duration: 1 | 2) => void;
-  slotWouldConflict: (occupied: Set<number>, startHour: number, durationHours: number) => boolean;
+  durationHours: CoachSlotDuration;
+  onPickSlot: (hour: number, duration: CoachSlotDuration) => void;
 };
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
 
-function hourFromIso(iso: string): number {
-  return new Date(iso).getHours();
-}
-
 function durationHoursFromCourse(c: CoachDayCourse): number {
-  const startH = hourFromIso(c.scheduled_start);
-  let endH = new Date(c.scheduled_end).getHours();
+  const start = new Date(c.scheduled_start);
+  const end = new Date(c.scheduled_end);
+  const startH = start.getHours() + start.getMinutes() / 60;
+  let endH = end.getHours() + end.getMinutes() / 60;
   if (endH <= startH) endH = startH + 1;
-  return Math.min(2, Math.max(1, endH - startH));
+  return Math.max(0.5, endH - startH);
 }
 
 export default function CoachHourlyDayView({
   hours,
   dayCourses,
-  excludeCourseIds,
-  occupied,
+  occupiedRanges,
   selectedStudentName,
   startHour,
   durationHours,
-  onPickSlot,
-  slotWouldConflict
+  onPickSlot
 }: Props) {
-  const visibleCourses = dayCourses.filter((c) => !excludeCourseIds.has(c.id));
   const minHour = hours[0] ?? 9;
   const maxHour = (hours[hours.length - 1] ?? 18) + 1;
   const totalHeight = (maxHour - minHour) * ROW_PX;
@@ -63,32 +65,29 @@ export default function CoachHourlyDayView({
   return (
     <div className="mt-3 overflow-hidden rounded-xl border border-ink/10 bg-canvas">
       <div className="relative" style={{ height: totalHeight }}>
-        {/* hour grid lines */}
         {hours.map((h) => (
           <div
             key={`line-${h}`}
             className="absolute left-0 right-0 border-t border-ink/10"
             style={{ top: (h - minHour) * ROW_PX }}
           >
-            <span className="absolute -top-2.5 left-2 w-12 text-right text-[10px] font-medium text-ink/45">
+            <span className="absolute -top-2.5 left-2 w-14 text-right text-[10px] font-medium tabular-nums text-ink/45">
               {pad2(h)}:00
             </span>
           </div>
         ))}
         <div className="absolute bottom-0 left-0 right-0 border-t border-ink/10">
-          <span className="absolute -top-2.5 left-2 w-12 text-right text-[10px] font-medium text-ink/45">
+          <span className="absolute -top-2.5 left-2 w-14 text-right text-[10px] font-medium tabular-nums text-ink/45">
             {pad2(maxHour)}:00
           </span>
         </div>
 
-        {/* clickable free slots */}
-        <div className="absolute left-14 right-2 top-0 bottom-0">
+        <div className="absolute bottom-0 left-16 right-2 top-0">
           {hours.map((h) => {
-            const blocked = occupied.has(h);
-            const can1 = !slotWouldConflict(occupied, h, 1);
-            const can2 = !slotWouldConflict(occupied, h, 2);
-            const enabled = Boolean(selectedStudentName) && (can1 || can2);
+            const fit = firstFittingDuration(occupiedRanges, h);
+            const enabled = Boolean(selectedStudentName) && fit != null;
             const isSelected = selectedStudentName != null && startHour === h;
+            const blocked = !fit;
             return (
               <button
                 key={`slot-${h}`}
@@ -102,8 +101,8 @@ export default function CoachHourlyDayView({
                       : `排程 ${pad2(h)}:00`
                 }
                 onClick={() => {
-                  if (!selectedStudentName) return;
-                  onPickSlot(h, can1 ? 1 : 2);
+                  if (!selectedStudentName || !fit) return;
+                  onPickSlot(h, fit);
                 }}
                 className={`absolute left-0 right-0 rounded-md border transition ${
                   isSelected
@@ -119,7 +118,7 @@ export default function CoachHourlyDayView({
                   height: ROW_PX - 4
                 }}
               >
-                {enabled && !blocked && !isSelected ? (
+                {enabled && !isSelected ? (
                   <span className="block truncate px-2 text-left text-[11px] font-medium text-primary/85">
                     {pad2(h)}:00 可排程
                   </span>
@@ -128,8 +127,7 @@ export default function CoachHourlyDayView({
             );
           })}
 
-          {/* selection preview spanning duration */}
-          {selectedStudentName && !slotWouldConflict(occupied, startHour, durationHours) ? (
+          {selectedStudentName && !slotWouldConflict(occupiedRanges, startHour, durationHours) ? (
             <div
               className="pointer-events-none absolute left-0 right-0 z-30 rounded-md border-2 border-dashed border-primary/70 bg-primary/10 px-2 py-1"
               style={{
@@ -137,18 +135,15 @@ export default function CoachHourlyDayView({
                 height: durationHours * ROW_PX - 4
               }}
             >
-              <p className="truncate text-[11px] font-semibold text-ink">
-                {selectedStudentName}
-              </p>
+              <p className="truncate text-[11px] font-semibold text-ink">{selectedStudentName}</p>
               <p className="truncate text-[10px] text-ink/65">
-                {pad2(startHour)}:00 – {pad2(startHour + durationHours)}:00 · {durationHours}h
+                {formatTimeRange(startHour, durationHours)} · {durationHours}h
               </p>
             </div>
           ) : null}
 
-          {/* booked events */}
-          {visibleCourses.map((c) => {
-            const startH = hourFromIso(c.scheduled_start);
+          {dayCourses.map((c) => {
+            const startH = new Date(c.scheduled_start).getHours();
             if (startH < minHour || startH >= maxHour) return null;
             const dur = durationHoursFromCourse(c);
             const names = c.enrollments.map((e) => e.student_name).join("、");

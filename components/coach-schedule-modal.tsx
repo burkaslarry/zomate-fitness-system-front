@@ -4,10 +4,17 @@
  * [F003][S003]
  * Feature: Coach Dashboard
  * Step: Schedule slot picker modal (9:00–19:00)
- * Logic: Opens after student/day click; hourly timeline + confirm in popup.
+ * Logic: Opens after student/day click; duration 0.5 / 1 / 1.5 / 2 h in popup.
  */
 
-import CoachHourlyDayView, { type CoachDayCourse } from "./coach-hourly-day-view";
+import CoachHourlyDayView from "./coach-hourly-day-view";
+import {
+  COACH_SLOT_DURATIONS,
+  type CoachSlotDuration,
+  type HourRange,
+  formatDurationLabel,
+  slotWouldConflict
+} from "../lib/coach-schedule-duration";
 
 const HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18] as const;
 
@@ -20,19 +27,23 @@ type Props = {
   studentName: string;
   courseTitle: string;
   selectedDay: string;
-  dayCourses: CoachDayCourse[];
-  excludeCourseIds: Set<number>;
-  occupied: Set<number>;
+  dayCourses: {
+    id: number;
+    title: string;
+    scheduled_start: string;
+    scheduled_end: string;
+    enrollments: { student_id: number; student_name: string }[];
+  }[];
+  occupiedRanges: HourRange[];
   startHour: number;
-  durationHours: 1 | 2;
+  durationHours: CoachSlotDuration;
   scheduling: boolean;
   onClose: () => void;
   onDayChange: (day: string) => void;
-  onPickSlot: (hour: number, duration: 1 | 2) => void;
+  onPickSlot: (hour: number, duration: CoachSlotDuration) => void;
   onStartHourChange: (hour: number) => void;
-  onDurationChange: (hours: 1 | 2) => void;
+  onDurationChange: (hours: CoachSlotDuration) => void;
   onConfirm: () => void;
-  slotWouldConflict: (occupied: Set<number>, startHour: number, durationHours: number) => boolean;
 };
 
 export default function CoachScheduleModal({
@@ -41,8 +52,7 @@ export default function CoachScheduleModal({
   courseTitle,
   selectedDay,
   dayCourses,
-  excludeCourseIds,
-  occupied,
+  occupiedRanges,
   startHour,
   durationHours,
   scheduling,
@@ -51,12 +61,11 @@ export default function CoachScheduleModal({
   onPickSlot,
   onStartHourChange,
   onDurationChange,
-  onConfirm,
-  slotWouldConflict
+  onConfirm
 }: Props) {
   if (!open) return null;
 
-  const conflict = slotWouldConflict(occupied, startHour, durationHours);
+  const conflict = slotWouldConflict(occupiedRanges, startHour, durationHours);
 
   return (
     <div
@@ -87,7 +96,7 @@ export default function CoachScheduleModal({
 
         <div className="space-y-3 p-4">
           <p className="text-xs text-ink/70">
-            正在為 <strong className="text-ink">{studentName}</strong> 排程 · {courseTitle} · 點選空白時段（1–2 小時）
+            正在為 <strong className="text-ink">{studentName}</strong> 排程 · {courseTitle} · 點選空白時段（0.5–2 小時）
           </p>
 
           <label className="block text-xs text-ink/70">
@@ -103,12 +112,10 @@ export default function CoachScheduleModal({
           <CoachHourlyDayView
             hours={HOURS}
             dayCourses={dayCourses}
-            excludeCourseIds={excludeCourseIds}
-            occupied={occupied}
+            occupiedRanges={occupiedRanges}
             selectedStudentName={studentName}
             startHour={startHour}
             durationHours={durationHours}
-            slotWouldConflict={slotWouldConflict}
             onPickSlot={onPickSlot}
           />
 
@@ -120,7 +127,9 @@ export default function CoachScheduleModal({
                 onChange={(e) => onStartHourChange(Number(e.target.value))}
                 className="mt-1 block min-w-[5.5rem] rounded-lg border border-ink/15 bg-canvas px-2 py-1.5 text-sm"
               >
-                {HOURS.filter((h) => !slotWouldConflict(occupied, h, durationHours)).map((h) => (
+                {HOURS.filter((h) =>
+                  COACH_SLOT_DURATIONS.some((d) => !slotWouldConflict(occupiedRanges, h, d))
+                ).map((h) => (
                   <option key={h} value={h}>
                     {pad2(h)}:00
                   </option>
@@ -131,12 +140,14 @@ export default function CoachScheduleModal({
               時長
               <select
                 value={durationHours}
-                onChange={(e) => onDurationChange(Number(e.target.value) as 1 | 2)}
-                className="mt-1 block min-w-[5.5rem] rounded-lg border border-ink/15 bg-canvas px-2 py-1.5 text-sm"
+                onChange={(e) => onDurationChange(Number(e.target.value) as CoachSlotDuration)}
+                className="mt-1 block min-w-[8rem] rounded-lg border border-ink/15 bg-canvas px-2 py-1.5 text-sm"
               >
-                {[1, 2].filter((d) => !slotWouldConflict(occupied, startHour, d)).map((d) => (
+                {COACH_SLOT_DURATIONS.filter(
+                  (d) => !slotWouldConflict(occupiedRanges, startHour, d)
+                ).map((d) => (
                   <option key={d} value={d}>
-                    {d} 小時
+                    {formatDurationLabel(d)}
                   </option>
                 ))}
               </select>

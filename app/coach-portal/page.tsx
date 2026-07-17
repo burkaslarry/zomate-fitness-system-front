@@ -13,6 +13,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import CoachScheduleCalendarNav, { type CalendarMode } from "../../components/coach-schedule-calendar-nav";
 import CoachScheduleModal from "../../components/coach-schedule-modal";
 import { monthRange, weekRange } from "../../lib/coach-schedule-dates";
+import {
+  COACH_SLOT_DURATIONS,
+  type CoachSlotDuration,
+  formatDurationLabel,
+  rangesForDay,
+  slotWouldConflict
+} from "../../lib/coach-schedule-duration";
 import { alertApiError, api } from "../../lib/api";
 import { getAuthSession } from "../../lib/auth";
 import type { CoachStudentBriefDto, CoachStudentRecordDto, CoachRemindPaymentDto } from "../../types/api";
@@ -77,19 +84,6 @@ function remindPayWaLink(phone: string, name: string, courseTitle: string): stri
   return `https://wa.me/${hk}?text=${text}`;
 }
 
-function occupiedHoursForDay(courses: CourseRow[], day: string, excludeCourseIds: Set<number>): Set<number> {
-  const occupied = new Set<number>();
-  for (const c of courses) {
-    if (excludeCourseIds.has(c.id)) continue;
-    if (localDateKey(c.scheduled_start) !== day) continue;
-    const startH = new Date(c.scheduled_start).getHours();
-    let endH = new Date(c.scheduled_end).getHours();
-    if (endH <= startH) endH = startH + 1;
-    for (let h = startH; h < endH; h++) occupied.add(h);
-  }
-  return occupied;
-}
-
 function formatCourseSlotLine(c: CourseRow): string {
   const time = new Date(c.scheduled_start).toLocaleTimeString("zh-HK", {
     hour: "2-digit",
@@ -123,15 +117,18 @@ function pendingFromEnrollment(
   };
 }
 
-function slotWouldConflict(
-  occupied: Set<number>,
+function slotConflictForDay(
+  courses: CourseRow[],
+  day: string,
+  excludeCourseIds: Set<number>,
   startHour: number,
   durationHours: number
 ): boolean {
-  for (let h = startHour; h < startHour + durationHours; h++) {
-    if (occupied.has(h)) return true;
-  }
-  return startHour + durationHours > 19;
+  return slotWouldConflict(
+    rangesForDay(courses, day, excludeCourseIds, localDateKey),
+    startHour,
+    durationHours
+  );
 }
 
 function tabFromParams(raw: string | null): Tab {
@@ -154,7 +151,7 @@ export default function CoachDashboardPage() {
   const [selectedDay, setSelectedDay] = useState(todayKey);
   const [selectedPending, setSelectedPending] = useState<PendingRow | null>(null);
   const [startHour, setStartHour] = useState<number>(9);
-  const [durationHours, setDurationHours] = useState<1 | 2>(1);
+  const [durationHours, setDurationHours] = useState<CoachSlotDuration>(1);
   const [scheduling, setScheduling] = useState(false);
   const [status, setStatus] = useState("");
   const [students, setStudents] = useState<CoachStudentBriefDto[]>([]);
@@ -164,7 +161,7 @@ export default function CoachDashboardPage() {
   const [bookingEnrollmentId, setBookingEnrollmentId] = useState<number | null>(null);
   const [bookDay, setBookDay] = useState(todayKey);
   const [bookStartHour, setBookStartHour] = useState(9);
-  const [bookDuration, setBookDuration] = useState<1 | 2>(1);
+  const [bookDuration, setBookDuration] = useState<CoachSlotDuration>(1);
   const [bookBusy, setBookBusy] = useState(false);
   const [remindBusy, setRemindBusy] = useState<number | null>(null);
   const [scheduleStudentId, setScheduleStudentId] = useState<number | null>(null);
@@ -176,8 +173,8 @@ export default function CoachDashboardPage() {
     if (selectedPending) ids.add(selectedPending.enrollment_id);
     return ids;
   }, [pendingCourseIds, selectedPending]);
-  const occupied = useMemo(
-    () => occupiedHoursForDay(dayCourses, selectedDay, excludeCourseIds),
+  const occupiedRanges = useMemo(
+    () => rangesForDay(dayCourses, selectedDay, excludeCourseIds, localDateKey),
     [dayCourses, selectedDay, excludeCourseIds]
   );
 
@@ -189,14 +186,10 @@ export default function CoachDashboardPage() {
 
   const paidPayments = useMemo(() => payments.filter((p) => p.payment_status === "Paid"), [payments]);
 
-  const bookOccupiedForStudent = useMemo(
+  const bookExcludeIds = useMemo(
     () =>
-      occupiedHoursForDay(
-        dayCourses,
-        bookDay,
-        bookingEnrollmentId ? new Set([...pendingCourseIds, bookingEnrollmentId]) : pendingCourseIds
-      ),
-    [dayCourses, bookDay, pendingCourseIds, bookingEnrollmentId]
+      bookingEnrollmentId ? new Set([...pendingCourseIds, bookingEnrollmentId]) : pendingCourseIds,
+    [pendingCourseIds, bookingEnrollmentId]
   );
 
 
@@ -338,7 +331,7 @@ export default function CoachDashboardPage() {
 
   async function confirmSchedule() {
     if (!coach || !selectedPending) return;
-    if (slotWouldConflict(occupied, startHour, durationHours)) {
+    if (slotConflictForDay(dayCourses, selectedDay, excludeCourseIds, startHour, durationHours)) {
       setStatus("此時段已被佔用或超出 19:00，請另選。");
       return;
     }
@@ -389,12 +382,8 @@ export default function CoachDashboardPage() {
 
   async function bookEnrollment(enrollmentId: number, confirmed: boolean) {
     if (!coach) return;
-    const bookOccupied = occupiedHoursForDay(
-      dayCourses,
-      bookDay,
-      new Set([...pendingCourseIds, enrollmentId])
-    );
-    if (slotWouldConflict(bookOccupied, bookStartHour, bookDuration)) {
+    const bookExclude = new Set([...pendingCourseIds, enrollmentId]);
+    if (slotConflictForDay(dayCourses, bookDay, bookExclude, bookStartHour, bookDuration)) {
       setStatus("此時段已被佔用或超出 19:00，請另選。");
       return;
     }
@@ -468,7 +457,7 @@ export default function CoachDashboardPage() {
         <p className="mt-1 text-xs text-ink/55">
           {pending.length > 0
             ? `你有 ${pending.length} 位學員待確認上課時間（未付款亦可排程）。`
-            : "點選學員卡片 → 開啟排程視窗揀 9:00–19:00 時段；未付款亦可安排上堂。"}
+            : "點選學員卡片 → 開啟排程視窗揀 0.5–2 小時時段；未付款亦可安排上堂。"}
         </p>
         {pickBusy ? <p className="mt-2 text-xs text-primary">載入學員課程…</p> : null}
         {pending.length === 0 ? (
@@ -562,9 +551,8 @@ export default function CoachDashboardPage() {
         studentName={selectedPending?.student_name ?? ""}
         courseTitle={selectedPending?.course_title ?? ""}
         selectedDay={selectedDay}
-        dayCourses={dayCourses}
-        excludeCourseIds={excludeCourseIds}
-        occupied={occupied}
+        dayCourses={dayCourses.filter((c) => !excludeCourseIds.has(c.id))}
+        occupiedRanges={occupiedRanges}
         startHour={startHour}
         durationHours={durationHours}
         scheduling={scheduling}
@@ -577,7 +565,6 @@ export default function CoachDashboardPage() {
         onStartHourChange={setStartHour}
         onDurationChange={setDurationHours}
         onConfirm={() => void confirmSchedule()}
-        slotWouldConflict={slotWouldConflict}
       />
     </div>
   );
@@ -796,7 +783,7 @@ export default function CoachDashboardPage() {
                       }}
                       className="rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-xs font-medium text-ink"
                     >
-                      {enr.coach_time_confirmed ? "改期" : "排程"} 1–2h
+                      {enr.coach_time_confirmed ? "改期" : "排程"} 0.5–2h
                     </button>
                   </div>
                   {bookingEnrollmentId === enr.enrollment_id ? (
@@ -817,7 +804,11 @@ export default function CoachDashboardPage() {
                           onChange={(e) => setBookStartHour(Number(e.target.value))}
                           className="mt-1 block rounded-lg border border-ink/15 bg-surface px-2 py-1 text-sm"
                         >
-                          {HOURS.filter((h) => !slotWouldConflict(bookOccupiedForStudent, h, bookDuration)).map((h) => (
+                          {HOURS.filter((h) =>
+                            COACH_SLOT_DURATIONS.some(
+                              (d) => !slotConflictForDay(dayCourses, bookDay, bookExcludeIds, h, d)
+                            )
+                          ).map((h) => (
                             <option key={h} value={h}>
                               {pad2(h)}:00
                             </option>
@@ -828,21 +819,24 @@ export default function CoachDashboardPage() {
                         時長
                         <select
                           value={bookDuration}
-                          onChange={(e) => setBookDuration(Number(e.target.value) as 1 | 2)}
+                          onChange={(e) => setBookDuration(Number(e.target.value) as CoachSlotDuration)}
                           className="mt-1 block rounded-lg border border-ink/15 bg-surface px-2 py-1 text-sm"
                         >
-                          {[1, 2]
-                            .filter((d) => !slotWouldConflict(bookOccupiedForStudent, bookStartHour, d))
-                            .map((d) => (
-                              <option key={d} value={d}>
-                                {d} 小時
-                              </option>
-                            ))}
+                          {COACH_SLOT_DURATIONS.filter(
+                            (d) => !slotConflictForDay(dayCourses, bookDay, bookExcludeIds, bookStartHour, d)
+                          ).map((d) => (
+                            <option key={d} value={d}>
+                              {formatDurationLabel(d)}
+                            </option>
+                          ))}
                         </select>
                       </label>
                       <button
                         type="button"
-                        disabled={bookBusy || slotWouldConflict(bookOccupiedForStudent, bookStartHour, bookDuration)}
+                        disabled={
+                          bookBusy ||
+                          slotConflictForDay(dayCourses, bookDay, bookExcludeIds, bookStartHour, bookDuration)
+                        }
                         onClick={() => void bookEnrollment(enr.enrollment_id, enr.coach_time_confirmed)}
                         className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
                       >
