@@ -12,6 +12,11 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, downloadCsv } from "../../../../lib/api";
 
+const btnPrimary =
+  "inline-flex items-center justify-center rounded-lg border border-ink/10 bg-primary px-4 py-2 text-sm font-medium text-black shadow-sm hover:bg-primary/90";
+const btnSecondary =
+  "inline-flex items-center justify-center rounded-lg border border-ink/15 bg-surface px-4 py-2 text-sm font-medium text-ink shadow-sm hover:bg-canvas";
+
 export default function AdminQrConsolePage() {
   const [status, setStatus] = useState("");
   const [origin, setOrigin] = useState("");
@@ -69,32 +74,56 @@ export default function AdminQrConsolePage() {
           下載 PDF 含 <strong className="text-ink">Zomate Fitness Limited</strong> 標題及 QR 碼，可列印放於接待處。
         </p>
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-2 rounded-xl border border-ink/10 bg-surface p-3 shadow-sm ring-1 ring-ink/[0.04]">
-            <p className="text-sm font-medium text-ink">Zomate Fitness Limited · Onboarding QR</p>
+          <div className="space-y-3 rounded-xl border border-ink/10 bg-surface p-4 shadow-sm ring-1 ring-ink/[0.04]">
+            <p className="text-sm font-semibold text-ink">新會員加入</p>
+            <p className="text-xs text-ink/55">學生掃描 QR 或按下方按鈕，直接進入入會登記頁。</p>
             {onboardQrSrc && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={onboardQrSrc} width={180} height={180} alt="Onboarding QR" className="rounded border border-ink/10 bg-white p-2" />
+              <img
+                src={onboardQrSrc}
+                width={180}
+                height={180}
+                alt="新會員加入 QR"
+                className="rounded border border-ink/10 bg-white p-2"
+              />
             )}
-            <button type="button" onClick={() => void downloadQrPdf("onboard")}>
-              匯出 onboarding PDF
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/student/onboard" target="_blank" rel="noopener noreferrer" className={btnPrimary}>
+                開啟新會員加入
+              </Link>
+              <button type="button" className={btnSecondary} onClick={() => void downloadQrPdf("onboard")}>
+                匯出新會員加入 PDF
+              </button>
+            </div>
           </div>
-          <div className="space-y-2 rounded-xl border border-ink/10 bg-surface p-3 shadow-sm ring-1 ring-ink/[0.04]">
-            <p className="text-sm font-medium text-ink">Zomate Fitness Limited · Check-in URL QR</p>
+          <div className="space-y-3 rounded-xl border border-ink/10 bg-surface p-4 shadow-sm ring-1 ring-ink/[0.04]">
+            <p className="text-sm font-semibold text-ink">簽到</p>
+            <p className="text-xs text-ink/55">學生掃描 QR 或按下方按鈕，直接進入簽到扣堂頁。</p>
             {checkinQrSrc && (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={checkinQrSrc} width={180} height={180} alt="Check-in URL QR" className="rounded border border-ink/10 bg-white p-2" />
+              <img
+                src={checkinQrSrc}
+                width={180}
+                height={180}
+                alt="簽到 QR"
+                className="rounded border border-ink/10 bg-white p-2"
+              />
             )}
-            <button type="button" onClick={() => void downloadQrPdf("checkin")}>
-              匯出 checkin PDF
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <Link href="/student/checkin?from=qr" target="_blank" rel="noopener noreferrer" className={btnPrimary}>
+                開啟簽到
+              </Link>
+              <button type="button" className={btnSecondary} onClick={() => void downloadQrPdf("checkin")}>
+                匯出簽到 PDF
+              </button>
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => void downloadAttendanceTemplateCsv()}>
+          <button type="button" className={btnSecondary} onClick={() => void downloadAttendanceTemplateCsv()}>
             下載 attendance 範本（後端）
           </button>
-          <label className="cursor-pointer rounded-md border border-ink/15 bg-surface px-3 py-2 text-sm text-ink shadow-sm hover:bg-canvas">
+          <label className={`cursor-pointer ${btnSecondary}`}>
             匯入 CSV（預覽）
             <input
               type="file"
@@ -112,9 +141,6 @@ export default function AdminQrConsolePage() {
           </label>
         </div>
         {status && <p className="text-sm text-emerald-800">{status}</p>}
-        <Link href="/admin" className="inline-block rounded-md border border-ink/15 bg-surface px-4 py-2 text-sm text-ink shadow-sm hover:bg-canvas">
-          打開完整 QR 與出勤明細
-        </Link>
       </div>
     </BackendShell>
   );

@@ -24,6 +24,7 @@ export default function AdminPaymentsPage() {
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -51,6 +52,27 @@ export default function AdminPaymentsPage() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  async function handleDelete(row: PaymentRecordRow) {
+    if (row.record_type !== "renewal" && row.record_type !== "receipt") return;
+    const label = `${row.student_name} · ${row.label}`;
+    const reverse =
+      row.record_type === "renewal"
+        ? window.confirm(
+            `確定刪除付款紀錄？\n${label}\n\n將一併扣回此筆續會加上的堂數（如有）。`
+          )
+        : window.confirm(`確定刪除收據紀錄？\n${label}`);
+    if (!reverse) return;
+    setDeletingId(row.id);
+    try {
+      await api.deletePaymentRecord(row.record_type, row.ref_id, row.record_type === "renewal");
+      await reload();
+    } catch (e) {
+      alertApiError(e);
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <BackendShell title="付款紀錄">
@@ -88,7 +110,13 @@ export default function AdminPaymentsPage() {
           </button>
         </div>
         {loading ? <p className="text-sm text-ink/55">載入中…</p> : null}
-        <PaymentRecordsTable rows={rows} showStudent emptyText="沒有符合條件的付款紀錄。" />
+        {deletingId ? <p className="text-sm text-ink/55">刪除中…</p> : null}
+        <PaymentRecordsTable
+          rows={rows}
+          showStudent
+          emptyText="沒有符合條件的付款紀錄。"
+          onDelete={handleDelete}
+        />
       </div>
     </BackendShell>
   );

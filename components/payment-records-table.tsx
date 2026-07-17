@@ -9,6 +9,7 @@
 import Link from "next/link";
 import type { PaymentRecordRow } from "../types/api";
 import { apiAssetUrl } from "../lib/api";
+import { formatHktDateTime } from "../lib/format-hkt";
 
 function statusBadge(status: PaymentRecordRow["status"]) {
   if (status === "paid") {
@@ -21,21 +22,19 @@ function statusBadge(status: PaymentRecordRow["status"]) {
 }
 
 function fmtDate(iso: string) {
-  try {
-    return new Date(iso).toLocaleString("zh-HK", { dateStyle: "medium", timeStyle: "short" });
-  } catch {
-    return iso;
-  }
+  return formatHktDateTime(iso);
 }
 
 export default function PaymentRecordsTable({
   rows,
   showStudent = false,
-  emptyText = "暫無付款紀錄。"
+  emptyText = "暫無付款紀錄。",
+  onDelete
 }: {
   rows: PaymentRecordRow[];
   showStudent?: boolean;
   emptyText?: string;
+  onDelete?: (row: PaymentRecordRow) => void | Promise<void>;
 }) {
   if (!rows.length) {
     return <p className="text-sm text-ink/55">{emptyText}</p>;
@@ -87,6 +86,15 @@ export default function PaymentRecordsTable({
                 查看收據
               </a>
             ) : null}
+            {onDelete && (row.record_type === "renewal" || row.record_type === "receipt") ? (
+              <button
+                type="button"
+                onClick={() => void onDelete(row)}
+                className="mt-2 block text-xs font-medium text-rose-700 underline"
+              >
+                刪除紀錄
+              </button>
+            ) : null}
           </article>
         ))}
       </div>
@@ -101,7 +109,8 @@ export default function PaymentRecordsTable({
               <th className="px-3 py-2">狀態</th>
               <th className="px-3 py-2">教練</th>
               <th className="px-3 py-2">收據</th>
-              <th className="px-3 py-2">日期</th>
+              <th className="px-3 py-2">日期 (HKT)</th>
+              {onDelete ? <th className="px-3 py-2">操作</th> : null}
             </tr>
           </thead>
           <tbody>
@@ -135,6 +144,21 @@ export default function PaymentRecordsTable({
                   )}
                 </td>
                 <td className="px-3 py-2 whitespace-nowrap text-xs">{fmtDate(row.created_at)}</td>
+                {onDelete ? (
+                  <td className="px-3 py-2">
+                    {row.record_type === "renewal" || row.record_type === "receipt" ? (
+                      <button
+                        type="button"
+                        onClick={() => void onDelete(row)}
+                        className="text-xs font-medium text-rose-700 underline"
+                      >
+                        刪除
+                      </button>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>

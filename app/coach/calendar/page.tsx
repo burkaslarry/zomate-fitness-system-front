@@ -15,18 +15,15 @@ import BackendShell from "../../../components/backend-shell";
 import CoachCategoryFilter from "../../../components/coach-category-filter";
 import { alertApiError, api, getCheckinsWebSocketUrl } from "../../../lib/api";
 import { getAuthSession } from "../../../lib/auth";
+import {
+  type CoachSessionRow,
+  groupSessionsByDate,
+  sessionIsCheckedIn,
+  sessionRedeemedDayKey,
+  sessionRedeemedPairKey
+} from "../../../lib/coach-sessions";
 
 type CoachOpt = { id: number; full_name: string; phone: string; branch_id: number | null };
-type Enr = { student_id: number; student_name: string; student_phone: string; checkin_pin: string };
-type CourseRow = {
-  id: number;
-  title: string;
-  branch_name: string;
-  branch_address: string;
-  scheduled_start: string;
-  scheduled_end: string;
-  enrollments: Enr[];
-};
 
 type WsCheckinEvent = {
   event: string;
@@ -44,11 +41,6 @@ type WsCheckinEvent = {
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
-}
-
-function localDateKey(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
 function monthRangeIso(year: number, monthIdx: number): { from: string; to: string } {
@@ -79,11 +71,6 @@ function buildCalendarCells(viewYear: number, viewMonth: number): { date: Date; 
 }
 
 const WEEKDAYS = ["一", "二", "三", "四", "五", "六", "日"];
-
-/** ``course_id:student_id`` — 已由 WS 確認扣堂簽到，用於細項列變色。 */
-function redeemedPairKey(courseId: number, studentId: number): string {
-  return `${courseId}:${studentId}`;
-}
 
 /** [F003][S003] Master admin／教練：簽到與課堂 PIN 途徑一覽。 */
 function PinFlowGuide() {
@@ -134,7 +121,6 @@ export default function CoachCalendarPage() {
   const [mobileCoachTab, setMobileCoachTab] = useState<"calendar" | "live" | "guide">("calendar");
   const touchStartX = useRef<number | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
-  const [courseIdsRedeemed, setCourseIdsRedeemed] = useState<Set<number>>(() => new Set());
   const [redeemedPairs, setRedeemedPairs] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
@@ -147,7 +133,7 @@ export default function CoachCalendarPage() {
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [coaches, setCoaches] = useState<CoachOpt[]>([]);
   const [coachId, setCoachId] = useState<number | "">("");
-  const [courses, setCourses] = useState<CourseRow[]>([]);
+  const [sessions, setSessions] = useState<CoachSessionRow[]>([]);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -209,21 +195,15 @@ export default function CoachCalendarPage() {
     if (!portalResolved || coachId === "") return;
     setLoading(true);
     try {
-      const c = (await api.coachCourses(Number(coachId), { fromDate: rangeFrom, toDate: rangeTo })) as CourseRow[];
-      let list = c ?? [];
-      if (categoryIds.length > 0) {
-        const sessions = (await api.coachSessions(Number(coachId), {
-          fromDate: rangeFrom,
-          toDate: rangeTo,
-          categoryIds
-        })) as { enrollment_id: number }[];
-        const allowed = new Set(sessions.map((s) => s.enrollment_id));
-        list = list.filter((row) => allowed.has(row.id));
-      }
-      setCourses(list);
+      const rows = (await api.coachSessions(Number(coachId), {
+        fromDate: rangeFrom,
+        toDate: rangeTo,
+        categoryIds: categoryIds.length ? categoryIds : undefined
+      })) as CoachSessionRow[];
+      setSessions(rows ?? []);
       setStatus("");
     } catch (e) {
-      setCourses([]);
+      setSessions([]);
       setStatus(String(e));
     } finally {
       setLoading(false);
@@ -236,7 +216,6 @@ export default function CoachCalendarPage() {
 
   /** 換月／換 coach 視圖後清空「已簽到」標記，避免套用舊班別。 */
   useEffect(() => {
-    setCourseIdsRedeemed(new Set());
     setRedeemedPairs(new Set());
   }, [coachId, viewYear, viewMonth]);
 
@@ -246,29 +225,15 @@ export default function CoachCalendarPage() {
     return () => window.clearTimeout(id);
   }, [toastMsg]);
 
-  const byDay = useMemo(() => {
-    const m = new Map<string, CourseRow[]>();
-    for (const c of courses) {
-      const k = localDateKey(c.scheduled_start);
-      const list = m.get(k) ?? [];
-      list.push(c);
-      m.set(k, list);
-    }
-    for (const [, list] of m) {
-      list.sort((a, b) => +new Date(a.scheduled_start) - +new Date(b.scheduled_start));
-    }
-    return m;
-  }, [courses]);
+  const byDay = useMemo(() => groupSessionsByDate(sessions), [sessions]);
 
   const myStudentIds = useMemo(() => {
     const s = new Set<number>();
-    for (const c of courses) {
-      for (const e of c.enrollments) {
-        s.add(e.student_id);
-      }
+    for (const row of sessions) {
+      s.add(row.student_id);
     }
     return s;
-  }, [courses]);
+  }, [sessions]);
 
   const myStudentIdsRef = useRef(myStudentIds);
   myStudentIdsRef.current = myStudentIds;
@@ -298,9 +263,14 @@ export default function CoachCalendarPage() {
         const line = ttl ? `${name} 已於「${ttl}」簽到扣堂` : `${name} 已簽到扣堂`;
         setToastMsg(line);
         const cid = parsed.course_id;
+        const calDate = parsed.session_calendar_date?.trim() || null;
         if (typeof cid === "number" && sid != null) {
-          setCourseIdsRedeemed((prev) => new Set(prev).add(cid));
-          setRedeemedPairs((prev) => new Set(prev).add(redeemedPairKey(cid, sid)));
+          setRedeemedPairs((prev) => {
+            const next = new Set(prev);
+            next.add(sessionRedeemedPairKey(cid, sid));
+            if (calDate) next.add(sessionRedeemedDayKey(cid, sid, calDate));
+            return next;
+          });
         }
       } catch {
         /* ignore */
@@ -326,24 +296,13 @@ export default function CoachCalendarPage() {
   }
 
   const title = `${viewYear} 年 ${viewMonth + 1} 月`;
-  const selectedCourses = selectedKey ? byDay.get(selectedKey) ?? [] : [];
+  const selectedSessions = selectedKey ? byDay.get(selectedKey) ?? [] : [];
 
   const selectedCoachLabel = coaches.find((c) => c.id === coachId)?.full_name ?? "—";
 
-  const courseIsRedeemed = useCallback(
-    (c: CourseRow) =>
-      courseIdsRedeemed.has(c.id) ||
-      c.enrollments.some((e) => redeemedPairs.has(redeemedPairKey(c.id, e.student_id))),
-    [courseIdsRedeemed, redeemedPairs]
-  );
-
-  /** 僅對「載入嘅本月課」加上 WS course_id — 避免標記到其他教練班。 */
-  const courseLooksRedeemedHere = useCallback(
-    (c: CourseRow) => {
-      const inLoaded = courses.some((x) => x.id === c.id);
-      return inLoaded && courseIsRedeemed(c);
-    },
-    [courses, courseIsRedeemed]
+  const sessionLooksRedeemed = useCallback(
+    (s: CoachSessionRow) => sessionIsCheckedIn(s, redeemedPairs),
+    [redeemedPairs]
   );
 
   const liveAside = (
@@ -578,8 +537,8 @@ export default function CoachCalendarPage() {
               <div className="grid grid-cols-7 gap-px bg-ink/10">
                 {cells.map((cell, idx) => {
                   const key = `${cell.date.getFullYear()}-${pad2(cell.date.getMonth() + 1)}-${pad2(cell.date.getDate())}`;
-                  const dayCourses = byDay.get(key) ?? [];
-                  const dayHasRedeemedLesson = dayCourses.some((c) => courseLooksRedeemedHere(c));
+                  const daySessions = byDay.get(key) ?? [];
+                  const dayHasRedeemedLesson = daySessions.some((s) => sessionLooksRedeemed(s));
                   const isSel = selectedKey === key;
                   const isToday =
                     cell.date.toDateString() === new Date().toDateString();
@@ -602,32 +561,28 @@ export default function CoachCalendarPage() {
                         >
                           {cell.date.getDate()}
                         </span>
-                        {dayCourses.length > 0 && (
+                        {daySessions.length > 0 && (
                           <span className="rounded-full bg-primary/25 px-1.5 py-px text-[10px] text-black">
-                            {dayCourses.length}
+                            {daySessions.length}
                           </span>
                         )}
                       </div>
                       <div className="mt-1 space-y-0.5">
-                        {dayCourses.slice(0, 3).map((c) => (
+                        {daySessions.slice(0, 3).map((s) => (
                           <div
-                            key={c.id}
+                            key={`${s.enrollment_id}-${s.session_date}-${s.student_id}`}
                             className={`truncate rounded px-1 py-px text-[10px] leading-tight ${
-                              courseLooksRedeemedHere(c)
+                              sessionLooksRedeemed(s)
                                 ? "border border-emerald-400/65 bg-emerald-100/90 font-semibold text-emerald-950"
                                 : "border border-ink/[0.06] bg-canvas text-ink/70"
                             }`}
-                            title={c.title}
+                            title={`${s.student_name} · ${s.category_name}`}
                           >
-                            {new Date(c.scheduled_start).toLocaleTimeString(undefined, {
-                              hour: "2-digit",
-                              minute: "2-digit"
-                            })}{" "}
-                            {c.title}
+                            {s.start_time} {s.student_name}
                           </div>
                         ))}
-                        {dayCourses.length > 3 && (
-                          <p className="text-[10px] text-ink/50">+{dayCourses.length - 3}…</p>
+                        {daySessions.length > 3 && (
+                          <p className="text-[10px] text-ink/50">+{daySessions.length - 3}…</p>
                         )}
                       </div>
                     </button>
@@ -642,52 +597,44 @@ export default function CoachCalendarPage() {
                   {selectedKey} 的課堂
                 </h3>
                 <ul className="mt-3 space-y-3">
-                  {selectedCourses.length === 0 ? (
+                  {selectedSessions.length === 0 ? (
                     <li className="text-sm text-ink/50">當日無堂。</li>
                   ) : (
-                    selectedCourses.map((c) => {
-                      const cr = courseLooksRedeemedHere(c);
+                    selectedSessions.map((s) => {
+                      const checkedIn = sessionLooksRedeemed(s);
                       return (
                         <li
-                          key={c.id}
+                          key={`${s.enrollment_id}-${s.session_date}-${s.student_id}`}
                           className={`rounded-lg border p-3 text-sm shadow-sm ${
-                            cr
+                            checkedIn
                               ? "border-emerald-400/70 bg-emerald-50/95 ring-1 ring-emerald-500/25"
                               : "border border-ink/[0.08] bg-canvas"
                           }`}
                         >
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className={`font-medium ${cr ? "text-emerald-950" : "text-ink"}`}>{c.title}</p>
-                            {cr ? (
+                            <p className={`font-medium ${checkedIn ? "text-emerald-950" : "text-ink"}`}>
+                              {s.student_name}
+                            </p>
+                            <span className="rounded-full bg-primary/10 px-2 py-px text-[10px] text-black/80">
+                              {s.category_name}
+                            </span>
+                            {checkedIn ? (
                               <span className="rounded-full bg-emerald-600/95 px-2 py-px text-[10px] font-semibold uppercase text-white">
                                 已簽到
                               </span>
                             ) : null}
                           </div>
                           <p className="text-xs text-ink/55">
-                            {new Date(c.scheduled_start).toLocaleString()} —{" "}
-                            {new Date(c.scheduled_end).toLocaleString()}
+                            {s.session_date} {s.start_time} – {s.end_time}
                           </p>
-                          <p className="mt-1 text-xs text-ink/50">{c.branch_name}</p>
-                          <ul className="mt-2 space-y-0.5 text-xs text-ink/70">
-                            {c.enrollments.map((e) => {
-                              const rowRedeemed = redeemedPairs.has(redeemedPairKey(c.id, e.student_id));
-                              return (
-                                <li
-                                  key={e.student_id}
-                                  className={`rounded px-1 py-0.5 ${
-                                    rowRedeemed ? "bg-emerald-100/90 font-medium text-emerald-950" : ""
-                                  }`}
-                                >
-                                  {e.student_name} · PIN{" "}
-                                  <span className="font-mono text-primary">{e.checkin_pin}</span>
-                                  {rowRedeemed ? (
-                                    <span className="ml-1 text-[10px] text-emerald-800">✓已扣</span>
-                                  ) : null}
-                                </li>
-                              );
-                            })}
-                          </ul>
+                          <p className="mt-1 text-xs text-ink/50">{s.branch_name}</p>
+                          <p className="mt-2 text-xs text-ink/70">
+                            {s.course_title} · PIN{" "}
+                            <span className="font-mono text-primary">{s.checkin_pin}</span>
+                            {checkedIn ? (
+                              <span className="ml-1 text-[10px] text-emerald-800">✓已扣</span>
+                            ) : null}
+                          </p>
                         </li>
                       );
                     })

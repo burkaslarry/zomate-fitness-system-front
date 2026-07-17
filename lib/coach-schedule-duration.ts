@@ -82,3 +82,31 @@ export function rangesForDay<T extends { id: number; scheduled_start: string; sc
   }
   return ranges;
 }
+
+/** [F008][S002] Occupied ranges from unified coach session rows (same source as 教練出勤). */
+export function rangesForDayFromSessions(
+  sessions: {
+    enrollment_id: number;
+    session_date: string;
+    start_time: string;
+    end_time: string;
+    coach_time_confirmed?: boolean;
+  }[],
+  day: string,
+  excludeEnrollmentIds: Set<number>,
+  options?: { confirmedOnly?: boolean }
+): HourRange[] {
+  const ranges: HourRange[] = [];
+  for (const s of sessions) {
+    if (s.session_date !== day) continue;
+    if (excludeEnrollmentIds.has(s.enrollment_id)) continue;
+    if (options?.confirmedOnly && s.coach_time_confirmed === false) continue;
+    const [sh, sm] = s.start_time.split(":").map((x) => parseInt(x, 10) || 0);
+    const [eh, em] = s.end_time.split(":").map((x) => parseInt(x, 10) || 0);
+    const start = sh + sm / 60;
+    let end = eh + em / 60;
+    if (end <= start) end = start + 1;
+    ranges.push({ start, end });
+  }
+  return ranges;
+}

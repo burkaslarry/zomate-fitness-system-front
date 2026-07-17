@@ -506,6 +506,15 @@ export const api = {
     const qs = sp.toString();
     return request(`/api/admin/payment-records${qs ? `?${qs}` : ""}`);
   },
+  deletePaymentRecord: (
+    recordType: "renewal" | "receipt",
+    refId: number,
+    reverseLessons = true
+  ) =>
+    request(
+      `/api/admin/payment-records/${encodeURIComponent(recordType)}/${refId}?reverse_lessons=${reverseLessons ? "true" : "false"}`,
+      { method: "DELETE" }
+    ),
   missingReceiptRegistrations: () => request("/api/admin/missing-receipt-registrations"),
   whatsappLogs: () => request("/api/admin/whatsapp-logs"),
   whatsappTemplates: () => request("/api/admin/whatsapp-templates"),
