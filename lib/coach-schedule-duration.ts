@@ -66,15 +66,17 @@ export function courseToRange(
   return { start: startH, end: endH };
 }
 
-export function rangesForDay<T extends { id: number; scheduled_start: string; scheduled_end: string }>(
+export function rangesForDay<T extends { id: number; scheduled_start: string; scheduled_end: string; coach_time_confirmed?: boolean }>(
   courses: T[],
   day: string,
   excludeCourseIds: Set<number>,
-  localDateKey: (iso: string) => string
+  localDateKey: (iso: string) => string,
+  options?: { confirmedOnly?: boolean }
 ): HourRange[] {
   const ranges: HourRange[] = [];
   for (const c of courses) {
     if (excludeCourseIds.has(c.id)) continue;
+    if (options?.confirmedOnly && c.coach_time_confirmed === false) continue;
     const r = courseToRange(c.scheduled_start, c.scheduled_end, day, localDateKey);
     if (r) ranges.push(r);
   }

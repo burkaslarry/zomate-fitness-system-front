@@ -105,6 +105,27 @@ export function formatMonthLabel(monthKey: string): string {
   return `${y}年${m}月`;
 }
 
+/** Compare YYYY-MM-DD keys; negative if a < b. */
+export function compareDateKeys(a: string, b: string): number {
+  return a.localeCompare(b);
+}
+
+export function todayDateKey(): string {
+  return formatDateKey(new Date());
+}
+
+export function isPastDay(dateKey: string, today = todayDateKey()): boolean {
+  return compareDateKeys(dateKey, today) < 0;
+}
+
+export function isTodayOrFutureDay(dateKey: string, today = todayDateKey()): boolean {
+  return compareDateKeys(dateKey, today) >= 0;
+}
+
+export function clampDateKeyToTodayOrFuture(dateKey: string, today = todayDateKey()): string {
+  return isPastDay(dateKey, today) ? today : dateKey;
+}
+
 export function weekdayLabel(dateKey: string): string {
   const labels = ["日", "一", "二", "三", "四", "五", "六"];
   return labels[parseDateKey(dateKey).getDay()] ?? "";

@@ -756,6 +756,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload)
     }),
+  /** [F003][S009] Coach soft-cancels assigned enrollment. */
+  coachCancelEnrollment: (enrollmentId: number, payload?: { coach_id?: number }) =>
+    request(`/api/coach/enrollments/${enrollmentId}/cancel`, {
+      method: "POST",
+      body: JSON.stringify(payload ?? {})
+    }),
   confirmCoachSchedule: (
     enrollmentId: number,
     payload: {
