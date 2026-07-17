@@ -32,9 +32,15 @@ New management routes include:
 - `/renewal` → HKID lookup + package renewal + receipt
 - `/regCourse` → course registration / payment
 - `/admin/students`, `/admin/students/[hkid]`, `/admin/coaches`, `/admin/branches`
+- `/admin/payments` → CRM payment records (HKT dates; ADMIN soft-delete)
+- `/admin/attendance/qr-console` → **新會員加入** / **簽到** QR hub (one-click open + PDF export)
 - `/admin/finance/sales`（側欄僅此項；`/admin/finance`、`expenses`、`payroll` 均重新導向至銷售與分期）
 - `/admin/settings/whatsapp`（Whatsapp 設定；舊路徑 `/admin/whatsapp` 亦會導向此頁）
+- `/coach`, `/coach/calendar`, `/coach/attendance` → staff coach session views (unified on `GET /api/coach/sessions`)
+- `/coach-portal/**` → COACH role portal (schedule, students, report)
 - `/admin/students/[hkid]` → student profile, course-specific check-in PINs, category lesson enrollment, coach trial quota
+
+**Production tag:** `prod/1.14` — see root [`../README.md`](../README.md) Deploy section for SRAA + Vercel/Render URLs.
 
 ## Verify F01-F04
 
