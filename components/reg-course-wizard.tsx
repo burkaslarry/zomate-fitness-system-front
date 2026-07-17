@@ -12,6 +12,7 @@ import Link from "next/link";
 import { alertApiError, api } from "../lib/api";
 import type { CoachDto, CourseCategoryDto, InstallmentSegmentPinDto, MemberProfile } from "../types/api";
 import FileUpload from "./forms/file-upload";
+import MobileRadioList from "./mobile-radio-list";
 import PaymentMethodRadio from "./forms/payment-method-radio";
 
 function inputToLookupPhone(raw: string): string {
@@ -398,18 +399,14 @@ export default function RegCourseWizard({
       {member && step === 1 && mode !== "coach" && (
         <section className="space-y-4 rounded-xl border border-ink/10 bg-surface p-4 shadow-sm sm:p-5">
           <h2 className="text-sm font-semibold">Step 1 · 負責教練</h2>
-          <select
-            value={coachId === "" ? "" : String(coachId)}
-            onChange={(e) => setCoachId(e.target.value ? Number(e.target.value) : "")}
-            className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2.5 text-base sm:text-sm"
-          >
-            <option value="">請選擇教練</option>
-            {coaches.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.full_name}
-              </option>
-            ))}
-          </select>
+          <MobileRadioList
+            name="reg-course-coach"
+            legend="揀教練"
+            value={coachId}
+            options={coaches.map((c) => ({ value: c.id, label: c.full_name }))}
+            onChange={setCoachId}
+            emptyLabel="暫無教練"
+          />
           <button
             type="button"
             onClick={goCoachNext}
@@ -425,18 +422,14 @@ export default function RegCourseWizard({
           <h2 className="text-sm font-semibold">
             {mode === "coach" ? "Step 1" : "Step 2"} · 課堂種類 · 堂數
           </h2>
-          <select
-            value={categoryId === "" ? "" : String(categoryId)}
-            onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : "")}
-            className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2.5 text-base sm:text-sm"
-          >
-            <option value="">請選擇</option>
-            {filteredCategories.map((k) => (
-              <option key={k.id} value={k.id}>
-                {k.name}
-              </option>
-            ))}
-          </select>
+          <MobileRadioList
+            name="reg-course-category"
+            legend="課堂種類"
+            value={categoryId}
+            options={filteredCategories.map((k) => ({ value: k.id, label: k.name }))}
+            onChange={setCategoryId}
+            emptyLabel="暫無課程種類"
+          />
           <label className="block text-sm">
             <span className="text-ink/70">堂數（10–30）</span>
             <input

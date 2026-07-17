@@ -78,6 +78,33 @@ export function shiftMonth(dateKey: string, delta: number): string {
   return formatDateKey(d);
 }
 
+export function shiftDay(dateKey: string, delta: number): string {
+  const d = parseDateKey(dateKey);
+  d.setDate(d.getDate() + delta);
+  return formatDateKey(d);
+}
+
+export function formatDateLabel(dateKey: string): string {
+  const d = parseDateKey(dateKey);
+  return d.toLocaleDateString("zh-HK", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "short"
+  });
+}
+
+export function shiftMonthValue(monthKey: string, delta: number): string {
+  const [y, m] = monthKey.split("-").map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+}
+
+export function formatMonthLabel(monthKey: string): string {
+  const [y, m] = monthKey.split("-").map(Number);
+  return `${y}年${m}月`;
+}
+
 export function weekdayLabel(dateKey: string): string {
   const labels = ["日", "一", "二", "三", "四", "五", "六"];
   return labels[parseDateKey(dateKey).getDay()] ?? "";

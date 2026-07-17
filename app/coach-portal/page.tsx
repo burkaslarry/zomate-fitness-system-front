@@ -12,11 +12,13 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import CoachScheduleCalendarNav, { type CalendarMode } from "../../components/coach-schedule-calendar-nav";
 import CoachScheduleModal from "../../components/coach-schedule-modal";
+import CoachDateStepper from "../../components/coach-date-stepper";
+import CoachSlotDurationChips from "../../components/coach-slot-duration-chips";
+import CoachStartEndSummary from "../../components/coach-start-end-summary";
+import CoachStartHourChips from "../../components/coach-start-hour-chips";
 import { monthRange, weekRange } from "../../lib/coach-schedule-dates";
 import {
-  COACH_SLOT_DURATIONS,
   type CoachSlotDuration,
-  formatDurationLabel,
   rangesForDay,
   slotWouldConflict
 } from "../../lib/coach-schedule-duration";
@@ -786,50 +788,26 @@ export default function CoachDashboardPage() {
                     </button>
                   </div>
                   {bookingEnrollmentId === enr.enrollment_id ? (
-                    <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-ink/10 pt-3">
-                      <label className="text-xs text-ink/70">
-                        日期
-                        <input
-                          type="date"
-                          value={bookDay}
-                          onChange={(e) => setBookDay(e.target.value)}
-                          className="mt-1 block rounded-lg border border-ink/15 bg-surface px-2 py-1 text-sm"
-                        />
-                      </label>
-                      <label className="text-xs text-ink/70">
-                        開始
-                        <select
-                          value={bookStartHour}
-                          onChange={(e) => setBookStartHour(Number(e.target.value))}
-                          className="mt-1 block rounded-lg border border-ink/15 bg-surface px-2 py-1 text-sm"
-                        >
-                          {HOURS.filter((h) =>
-                            COACH_SLOT_DURATIONS.some(
-                              (d) => !slotConflictForDay(dayCourses, bookDay, bookExcludeIds, h, d)
-                            )
-                          ).map((h) => (
-                            <option key={h} value={h}>
-                              {pad2(h)}:00
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="text-xs text-ink/70">
-                        時長
-                        <select
-                          value={bookDuration}
-                          onChange={(e) => setBookDuration(Number(e.target.value) as CoachSlotDuration)}
-                          className="mt-1 block rounded-lg border border-ink/15 bg-surface px-2 py-1 text-sm"
-                        >
-                          {COACH_SLOT_DURATIONS.filter(
-                            (d) => !slotConflictForDay(dayCourses, bookDay, bookExcludeIds, bookStartHour, d)
-                          ).map((d) => (
-                            <option key={d} value={d}>
-                              {formatDurationLabel(d)}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                    <div className="mt-3 space-y-3 border-t border-ink/10 pt-3">
+                      <div>
+                        <p className="mb-1 text-xs text-ink/70">日期</p>
+                        <CoachDateStepper value={bookDay} onChange={setBookDay} />
+                      </div>
+                      <CoachStartHourChips
+                        name={`book-hour-${enr.enrollment_id}`}
+                        hours={HOURS}
+                        startHour={bookStartHour}
+                        occupiedRanges={rangesForDay(dayCourses, bookDay, bookExcludeIds, localDateKey)}
+                        onChange={setBookStartHour}
+                      />
+                      <CoachStartEndSummary startHour={bookStartHour} durationHours={bookDuration} />
+                      <CoachSlotDurationChips
+                        name={`book-duration-${enr.enrollment_id}`}
+                        startHour={bookStartHour}
+                        durationHours={bookDuration}
+                        occupiedRanges={rangesForDay(dayCourses, bookDay, bookExcludeIds, localDateKey)}
+                        onChange={setBookDuration}
+                      />
                       <button
                         type="button"
                         disabled={
@@ -837,7 +815,7 @@ export default function CoachDashboardPage() {
                           slotConflictForDay(dayCourses, bookDay, bookExcludeIds, bookStartHour, bookDuration)
                         }
                         onClick={() => void bookEnrollment(enr.enrollment_id, enr.coach_time_confirmed)}
-                        className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-50"
+                        className="w-full rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-black disabled:opacity-50 sm:w-auto"
                       >
                         {bookBusy ? "…" : "確認"}
                       </button>

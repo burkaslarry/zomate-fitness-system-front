@@ -7,12 +7,13 @@
  * Logic: Opens after student/day click; duration 0.5 / 1 / 1.5 / 2 h in popup.
  */
 
+import CoachDateStepper from "./coach-date-stepper";
 import CoachHourlyDayView from "./coach-hourly-day-view";
+import CoachSlotDurationChips from "./coach-slot-duration-chips";
+import CoachStartEndSummary from "./coach-start-end-summary";
 import {
-  COACH_SLOT_DURATIONS,
   type CoachSlotDuration,
   type HourRange,
-  formatHourMinute,
   slotWouldConflict
 } from "../lib/coach-schedule-duration";
 
@@ -41,12 +42,6 @@ type Props = {
   onConfirm: () => void;
 };
 
-function durationChipLabel(hours: CoachSlotDuration): string {
-  if (hours === 0.5) return "0.5 hr";
-  if (hours === 1.5) return "1.5 hr";
-  return `${hours} hr`;
-}
-
 export default function CoachScheduleModal({
   open,
   studentName,
@@ -66,7 +61,6 @@ export default function CoachScheduleModal({
   if (!open) return null;
 
   const conflict = slotWouldConflict(occupiedRanges, startHour, durationHours);
-  const endHour = startHour + durationHours;
 
   return (
     <div
@@ -100,15 +94,10 @@ export default function CoachScheduleModal({
             正在為 <strong className="text-ink">{studentName}</strong> 排程 · {courseTitle} · 點選空白時段（0.5–2 小時）
           </p>
 
-          <label className="block text-xs text-ink/70">
-            日期
-            <input
-              type="date"
-              value={selectedDay}
-              onChange={(e) => onDayChange(e.target.value)}
-              className="mt-1 block w-full rounded-lg border border-ink/15 bg-canvas px-3 py-2 text-sm text-ink"
-            />
-          </label>
+          <div>
+            <p className="mb-1 text-xs text-ink/70">日期</p>
+            <CoachDateStepper value={selectedDay} onChange={onDayChange} />
+          </div>
 
           <CoachHourlyDayView
             hours={HOURS}
@@ -121,53 +110,15 @@ export default function CoachScheduleModal({
           />
 
           <div className="space-y-3 border-t border-ink/10 pt-4">
-            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-ink/10 bg-canvas px-3 py-2.5">
-              <div>
-                <p className="text-[10px] font-medium uppercase tracking-wide text-ink/50">開始</p>
-                <p className="text-base font-semibold tabular-nums text-black">{formatHourMinute(startHour)}</p>
-              </div>
-              <span className="text-lg text-ink/25" aria-hidden>
-                →
-              </span>
-              <div>
-                <p className="text-[10px] font-medium uppercase tracking-wide text-ink/50">結束</p>
-                <p className="text-base font-semibold tabular-nums text-black">{formatHourMinute(endHour)}</p>
-              </div>
-            </div>
-
-            <fieldset>
-              <legend className="text-xs font-medium text-ink/70">時長（點選時段後揀）</legend>
-              <div className="mt-2 grid grid-cols-4 gap-2">
-                {COACH_SLOT_DURATIONS.map((d) => {
-                  const disabled = slotWouldConflict(occupiedRanges, startHour, d);
-                  const checked = durationHours === d;
-                  return (
-                    <label
-                      key={d}
-                      className={`flex cursor-pointer items-center justify-center rounded-lg border px-2 py-2.5 text-center text-sm font-semibold transition ${
-                        checked
-                          ? "border-primary bg-primary text-black ring-1 ring-primary/35"
-                          : disabled
-                            ? "cursor-not-allowed border-ink/10 bg-ink/[0.04] text-ink/30"
-                            : "border-ink/15 bg-surface text-black hover:border-primary/40"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="coach-slot-duration"
-                        value={d}
-                        checked={checked}
-                        disabled={disabled}
-                        onChange={() => onDurationChange(d)}
-                        className="sr-only"
-                      />
-                      {durationChipLabel(d)}
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
-
+            <CoachStartEndSummary startHour={startHour} durationHours={durationHours} />
+            <CoachSlotDurationChips
+              name="coach-slot-duration"
+              startHour={startHour}
+              durationHours={durationHours}
+              occupiedRanges={occupiedRanges}
+              onChange={onDurationChange}
+              legend="時長（點選時段後揀）"
+            />
             <button
               type="button"
               disabled={scheduling || conflict}

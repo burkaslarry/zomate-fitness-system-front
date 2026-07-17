@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from "react";
 import { alertApiError, api } from "../../../lib/api";
 import { getAuthSession } from "../../../lib/auth";
 import CoachCategoryFilter from "../../../components/coach-category-filter";
+import CoachMonthStepper from "../../../components/coach-month-stepper";
 import { exportRowsToExcelSheet } from "../../../lib/excel-export";
 
 type CoachMe = { id: number; full_name: string };
@@ -117,15 +118,10 @@ export default function CoachPortalReportPage() {
           {rangeLabel ? <span className="ml-1">範圍：{rangeLabel}</span> : null}
         </p>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          <label className="block w-full text-xs text-ink sm:w-auto">
-            月份（yyyy-MM）
-            <input
-              type="month"
-              value={month}
-              onChange={(e) => setMonth(e.target.value || currentMonthValue())}
-              className="mt-1 block w-full rounded-lg border border-ink/15 bg-canvas px-2 py-2 text-sm"
-            />
-          </label>
+          <div className="w-full sm:w-auto sm:min-w-[14rem]">
+            <p className="mb-1 text-xs text-ink/70">月份</p>
+            <CoachMonthStepper value={month} onChange={setMonth} />
+          </div>
           <div className="flex items-end">
             <button
               type="button"
