@@ -672,7 +672,7 @@ function MonthlySalesReportImpl() {
                 <div className="mt-6 flex justify-end border-t border-ink/[0.06] pt-4">
                   <button
                     type="button"
-                    className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary"
+                    className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-black shadow-sm hover:bg-primary"
                     onClick={closeVisibleColumnsModal}
                   >
                     完成

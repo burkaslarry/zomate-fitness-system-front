@@ -156,7 +156,7 @@ export default function CoachAttendanceReportPage() {
             type="button"
             onClick={() => void exportExcel()}
             disabled={rows.length === 0 || loading}
-            className="w-full shrink-0 rounded-lg bg-primary px-3.5 py-2.5 text-sm font-semibold text-white disabled:opacity-40 sm:w-auto"
+            className="w-full shrink-0 rounded-lg bg-primary px-3.5 py-2.5 text-sm font-semibold text-black disabled:opacity-40 sm:w-auto"
           >
             匯出 Excel
           </button>

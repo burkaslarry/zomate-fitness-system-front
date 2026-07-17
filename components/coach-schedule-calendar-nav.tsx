@@ -58,7 +58,7 @@ export default function CoachScheduleCalendarNav({
             type="button"
             onClick={() => onModeChange("week")}
             className={`rounded-md px-3 py-1.5 transition ${
-              mode === "week" ? "bg-primary text-white shadow-sm" : "text-ink/65 hover:text-ink"
+              mode === "week" ? "bg-primary text-black shadow-sm" : "text-ink/65 hover:text-ink"
             }`}
           >
             週
@@ -67,7 +67,7 @@ export default function CoachScheduleCalendarNav({
             type="button"
             onClick={() => onModeChange("month")}
             className={`rounded-md px-3 py-1.5 transition ${
-              mode === "month" ? "bg-primary text-white shadow-sm" : "text-ink/65 hover:text-ink"
+              mode === "month" ? "bg-primary text-black shadow-sm" : "text-ink/65 hover:text-ink"
             }`}
           >
             月

@@ -20,7 +20,7 @@ select {
 }
 
 button {
-  @apply rounded-md border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-medium text-ink shadow-sm transition hover:bg-primary disabled:cursor-not-allowed disabled:opacity-50;
+  @apply rounded-md border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-medium text-black shadow-sm transition hover:bg-primary disabled:cursor-not-allowed disabled:opacity-50;
 }
 
 .bg-brand-purple {

@@ -569,7 +569,7 @@ export default function AdminCourseSetPage() {
             <button
               type="submit"
               disabled={submitBusy}
-              className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white shadow-sm hover:opacity-95 disabled:opacity-50 sm:w-auto"
+              className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-black shadow-sm hover:opacity-95 disabled:opacity-50 sm:w-auto"
             >
               {submitBusy ? "建立中…" : "建立課程"}
             </button>

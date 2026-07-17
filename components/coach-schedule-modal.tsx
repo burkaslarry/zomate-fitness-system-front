@@ -156,7 +156,7 @@ export default function CoachScheduleModal({
               type="button"
               disabled={scheduling || conflict}
               onClick={onConfirm}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
             >
               {scheduling ? "提交中…" : "確認排程"}
             </button>

@@ -838,7 +838,7 @@ export default function CoachDashboardPage() {
                           slotConflictForDay(dayCourses, bookDay, bookExcludeIds, bookStartHour, bookDuration)
                         }
                         onClick={() => void bookEnrollment(enr.enrollment_id, enr.coach_time_confirmed)}
-                        className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                        className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-50"
                       >
                         {bookBusy ? "…" : "確認"}
                       </button>

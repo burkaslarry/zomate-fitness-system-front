@@ -131,7 +131,7 @@ export default function CoachPortalReportPage() {
               type="button"
               disabled={exporting || rows.length === 0}
               onClick={() => void exportExcel()}
-              className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 sm:w-auto"
+              className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-black disabled:opacity-50 sm:w-auto"
             >
               {exporting ? "匯出中…" : "匯出 Excel"}
             </button>
