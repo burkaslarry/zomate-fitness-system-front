@@ -7,7 +7,7 @@
  */
 
 import CoachScheduleBottomSheet from "./coach-schedule-bottom-sheet";
-import { type CoachSlotDuration, type HourRange } from "../lib/coach-schedule-duration";
+import { type CoachSlotDuration, type CoachStartMinute, type HourRange } from "../lib/coach-schedule-duration";
 
 type Props = {
   studentName: string;
@@ -22,12 +22,13 @@ type Props = {
   }[];
   occupiedRanges: HourRange[];
   startHour: number;
+  startMinute: CoachStartMinute;
   durationHours: CoachSlotDuration;
   sheetOpen: boolean;
   scheduling: boolean;
   onOpenSheet: () => void;
   onDayChange: (day: string) => void;
-  onPickSlot: (hour: number, duration: CoachSlotDuration) => void;
+  onStartTimeChange: (hour: number, minute: CoachStartMinute) => void;
   onCloseSheet: () => void;
   onDurationChange: (hours: CoachSlotDuration) => void;
   onConfirm: () => void;
@@ -40,12 +41,13 @@ export default function CoachSchedulePanel({
   dayCourses,
   occupiedRanges,
   startHour,
+  startMinute,
   durationHours,
   sheetOpen,
   scheduling,
   onOpenSheet,
   onDayChange,
-  onPickSlot,
+  onStartTimeChange,
   onCloseSheet,
   onDurationChange,
   onConfirm
@@ -74,11 +76,12 @@ export default function CoachSchedulePanel({
         dayCourses={dayCourses}
         occupiedRanges={occupiedRanges}
         startHour={startHour}
+        startMinute={startMinute}
         durationHours={durationHours}
         scheduling={scheduling}
         onClose={onCloseSheet}
         onDayChange={onDayChange}
-        onPickSlot={onPickSlot}
+        onStartTimeChange={onStartTimeChange}
         onDurationChange={onDurationChange}
         onConfirm={onConfirm}
       />

@@ -758,6 +758,7 @@ export const api = {
     enrollment_id: number;
     day: string;
     start_hour: number;
+    start_minute?: number;
     duration_hours: number;
     coach_id?: number;
   }) =>

@@ -16,12 +16,14 @@ import CoachScheduleSuccessDialog from "../../components/coach-schedule-success-
 import CoachDateStepper from "../../components/coach-date-stepper";
 import CoachSlotDurationChips from "../../components/coach-slot-duration-chips";
 import CoachStartEndSummary from "../../components/coach-start-end-summary";
-import CoachStartHourChips from "../../components/coach-start-hour-chips";
+import CoachStartTimeSelect from "../../components/coach-start-time-select";
 import { monthRange, weekRange, isPastDay, isTodayOrFutureDay, todayDateKey } from "../../lib/coach-schedule-dates";
 import {
   type CoachSlotDuration,
+  type CoachStartMinute,
   rangesForDayFromSessions,
-  slotWouldConflict
+  slotWouldConflict,
+  startSlotDecimal
 } from "../../lib/coach-schedule-duration";
 import {
   type CoachSessionRow,
@@ -59,8 +61,6 @@ type PaymentRow = {
 };
 type Tab = "schedule" | "students" | "payments";
 
-const HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18] as const;
-
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
 }
@@ -89,11 +89,12 @@ function slotConflictForDay(
   day: string,
   excludeEnrollmentIds: Set<number>,
   startHour: number,
+  startMinute: number,
   durationHours: number
 ): boolean {
   return slotWouldConflict(
     rangesForDayFromSessions(sessions, day, excludeEnrollmentIds, { confirmedOnly: true }),
-    startHour,
+    startSlotDecimal(startHour, startMinute),
     durationHours
   );
 }
@@ -143,6 +144,7 @@ export default function CoachDashboardPage() {
   const [selectedDay, setSelectedDay] = useState(todayKey);
   const [selectedPending, setSelectedPending] = useState<PendingRow | null>(null);
   const [startHour, setStartHour] = useState<number>(9);
+  const [startMinute, setStartMinute] = useState<CoachStartMinute>(0);
   const [durationHours, setDurationHours] = useState<CoachSlotDuration>(1);
   const [scheduling, setScheduling] = useState(false);
   const [status, setStatus] = useState("");
@@ -154,6 +156,7 @@ export default function CoachDashboardPage() {
   const [bookDay, setBookDay] = useState(todayKey);
   const [bookDaySessions, setBookDaySessions] = useState<CoachSessionRow[]>([]);
   const [bookStartHour, setBookStartHour] = useState(9);
+  const [bookStartMinute, setBookStartMinute] = useState<CoachStartMinute>(0);
   const [bookDuration, setBookDuration] = useState<CoachSlotDuration>(1);
   const [bookBusy, setBookBusy] = useState(false);
   const [cancelBusy, setCancelBusy] = useState<number | null>(null);
@@ -165,6 +168,7 @@ export default function CoachDashboardPage() {
     courseTitle: string;
     day: string;
     startHour: number;
+    startMinute: CoachStartMinute;
     durationHours: CoachSlotDuration;
   } | null>(null);
   const scheduleAnchorRef = useRef<HTMLDivElement>(null);
@@ -301,11 +305,14 @@ export default function CoachDashboardPage() {
           })
         );
         if (target.coach_time_confirmed) {
+          const d = new Date(target.scheduled_start);
           setSelectedDay(localDateKey(target.scheduled_start));
-          setStartHour(new Date(target.scheduled_start).getHours());
+          setStartHour(d.getHours());
+          setStartMinute((Math.round(d.getMinutes() / 15) * 15) as CoachStartMinute);
         } else {
           setSelectedDay(todayKey());
           setStartHour(9);
+          setStartMinute(0);
           setDurationHours(1);
         }
         setScheduleSheetOpen(false);
@@ -339,6 +346,7 @@ export default function CoachDashboardPage() {
     setScheduleSheetOpen(false);
     setSelectedDay(todayKey());
     setStartHour(9);
+    setStartMinute(0);
     setDurationHours(1);
   }, []);
 
@@ -348,7 +356,16 @@ export default function CoachDashboardPage() {
       setStatus("不能排期到過去日期，請選今日或未來。");
       return;
     }
-    if (slotConflictForDay(daySessions, selectedDay, excludeCourseIds, startHour, durationHours)) {
+    if (
+      slotConflictForDay(
+        daySessions,
+        selectedDay,
+        excludeCourseIds,
+        startHour,
+        startMinute,
+        durationHours
+      )
+    ) {
       setStatus("此時段已被佔用或超出 19:00，請另選。");
       return;
     }
@@ -358,7 +375,8 @@ export default function CoachDashboardPage() {
       studentName: selectedPending.student_name,
       courseTitle: selectedPending.course_title,
       day: selectedDay,
-      startHour,
+      startHour: startSlotDecimal(startHour, startMinute),
+      startMinute,
       durationHours
     };
     try {
@@ -366,6 +384,7 @@ export default function CoachDashboardPage() {
         enrollment_id: selectedPending.enrollment_id,
         day: selectedDay,
         start_hour: startHour,
+        start_minute: startMinute,
         duration_hours: durationHours,
         coach_id: coach.id
       });
@@ -410,6 +429,7 @@ export default function CoachDashboardPage() {
     setBookingEnrollmentId(enrollmentId);
     setBookDay(todayKey());
     setBookStartHour(9);
+    setBookStartMinute(0);
     setBookDuration(1);
   }
 
@@ -420,7 +440,16 @@ export default function CoachDashboardPage() {
       return;
     }
     const bookExclude = new Set([...pendingCourseIds, enrollmentId]);
-    if (slotConflictForDay(bookDaySessions, bookDay, bookExclude, bookStartHour, bookDuration)) {
+    if (
+      slotConflictForDay(
+        bookDaySessions,
+        bookDay,
+        bookExclude,
+        bookStartHour,
+        bookStartMinute,
+        bookDuration
+      )
+    ) {
       setStatus("此時段已被佔用或超出 19:00，請另選。");
       return;
     }
@@ -431,6 +460,7 @@ export default function CoachDashboardPage() {
         enrollment_id: enrollmentId,
         day: bookDay,
         start_hour: bookStartHour,
+        start_minute: bookStartMinute,
         duration_hours: bookDuration,
         coach_id: coach.id
       });
@@ -592,14 +622,15 @@ export default function CoachDashboardPage() {
             dayCourses={dayCoursesForPanel}
             occupiedRanges={occupiedRanges}
             startHour={startHour}
+            startMinute={startMinute}
             durationHours={durationHours}
             sheetOpen={scheduleSheetOpen}
             scheduling={scheduling}
             onOpenSheet={() => setScheduleSheetOpen(true)}
             onDayChange={setSelectedDay}
-            onPickSlot={(h, dur) => {
+            onStartTimeChange={(h, m) => {
               setStartHour(h);
-              setDurationHours(dur);
+              setStartMinute(m);
             }}
             onCloseSheet={() => setScheduleSheetOpen(false)}
             onDurationChange={setDurationHours}
@@ -855,6 +886,7 @@ export default function CoachDashboardPage() {
                         setBookingEnrollmentId(enr.enrollment_id);
                         setBookDay(todayKey());
                         setBookStartHour(9);
+                        setBookStartMinute(0);
                         setBookDuration(1);
                       }}
                       className="rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-xs font-medium text-black"
@@ -882,19 +914,25 @@ export default function CoachDashboardPage() {
                         <p className="mb-1 text-xs text-ink/70">日期</p>
                         <CoachDateStepper value={bookDay} onChange={setBookDay} minDate={todayKey()} />
                       </div>
-                      <CoachStartHourChips
-                        name={`book-hour-${enr.enrollment_id}`}
-                        hours={HOURS}
+                      <CoachStartTimeSelect
                         startHour={bookStartHour}
+                        startMinute={bookStartMinute}
+                        durationHours={bookDuration}
                         occupiedRanges={rangesForDayFromSessions(bookDaySessions, bookDay, bookExcludeIds, {
                           confirmedOnly: true
                         })}
-                        onChange={setBookStartHour}
+                        onChange={(h, m) => {
+                          setBookStartHour(h);
+                          setBookStartMinute(m);
+                        }}
                       />
-                      <CoachStartEndSummary startHour={bookStartHour} durationHours={bookDuration} />
+                      <CoachStartEndSummary
+                        startHour={startSlotDecimal(bookStartHour, bookStartMinute)}
+                        durationHours={bookDuration}
+                      />
                       <CoachSlotDurationChips
                         name={`book-duration-${enr.enrollment_id}`}
-                        startHour={bookStartHour}
+                        startHour={startSlotDecimal(bookStartHour, bookStartMinute)}
                         durationHours={bookDuration}
                         occupiedRanges={rangesForDayFromSessions(bookDaySessions, bookDay, bookExcludeIds, {
                           confirmedOnly: true
@@ -910,6 +948,7 @@ export default function CoachDashboardPage() {
                             bookDay,
                             bookExcludeIds,
                             bookStartHour,
+                            bookStartMinute,
                             bookDuration
                           )
                         }

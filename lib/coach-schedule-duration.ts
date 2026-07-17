@@ -6,9 +6,25 @@
 
 export const COACH_SLOT_DURATIONS = [0.5, 1, 1.5, 2] as const;
 export type CoachSlotDuration = (typeof COACH_SLOT_DURATIONS)[number];
+export const COACH_START_MINUTES = [0, 15, 30, 45] as const;
+export type CoachStartMinute = (typeof COACH_START_MINUTES)[number];
 export const SCHEDULE_DAY_END_HOUR = 19;
+export const COACH_START_HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18] as const;
 
 export type HourRange = { start: number; end: number };
+
+export function startSlotDecimal(hour: number, minute: number): number {
+  return hour + minute / 60;
+}
+
+export function splitStartSlot(decimal: number): { hour: number; minute: CoachStartMinute } {
+  const hour = Math.floor(decimal);
+  const rawMin = Math.round((decimal - hour) * 60);
+  const minute = (COACH_START_MINUTES as readonly number[]).includes(rawMin)
+    ? (rawMin as CoachStartMinute)
+    : 0;
+  return { hour, minute };
+}
 
 export function formatDurationLabel(hours: CoachSlotDuration): string {
   if (hours === 0.5) return "0.5 小時（30 分）";
