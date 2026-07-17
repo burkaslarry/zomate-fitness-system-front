@@ -12,15 +12,11 @@ import {
   COACH_SLOT_DURATIONS,
   type CoachSlotDuration,
   type HourRange,
-  formatDurationLabel,
+  formatHourMinute,
   slotWouldConflict
 } from "../lib/coach-schedule-duration";
 
 const HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18] as const;
-
-function pad2(n: number): string {
-  return String(n).padStart(2, "0");
-}
 
 type Props = {
   open: boolean;
@@ -41,10 +37,15 @@ type Props = {
   onClose: () => void;
   onDayChange: (day: string) => void;
   onPickSlot: (hour: number, duration: CoachSlotDuration) => void;
-  onStartHourChange: (hour: number) => void;
   onDurationChange: (hours: CoachSlotDuration) => void;
   onConfirm: () => void;
 };
+
+function durationChipLabel(hours: CoachSlotDuration): string {
+  if (hours === 0.5) return "0.5 hr";
+  if (hours === 1.5) return "1.5 hr";
+  return `${hours} hr`;
+}
 
 export default function CoachScheduleModal({
   open,
@@ -59,13 +60,13 @@ export default function CoachScheduleModal({
   onClose,
   onDayChange,
   onPickSlot,
-  onStartHourChange,
   onDurationChange,
   onConfirm
 }: Props) {
   if (!open) return null;
 
   const conflict = slotWouldConflict(occupiedRanges, startHour, durationHours);
+  const endHour = startHour + durationHours;
 
   return (
     <div
@@ -119,44 +120,59 @@ export default function CoachScheduleModal({
             onPickSlot={onPickSlot}
           />
 
-          <div className="flex flex-wrap items-end gap-3 border-t border-ink/10 pt-4">
-            <label className="text-xs text-ink/70">
-              開始
-              <select
-                value={startHour}
-                onChange={(e) => onStartHourChange(Number(e.target.value))}
-                className="mt-1 block min-w-[5.5rem] rounded-lg border border-ink/15 bg-canvas px-2 py-1.5 text-sm"
-              >
-                {HOURS.filter((h) =>
-                  COACH_SLOT_DURATIONS.some((d) => !slotWouldConflict(occupiedRanges, h, d))
-                ).map((h) => (
-                  <option key={h} value={h}>
-                    {pad2(h)}:00
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-xs text-ink/70">
-              時長
-              <select
-                value={durationHours}
-                onChange={(e) => onDurationChange(Number(e.target.value) as CoachSlotDuration)}
-                className="mt-1 block min-w-[8rem] rounded-lg border border-ink/15 bg-canvas px-2 py-1.5 text-sm"
-              >
-                {COACH_SLOT_DURATIONS.filter(
-                  (d) => !slotWouldConflict(occupiedRanges, startHour, d)
-                ).map((d) => (
-                  <option key={d} value={d}>
-                    {formatDurationLabel(d)}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div className="space-y-3 border-t border-ink/10 pt-4">
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-ink/10 bg-canvas px-3 py-2.5">
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-ink/50">開始</p>
+                <p className="text-base font-semibold tabular-nums text-black">{formatHourMinute(startHour)}</p>
+              </div>
+              <span className="text-lg text-ink/25" aria-hidden>
+                →
+              </span>
+              <div>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-ink/50">結束</p>
+                <p className="text-base font-semibold tabular-nums text-black">{formatHourMinute(endHour)}</p>
+              </div>
+            </div>
+
+            <fieldset>
+              <legend className="text-xs font-medium text-ink/70">時長（點選時段後揀）</legend>
+              <div className="mt-2 grid grid-cols-4 gap-2">
+                {COACH_SLOT_DURATIONS.map((d) => {
+                  const disabled = slotWouldConflict(occupiedRanges, startHour, d);
+                  const checked = durationHours === d;
+                  return (
+                    <label
+                      key={d}
+                      className={`flex cursor-pointer items-center justify-center rounded-lg border px-2 py-2.5 text-center text-sm font-semibold transition ${
+                        checked
+                          ? "border-primary bg-primary text-black ring-1 ring-primary/35"
+                          : disabled
+                            ? "cursor-not-allowed border-ink/10 bg-ink/[0.04] text-ink/30"
+                            : "border-ink/15 bg-surface text-black hover:border-primary/40"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="coach-slot-duration"
+                        value={d}
+                        checked={checked}
+                        disabled={disabled}
+                        onChange={() => onDurationChange(d)}
+                        className="sr-only"
+                      />
+                      {durationChipLabel(d)}
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+
             <button
               type="button"
               disabled={scheduling || conflict}
               onClick={onConfirm}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
+              className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-black disabled:opacity-50 sm:w-auto"
             >
               {scheduling ? "提交中…" : "確認排程"}
             </button>

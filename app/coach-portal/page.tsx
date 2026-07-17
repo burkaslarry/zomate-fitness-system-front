@@ -562,7 +562,6 @@ export default function CoachDashboardPage() {
           setStartHour(h);
           setDurationHours(dur);
         }}
-        onStartHourChange={setStartHour}
         onDurationChange={setDurationHours}
         onConfirm={() => void confirmSchedule()}
       />
