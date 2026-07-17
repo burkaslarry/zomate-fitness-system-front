@@ -86,7 +86,7 @@ export default function CoachCategoryFilter({
           onClick={() => onChange([])}
           className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
             selectedIds.length === 0
-              ? "border-primary bg-primary/15 text-ink"
+              ? "border-primary bg-primary/15 text-black"
               : "border-ink/15 bg-canvas text-ink/70 hover:border-primary/40"
           }`}
         >
@@ -107,7 +107,7 @@ export default function CoachCategoryFilter({
                 onClick={() => toggle(c.id)}
                 className={`rounded-full border px-2.5 py-1 text-[11px] transition ${
                   on
-                    ? "border-primary bg-primary/15 font-medium text-ink"
+                    ? "border-primary bg-primary/15 font-medium text-black"
                     : "border-ink/12 bg-surface text-ink/75 hover:border-primary/35"
                 }`}
               >

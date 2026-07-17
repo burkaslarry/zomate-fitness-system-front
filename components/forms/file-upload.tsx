@@ -39,7 +39,7 @@ export default function FileUpload({
         type="file"
         accept={accept}
         required={required}
-        className="mt-3 block w-full text-xs text-ink/80 file:mr-3 file:rounded-md file:border file:border-ink/15 file:bg-primary/90 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink"
+        className="mt-3 block w-full text-xs text-black/80 file:mr-3 file:rounded-md file:border file:border-ink/15 file:bg-primary/90 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-black"
         onChange={(event) => {
           const file = event.target.files?.[0];
           setError("");

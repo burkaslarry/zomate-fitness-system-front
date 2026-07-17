@@ -57,8 +57,8 @@ export default function CoachScheduleCalendarNav({
           <button
             type="button"
             onClick={() => onModeChange("week")}
-            className={`rounded-md px-3 py-1.5 transition ${
-              mode === "week" ? "bg-primary text-black shadow-sm" : "text-ink/65 hover:text-ink"
+            className={`rounded-md border-0 px-3 py-1.5 shadow-none transition ${
+              mode === "week" ? "bg-primary text-black" : "bg-transparent text-black/70 hover:text-black"
             }`}
           >
             週
@@ -66,8 +66,8 @@ export default function CoachScheduleCalendarNav({
           <button
             type="button"
             onClick={() => onModeChange("month")}
-            className={`rounded-md px-3 py-1.5 transition ${
-              mode === "month" ? "bg-primary text-black shadow-sm" : "text-ink/65 hover:text-ink"
+            className={`rounded-md border-0 px-3 py-1.5 shadow-none transition ${
+              mode === "month" ? "bg-primary text-black" : "bg-transparent text-black/70 hover:text-black"
             }`}
           >
             月
@@ -77,16 +77,16 @@ export default function CoachScheduleCalendarNav({
           <button
             type="button"
             onClick={goPrev}
-            className="rounded-lg border border-ink/15 px-2 py-1 text-sm text-ink/70 hover:bg-canvas"
+            className="rounded-lg border border-ink/15 bg-canvas px-2 py-1 text-sm text-black shadow-none hover:bg-surface"
             aria-label="上一段"
           >
             ‹
           </button>
-          <span className="min-w-[8rem] text-center text-xs font-medium text-ink/80">{periodTitle}</span>
+          <span className="min-w-[8rem] text-center text-xs font-medium text-black/80">{periodTitle}</span>
           <button
             type="button"
             onClick={goNext}
-            className="rounded-lg border border-ink/15 px-2 py-1 text-sm text-ink/70 hover:bg-canvas"
+            className="rounded-lg border border-ink/15 bg-canvas px-2 py-1 text-sm text-black shadow-none hover:bg-surface"
             aria-label="下一段"
           >
             ›
@@ -108,13 +108,13 @@ export default function CoachScheduleCalendarNav({
                 onClick={() => onSelectDay(dayKey)}
                 className={`flex flex-col items-center rounded-lg border py-2 text-center transition ${
                   active
-                    ? "border-primary bg-primary/15 ring-1 ring-primary/35"
-                    : "border-ink/10 bg-canvas hover:border-primary/30"
+                    ? "border-primary bg-primary/15 ring-1 ring-primary/35 text-black"
+                    : "border-ink/10 bg-canvas text-black hover:border-primary/30"
                 }`}
               >
-                <span className="text-[10px] text-ink/50">{weekdayLabel(dayKey)}</span>
+                <span className="text-[10px] text-black/50">{weekdayLabel(dayKey)}</span>
                 <span
-                  className={`mt-0.5 text-sm font-semibold ${isToday && !active ? "text-primary" : "text-ink"}`}
+                  className={`mt-0.5 text-sm font-semibold ${isToday && !active ? "text-black/80" : "text-black"}`}
                 >
                   {d.getDate()}
                 </span>
@@ -153,12 +153,12 @@ export default function CoachScheduleCalendarNav({
                       onClick={() => onSelectDay(dayKey)}
                       className={`flex aspect-square flex-col items-center justify-center rounded-lg border text-center transition ${
                         active
-                          ? "border-primary bg-primary/15 ring-1 ring-primary/35"
-                          : "border-ink/10 bg-canvas hover:border-primary/30"
+                          ? "border-primary bg-primary/15 ring-1 ring-primary/35 text-black"
+                          : "border-ink/10 bg-canvas text-black hover:border-primary/30"
                       } ${inMonth ? "" : "opacity-40"}`}
                     >
                       <span
-                        className={`text-xs font-semibold ${isToday && !active ? "text-primary" : "text-ink"}`}
+                        className={`text-xs font-semibold ${isToday && !active ? "text-black/80" : "text-black"}`}
                       >
                         {d.getDate()}
                       </span>

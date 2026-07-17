@@ -62,7 +62,7 @@ const MENU_SECTIONS: { frameClass: string; items: NavItem[] }[] = [
 function navLinkClass(active: boolean): string {
   return `flex items-center gap-3 rounded-lg border-l-[3px] border-transparent px-2.5 py-2 text-[13px] leading-5 transition ${
     active
-      ? "border-primary bg-primary/15 text-ink shadow-[inset_0_0_0_1px_rgba(45,36,34,0.06)]"
+      ? "border-primary bg-primary/15 text-black shadow-[inset_0_0_0_1px_rgba(45,36,34,0.06)]"
       : "text-ink/80 hover:bg-canvas/80 hover:text-ink"
   }`;
 }
@@ -447,7 +447,7 @@ export default function BackendShell({
               className="flex h-9 shrink-0 items-center gap-2 rounded-full border border-ink/15 bg-surface px-3 text-[12px] text-ink md:text-[13px]"
             >
             <span
-              className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/90 text-[11px] font-semibold text-ink"
+              className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/90 text-[11px] font-semibold text-black"
               aria-hidden="true"
             >
               {displaySession.username.slice(0, 1).toUpperCase()}

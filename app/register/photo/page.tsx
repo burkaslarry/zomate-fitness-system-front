@@ -76,7 +76,7 @@ export default function RegisterPhotoPage() {
       <video ref={videoRef} autoPlay playsInline muted className="aspect-video w-full rounded-xl border border-ink/10 bg-black" />
       <canvas ref={canvasRef} className="hidden" />
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={capture} className="rounded-md border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-medium text-ink shadow-sm hover:bg-primary">拍攝相片</button>
+        <button type="button" onClick={capture} className="rounded-md border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-medium text-black shadow-sm hover:bg-primary">拍攝相片</button>
         <label className="rounded-md border border-ink/15 px-4 py-2 text-sm">
           上載相片
           <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />

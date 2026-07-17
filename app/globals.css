@@ -19,8 +19,15 @@ select {
   @apply w-full rounded-md border border-ink/15 bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink/45 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40;
 }
 
+/** Default buttons: neutral surface + black label (not peach). */
 button {
-  @apply rounded-md border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-medium text-black shadow-sm transition hover:bg-primary disabled:cursor-not-allowed disabled:opacity-50;
+  @apply rounded-md border border-ink/15 bg-surface px-4 py-2 text-sm font-medium text-black shadow-sm transition hover:bg-canvas disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+/** Peach primary actions — label always black #000000. */
+.btn-primary,
+form button[type="submit"] {
+  @apply border-ink/15 bg-primary/90 text-black hover:bg-primary;
 }
 
 .bg-brand-purple {
@@ -29,4 +36,11 @@ button {
 
 .text-secondary-accessible {
   @apply text-ink/75;
+}
+
+/** Peach backgrounds — force #000000 labels (contrast fix). */
+@layer utilities {
+  [class*="bg-primary"] {
+    color: #000000;
+  }
 }

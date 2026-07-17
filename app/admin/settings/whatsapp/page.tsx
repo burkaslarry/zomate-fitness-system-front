@@ -125,7 +125,7 @@ export default function AdminSettingsWhatsappPage() {
                 type="button"
                 disabled={savingKey === t.key}
                 onClick={() => void saveTemplate(t.key)}
-                className="mt-3 rounded-lg bg-primary/90 px-4 py-2 text-xs font-medium text-ink disabled:opacity-50"
+                className="mt-3 rounded-lg bg-primary/90 px-4 py-2 text-xs font-medium text-black disabled:opacity-50"
               >
                 {savingKey === t.key ? "儲存中…" : "儲存 template"}
               </button>

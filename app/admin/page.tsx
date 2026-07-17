@@ -211,7 +211,7 @@ export default function AdminPage() {
                 建立 1:1 / 1:2 課程套餐、查看教練課表、簽到 QR 與堂數 ledger。
               </p>
             </div>
-            <span className="rounded-full border border-primary/40 bg-primary/15 px-3 py-1 text-xs font-medium text-ink">
+            <span className="rounded-full border border-primary/40 bg-primary/15 px-3 py-1 text-xs font-medium text-black">
               {summaryValue(summary, ["courses", "courses_total", "total_courses"])} courses
             </span>
           </div>
@@ -262,7 +262,7 @@ export default function AdminPage() {
               <button
                 type="button"
                 onClick={() => void downloadQrPdf("onboard")}
-                className="mt-3 rounded-lg border border-ink/10 bg-primary px-4 py-2 text-sm font-medium text-ink shadow-sm hover:bg-primary/90"
+                className="mt-3 rounded-lg border border-ink/10 bg-primary px-4 py-2 text-sm font-medium text-black shadow-sm hover:bg-primary/90"
               >
                 匯出 onboarding PDF
               </button>
@@ -283,7 +283,7 @@ export default function AdminPage() {
               <button
                 type="button"
                 onClick={() => void downloadQrPdf("checkin")}
-                className="mt-3 rounded-lg border border-ink/10 bg-primary px-4 py-2 text-sm font-medium text-ink shadow-sm hover:bg-primary/90"
+                className="mt-3 rounded-lg border border-ink/10 bg-primary px-4 py-2 text-sm font-medium text-black shadow-sm hover:bg-primary/90"
               >
                 匯出 checkin PDF
               </button>

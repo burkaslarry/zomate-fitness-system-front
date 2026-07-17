@@ -223,7 +223,7 @@ export default function AdminCoachesPage() {
           <button
             type="button"
             onClick={() => void runSearch()}
-            className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-primary"
+            className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-black shadow-sm hover:bg-primary"
           >
             搜尋
           </button>
@@ -252,7 +252,7 @@ export default function AdminCoachesPage() {
           <p className="text-xs text-ink/55 lg:col-span-3">
             填寫帳號＋密碼會建立 COACH 登入；帳號可留空（以姓名拼音自動產生）。教練登入後使用 /coach。
           </p>
-          <button className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-primary lg:col-span-3 lg:justify-self-start">
+          <button className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-black shadow-sm hover:bg-primary lg:col-span-3 lg:justify-self-start">
             新增
           </button>
         </form>
@@ -315,7 +315,7 @@ export default function AdminCoachesPage() {
             <div className="flex gap-2 lg:col-span-3">
               <button
                 type="submit"
-                className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-primary"
+                className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-black shadow-sm hover:bg-primary"
               >
                 儲存
               </button>
@@ -355,14 +355,14 @@ export default function AdminCoachesPage() {
                   <button
                     type="button"
                     onClick={() => void openSkillsModal(row)}
-                    className="rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-ink"
+                    className="rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-medium text-black"
                   >
                     課程權限
                   </button>
                 ) : null}
                 <Link
                   href={`/admin/coaches/${row.id}/students`}
-                  className="rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-ink"
+                  className="rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-black"
                 >
                   Students
                 </Link>
@@ -426,7 +426,7 @@ export default function AdminCoachesPage() {
                   <td className="px-4 py-3">
                     <Link
                       href={`/admin/coaches/${row.id}/students`}
-                      className="inline-block whitespace-nowrap rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-ink hover:bg-primary/20"
+                      className="inline-block whitespace-nowrap rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-black hover:bg-primary/20"
                     >
                       Students
                     </Link>
@@ -437,7 +437,7 @@ export default function AdminCoachesPage() {
                         <button
                           type="button"
                           onClick={() => void openSkillsModal(row)}
-                          className="whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-ink hover:bg-primary/20"
+                          className="whitespace-nowrap rounded-md border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-black hover:bg-primary/20"
                         >
                           課程權限
                         </button>
@@ -522,7 +522,7 @@ export default function AdminCoachesPage() {
                   type="button"
                   disabled={skillsBusy}
                   onClick={() => void saveSkills()}
-                  className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-ink disabled:opacity-50"
+                  className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-black disabled:opacity-50"
                 >
                   儲存
                 </button>

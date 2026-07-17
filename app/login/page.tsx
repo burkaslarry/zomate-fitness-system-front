@@ -70,7 +70,7 @@ export default function LoginPage() {
         <button
           type="button"
           onClick={() => setShowLoginHelp(true)}
-          className="text-sm font-medium text-black underline-offset-2 hover:underline"
+          className="btn-primary text-sm font-medium text-black underline-offset-2 hover:underline"
         >
           如何登入？
         </button>

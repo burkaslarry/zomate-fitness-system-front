@@ -408,7 +408,7 @@ export default function AdminStudentDetailPage() {
               type="button"
               onClick={() => setTab(item)}
               className={`rounded-lg px-4 py-2 text-sm ${
-                tab === item ? "bg-primary/90 text-ink" : "border border-ink/15 bg-surface text-ink/85"
+                tab === item ? "bg-primary/90 text-black" : "border border-ink/15 bg-surface text-ink/85"
               }`}
             >
               {item}
@@ -512,7 +512,7 @@ export default function AdminStudentDetailPage() {
                 <button
                   type="submit"
                   disabled={profileSaving}
-                  className="rounded-lg bg-primary/90 px-4 py-2 text-sm font-medium text-ink disabled:opacity-50"
+                  className="rounded-lg bg-primary/90 px-4 py-2 text-sm font-medium text-black disabled:opacity-50"
                 >
                   {profileSaving ? "儲存中…" : "儲存學生資料"}
                 </button>
@@ -612,7 +612,7 @@ export default function AdminStudentDetailPage() {
                     <button
                       type="submit"
                       disabled={medicalUploading}
-                      className="rounded-lg bg-primary/90 px-4 py-2 text-sm font-medium text-ink disabled:opacity-50"
+                      className="rounded-lg bg-primary/90 px-4 py-2 text-sm font-medium text-black disabled:opacity-50"
                     >
                       {medicalUploading ? "上傳中…" : "上傳並標記為已收到"}
                     </button>
@@ -739,7 +739,7 @@ export default function AdminStudentDetailPage() {
                               type="button"
                               disabled={transferBusy === p.course_id}
                               onClick={() => void onTransferCoach(p.course_id)}
-                              className="rounded-lg bg-primary/90 px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-50"
+                              className="rounded-lg bg-primary/90 px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-50"
                             >
                               {transferBusy === p.course_id ? "…" : "確認轉教練"}
                             </button>
@@ -822,7 +822,7 @@ export default function AdminStudentDetailPage() {
                       type="button"
                       disabled={saving}
                       onClick={() => void onSaveCategoryEnrollment()}
-                      className="w-full rounded-lg bg-primary/90 py-2 text-sm font-medium text-ink disabled:opacity-50"
+                      className="w-full rounded-lg bg-primary/90 py-2 text-sm font-medium text-black disabled:opacity-50"
                     >
                       {saving ? "…" : "儲存"}
                     </button>
@@ -941,7 +941,7 @@ export default function AdminStudentDetailPage() {
                   <button
                     type="submit"
                     disabled={receiptUploading}
-                    className="rounded-lg bg-primary/90 px-4 py-2 text-sm font-medium text-ink disabled:opacity-50 md:justify-self-start"
+                    className="rounded-lg bg-primary/90 px-4 py-2 text-sm font-medium text-black disabled:opacity-50 md:justify-self-start"
                   >
                     {receiptUploading ? "上傳中…" : "上傳收據"}
                   </button>

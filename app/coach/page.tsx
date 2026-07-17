@@ -134,7 +134,7 @@ export default function CoachStaffDayPage() {
           <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
             <Link
               href="/coach/attendance"
-              className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-2.5 text-center text-sm font-medium text-ink hover:border-primary/60"
+              className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-2.5 text-center text-sm font-medium text-black hover:border-primary/60"
             >
               教練出勤（月報）→
             </Link>
@@ -177,7 +177,7 @@ export default function CoachStaffDayPage() {
                 type="button"
                 disabled={exporting || coachId === ""}
                 onClick={() => void exportExcel()}
-                className="w-full rounded-lg border border-primary/40 bg-primary/10 px-3 py-2.5 text-sm font-semibold text-ink disabled:opacity-50 sm:w-auto"
+                className="w-full rounded-lg border border-primary/40 bg-primary/10 px-3 py-2.5 text-sm font-semibold text-black disabled:opacity-50 sm:w-auto"
               >
                 {exporting ? "匯出中…" : "匯出 Excel"}
               </button>
@@ -205,7 +205,7 @@ export default function CoachStaffDayPage() {
                 <li key={`${s.enrollment_id}-${s.session_date}-${s.student_id}`} className="py-3 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium text-ink">{s.student_name}</span>
-                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-ink/80">
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-black/80">
                       {s.category_name}
                     </span>
                     <span

@@ -422,7 +422,7 @@ export default function AdminCourseSetPage() {
                       onClick={() => toggleWeekday(day)}
                       className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
                         on
-                          ? "border-primary bg-primary/15 text-ink shadow-[inset_0_0_0_1px_rgba(45,36,34,0.08)]"
+                          ? "border-primary bg-primary/15 text-black shadow-[inset_0_0_0_1px_rgba(45,36,34,0.08)]"
                           : "border-ink/15 bg-canvas text-ink/55 hover:border-ink/25"
                       }`}
                     >
@@ -711,7 +711,7 @@ export default function AdminCourseSetPage() {
               <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse sm:justify-end">
                 <button
                   type="button"
-                  className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-ink hover:bg-primary/90 sm:w-auto sm:min-w-[8rem]"
+                  className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-black hover:bg-primary/90 sm:w-auto sm:min-w-[8rem]"
                   onClick={() => {
                     setSuccessOpen(false);
                     setSuccessEnrollments([]);

@@ -553,7 +553,7 @@ function MonthlySalesReportImpl() {
         <div className="flex flex-col gap-3">
           <button
             type="button"
-            className="inline-flex w-full items-center justify-center rounded-lg border border-primary/40 bg-primary/15 px-4 py-2.5 text-sm font-semibold text-ink shadow-sm transition hover:bg-primary/25 md:w-auto"
+            className="inline-flex w-full items-center justify-center rounded-lg border border-primary/40 bg-primary/15 px-4 py-2.5 text-sm font-semibold text-black shadow-sm transition hover:bg-primary/25 md:w-auto"
             onClick={() => openVisibleColumnsModal(null)}
           >
             選擇匯出欄位

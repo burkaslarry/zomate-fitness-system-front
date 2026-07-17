@@ -350,7 +350,7 @@ export default function RegCourseWizard({
             key={label}
             className={`rounded-full px-2.5 py-1 sm:px-3 ${
               displayStep === i
-                ? "bg-primary/90 font-semibold text-ink"
+                ? "bg-primary/90 font-semibold text-black"
                 : displayStep > i
                   ? "bg-emerald-100 text-emerald-900"
                   : "bg-ink/5 text-ink/45"
@@ -377,7 +377,7 @@ export default function RegCourseWizard({
               type="button"
               disabled={lookupBusy}
               onClick={() => void lookup()}
-              className="rounded-md bg-primary/90 px-4 py-2.5 text-sm font-medium text-ink disabled:opacity-60"
+              className="rounded-md bg-primary/90 px-4 py-2.5 text-sm font-medium text-black disabled:opacity-60"
             >
               {lookupBusy ? "…" : "搜尋"}
             </button>
@@ -413,7 +413,7 @@ export default function RegCourseWizard({
           <button
             type="button"
             onClick={goCoachNext}
-            className="w-full rounded-md bg-primary/90 px-4 py-3 text-sm font-semibold text-ink"
+            className="w-full rounded-md bg-primary/90 px-4 py-3 text-sm font-semibold text-black"
           >
             下一步
           </button>
@@ -470,7 +470,7 @@ export default function RegCourseWizard({
             <button
               type="button"
               onClick={goCategoryNext}
-              className="flex-1 rounded-md bg-primary/90 px-4 py-3 text-sm font-semibold text-ink"
+              className="flex-1 rounded-md bg-primary/90 px-4 py-3 text-sm font-semibold text-black"
             >
               下一步
             </button>

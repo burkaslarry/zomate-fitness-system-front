@@ -64,7 +64,7 @@ export default function RegisterReceiptPage() {
         <textarea name="note" rows={3} placeholder="備註（可選）" className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-ink" />
         {status && <p className="text-sm text-amber-900">{status}</p>}
         <div className="flex gap-2">
-          <button type="submit" className="rounded-md border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-medium text-ink shadow-sm hover:bg-primary">完成上載</button>
+          <button type="submit" className="rounded-md border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-medium text-black shadow-sm hover:bg-primary">完成上載</button>
           <button type="button" onClick={() => router.push("/register/success")} className="rounded-md border border-ink/15 px-4 py-2 text-sm text-ink">Skip — 之後再上載</button>
         </div>
       </form>

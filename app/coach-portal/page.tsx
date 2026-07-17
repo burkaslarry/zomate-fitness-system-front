@@ -526,7 +526,7 @@ export default function CoachDashboardPage() {
             <button
               type="button"
               onClick={() => setScheduleModalOpen(true)}
-              className="font-semibold text-primary underline-offset-2 hover:underline"
+              className="font-semibold text-black underline-offset-2 hover:underline"
             >
               開啟排程視窗
             </button>
@@ -709,7 +709,7 @@ export default function CoachDashboardPage() {
           </div>
           <Link
             href="/coach-portal/reg-course"
-            className="rounded-lg bg-primary/90 px-3 py-2 text-xs font-semibold text-ink"
+            className="rounded-lg bg-primary/90 px-3 py-2 text-xs font-semibold text-black"
           >
             報 Course
           </Link>
@@ -781,7 +781,7 @@ export default function CoachDashboardPage() {
                         setBookingEnrollmentId(enr.enrollment_id);
                         setBookDay(enr.coach_time_confirmed ? localDateKey(enr.scheduled_start) : todayKey());
                       }}
-                      className="rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-xs font-medium text-ink"
+                      className="rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-xs font-medium text-black"
                     >
                       {enr.coach_time_confirmed ? "改期" : "排程"} 0.5–2h
                     </button>

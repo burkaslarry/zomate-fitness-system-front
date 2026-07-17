@@ -82,7 +82,7 @@ export default function AdminPaymentsPage() {
           <button
             type="button"
             onClick={() => void reload()}
-            className="w-full rounded-lg bg-primary/90 px-4 py-2.5 text-sm font-semibold text-ink sm:w-auto"
+            className="w-full rounded-lg bg-primary/90 px-4 py-2.5 text-sm font-semibold text-black sm:w-auto"
           >
             搜尋
           </button>

@@ -225,7 +225,7 @@ export default function AdminStudentsPage() {
             >
               匯出 CSV 範本（首 5 筆）
             </button>
-            <label className="cursor-pointer rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-primary">
+            <label className="cursor-pointer rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-black shadow-sm hover:bg-primary">
               匯入 CSV
               <input
                 ref={fileRef}
@@ -237,7 +237,7 @@ export default function AdminStudentsPage() {
             </label>
             <Link
               href="/register"
-              className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-primary"
+              className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-black shadow-sm hover:bg-primary"
             >
               + 新會員
             </Link>

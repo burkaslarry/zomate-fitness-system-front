@@ -32,7 +32,7 @@ function coachUsernameValue(coach: CoachOption): string {
 }
 
 const btnPrimaryEnabled =
-  "rounded-md border border-primary/80 bg-primary/90 px-4 py-2 text-sm font-semibold text-ink shadow-sm transition-colors hover:bg-primary";
+  "rounded-md border border-primary/80 bg-primary/90 px-4 py-2 text-sm font-semibold text-black shadow-sm transition-colors hover:bg-primary";
 const btnPrimaryDisabled =
   "rounded-md border border-ink/10 bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-400 cursor-not-allowed";
 
@@ -619,7 +619,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                   data-testid="parq-medical-upload"
                   type="file"
                   accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
-                  className="block w-full text-xs text-ink/80 file:mr-3 file:rounded-md file:border file:border-ink/15 file:bg-primary/90 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-ink"
+                  className="block w-full text-xs text-black/80 file:mr-3 file:rounded-md file:border file:border-ink/15 file:bg-primary/90 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-black"
                   onChange={onParqClearanceFileChange}
                 />
                 {parqUploadError ? (
@@ -869,7 +869,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
             <p className="text-sm text-ink/80"></p>
             <button
               type="button"
-              className="w-full rounded-md border border-ink/15 bg-primary/90 px-4 py-3 text-sm font-semibold text-ink shadow-sm hover:bg-primary"
+              className="w-full rounded-md border border-ink/15 bg-primary/90 px-4 py-3 text-sm font-semibold text-black shadow-sm hover:bg-primary"
               onClick={() => router.push("/")}
             >
               回到主頁

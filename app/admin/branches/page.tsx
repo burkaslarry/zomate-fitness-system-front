@@ -180,7 +180,7 @@ export default function AdminBranchesPage() {
             <button
               type="submit"
               disabled={saving}
-              className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-primary disabled:opacity-50"
+              className="rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-black shadow-sm hover:bg-primary disabled:opacity-50"
             >
               {saving ? "新增中…" : "新增種類"}
             </button>

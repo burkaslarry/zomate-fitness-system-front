@@ -61,7 +61,7 @@ export default function CoachPortalBottomNav() {
               key={item.id}
               href={item.href}
               className={`flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition sm:text-[11px] ${
-                active ? "text-primary" : "text-ink/55 hover:text-ink"
+                active ? "text-black" : "text-ink/55 hover:text-ink"
               }`}
             >
               <span

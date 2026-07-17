@@ -507,7 +507,7 @@ export default function CoachCalendarPage() {
             )}
             <button
               type="button"
-              className="rounded-lg border border-ink/15 bg-primary/90 px-3 py-1.5 text-sm font-medium text-ink shadow-sm hover:bg-primary disabled:opacity-50"
+              className="rounded-lg border border-ink/15 bg-primary/90 px-3 py-1.5 text-sm font-medium text-black shadow-sm hover:bg-primary disabled:opacity-50"
               onClick={() => void loadMonth()}
               disabled={loading}
             >
@@ -515,7 +515,7 @@ export default function CoachCalendarPage() {
             </button>
             <button
               type="button"
-              className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-sm font-medium text-ink disabled:opacity-50"
+              className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-sm font-medium text-black disabled:opacity-50"
               onClick={() => void exportMonth()}
               disabled={exporting || coachId === ""}
             >
@@ -552,7 +552,7 @@ export default function CoachCalendarPage() {
                 <button
                   type="button"
                   onClick={goToday}
-                  className="rounded-md border border-primary/35 bg-primary/15 px-2.5 py-1 text-xs font-medium text-ink shadow-sm hover:bg-primary/25"
+                  className="rounded-md border border-primary/35 bg-primary/15 px-2.5 py-1 text-xs font-medium text-black shadow-sm hover:bg-primary/25"
                 >
                   今天
                 </button>
@@ -603,7 +603,7 @@ export default function CoachCalendarPage() {
                           {cell.date.getDate()}
                         </span>
                         {dayCourses.length > 0 && (
-                          <span className="rounded-full bg-primary/25 px-1.5 py-px text-[10px] text-ink">
+                          <span className="rounded-full bg-primary/25 px-1.5 py-px text-[10px] text-black">
                             {dayCourses.length}
                           </span>
                         )}
