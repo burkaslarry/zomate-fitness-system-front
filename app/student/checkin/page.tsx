@@ -235,7 +235,7 @@ export default function StudentCheckinPage() {
   return (
     <main className="mx-auto max-w-lg space-y-6 p-6 pb-16 text-ink">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-bold text-ink">Zomate 智能 QR 簽到</h1>
+        <h1 className="text-xl font-bold text-ink">Zomate Fitness 學生簽到</h1>
         <Link
           href="/student"
           className="text-sm text-sky-400 underline underline-offset-2 hover:text-sky-300"
@@ -245,8 +245,8 @@ export default function StudentCheckinPage() {
       </div>
 
       <p className="text-sm text-zinc-400">
-        店內簽到 QR／PDF 會連到本頁（可加 <code className="text-zinc-300">?from=qr</code>
-        ）。請輸入<strong>電話號碼</strong>（8 位香港手機），按搜尋；揀學員 → 確認今日課堂 → 揀一堂 → 輸入課堂 PIN 扣堂。
+        歡迎來到 Zomate Fitness，請到店內簽到，用相機掃二維碼，然後輸入<strong>電話號碼</strong>（8
+        位香港手機），按搜尋揀學員 → 確認今日課堂 → 揀一堂 → 輸入課堂 PIN 扣堂。
       </p>
 
       {installmentPrompt ? (
