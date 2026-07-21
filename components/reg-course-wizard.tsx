@@ -621,7 +621,10 @@ export default function RegCourseWizard({
                   courseTitle: purchaseSummary.coursePackageType,
                   checkinPin: purchaseSummary.checkinPin,
                   branchName: purchaseSummary.branchName,
-                  installmentSegments: purchaseSummary.installmentSegments
+                  installmentSegments: purchaseSummary.installmentSegments.map((seg) => ({
+                    ...seg,
+                    paid: seg.paid ?? false
+                  }))
                 })
               )}
               label="WhatsApp 發 PIN 俾學生"

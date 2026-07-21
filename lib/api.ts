@@ -309,16 +309,20 @@ export const api = {
     request("/api/v1/students/register", { method: "POST", body: JSON.stringify(payload) }),
   /** [F001][S002] Multipart registration — optional `medical_clearance` file when PAR-Q has「是」. */
   createMember: (payload: {
+    chinese_name: string;
     full_name: string;
+    nickname?: string;
+    gender: string;
     hkid: string;
     phone: string;
-    email?: string;
     date_of_birth: string;
     emergency_contact_name: string;
+    emergency_contact_relationship: string;
     emergency_contact_phone: string;
     parq: Record<string, boolean>;
     medical_clearance_file_name?: string;
     medical_clearance_file?: File | null;
+    pdpo_acknowledged: boolean;
     cooling_off_acknowledged: boolean;
     disclaimer_accepted: boolean;
     digital_signature: string;
@@ -327,15 +331,19 @@ export const api = {
     course_category_id: number;
   }) => {
     const form = new FormData();
+    form.append("chinese_name", payload.chinese_name);
     form.append("full_name", payload.full_name);
+    if (payload.nickname?.trim()) form.append("nickname", payload.nickname.trim());
+    form.append("gender", payload.gender);
     form.append("hkid", payload.hkid);
     form.append("phone", payload.phone);
-    if (payload.email) form.append("email", payload.email);
     form.append("date_of_birth", payload.date_of_birth);
     form.append("emergency_contact_name", payload.emergency_contact_name);
+    form.append("emergency_contact_relationship", payload.emergency_contact_relationship);
     form.append("emergency_contact_phone", payload.emergency_contact_phone);
     form.append("parq", JSON.stringify(payload.parq));
     form.append("medical_clearance_file_name", payload.medical_clearance_file_name ?? "");
+    form.append("pdpo_acknowledged", payload.pdpo_acknowledged ? "true" : "false");
     form.append("cooling_off_acknowledged", payload.cooling_off_acknowledged ? "true" : "false");
     form.append("disclaimer_accepted", payload.disclaimer_accepted ? "true" : "false");
     form.append("digital_signature", payload.digital_signature);

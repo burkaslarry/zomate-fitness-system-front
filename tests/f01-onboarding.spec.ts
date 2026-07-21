@@ -21,9 +21,10 @@ test.describe("F01 onboarding validations", () => {
   test("HKID short format (A123) is accepted without old min-8 error", async ({ page }) => {
     await page.goto("/register");
 
+    await page.locator('input[name="chinese_name"]').fill("測試用戶");
     await page.locator('input[name="full_name"]').fill("Playwright User");
     await page.locator('input[name="hkid"]').fill("A123");
-    await page.getByPlaceholder("電郵（可選）").click();
+    await page.locator('input[name="emergency_contact_relationship"]').click();
 
     await expect(page.getByText("Too small: expected string to have >=8 characters")).toHaveCount(0);
     await expect(page.getByText("請至少輸入 4 個字元（例：英文字 + 頭幾個數字 · A123）")).toHaveCount(0);
@@ -32,10 +33,12 @@ test.describe("F01 onboarding validations", () => {
   test("HK phone keeps +852 and requires exactly 8 digits", async ({ page }) => {
     await page.goto("/register");
 
+    await page.locator('input[name="chinese_name"]').fill("測試");
     await page.locator('input[name="full_name"]').fill("Playwright User");
     await page.locator('input[name="hkid"]').fill("A124");
     await page.getByPlaceholder("12345678").fill("1234567");
     await page.locator('input[name="emergency_contact_name"]').fill("Emergency Contact");
+    await page.locator('input[name="emergency_contact_relationship"]').fill("朋友");
     await page.getByPlaceholder("87654321").fill("87654321");
 
     await page.getByRole("button", { name: "下一步" }).click();
@@ -50,11 +53,13 @@ test.describe("F01 onboarding validations", () => {
     const emergencyPhone8 = String(60000000 + uniqNum).slice(0, 8);
     await page.goto("/register");
 
+    await page.locator('input[name="chinese_name"]').fill("測試");
     await page.locator('input[name="full_name"]').fill("Playwright User");
     await page.locator('input[name="hkid"]').fill(`Z${String(uniqNum).slice(-4)}`);
     await page.getByPlaceholder("12345678").fill(phone8);
     await page.locator('input[type="date"]').fill("1990-01-15");
     await page.locator('input[name="emergency_contact_name"]').fill("Emergency Contact");
+    await page.locator('input[name="emergency_contact_relationship"]').fill("家人");
     await page.getByPlaceholder("87654321").fill(emergencyPhone8);
 
     await page.getByRole("button", { name: "下一步" }).click();
@@ -73,7 +78,7 @@ test.describe("F01 onboarding validations", () => {
     await expect(page.getByText(/已接收檔案：clearance\.pdf/)).toBeVisible();
     await nextBtn.click();
 
-    await expect(page.locator("[data-cooling-copy]")).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator("[data-pdpo-ack]")).toBeVisible({ timeout: 15_000 });
   });
 
   test("successful submit shows application popup without displaying PIN", async ({ page }) => {
@@ -87,10 +92,12 @@ test.describe("F01 onboarding validations", () => {
 
     await page.goto("/register");
 
+    await page.locator('input[name="chinese_name"]').fill("測試");
     await page.locator('input[name="full_name"]').fill("Popup User");
     await page.locator('input[name="hkid"]').fill("Z9001");
     await page.getByPlaceholder("12345678").fill("91234567");
     await page.locator('input[name="emergency_contact_name"]').fill("Emergency Contact");
+    await page.locator('input[name="emergency_contact_relationship"]').fill("朋友");
     await page.getByPlaceholder("87654321").fill("61234567");
     await page.getByRole("button", { name: "下一步" }).click();
 
@@ -103,7 +110,8 @@ test.describe("F01 onboarding validations", () => {
     await expect(page.getByText(/已接收檔案：clearance\.pdf/)).toBeVisible();
     await page.getByRole("button", { name: "下一步" }).click();
 
-    await expect(page.locator("[data-cooling-copy]")).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator("[data-pdpo-ack]")).toBeVisible({ timeout: 15_000 });
+    await page.locator('[data-pdpo-ack] input[type="checkbox"]').check();
     await page.locator('[data-cooling-ack] input[type="checkbox"]').check();
     await page.locator('[data-disclaimer-ack] input[type="checkbox"]').check();
     await page.locator('input[name="digital_signature"]').fill("Popup User");

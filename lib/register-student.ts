@@ -28,8 +28,7 @@ export function registerStudentFromJson(body: unknown): RegisterResult {
     date_of_birth: data.date_of_birth,
     lesson_balance: packageSessions,
     membership_expiry_iso,
-    package_sessions: packageSessions,
-    email: data.email || undefined
+    package_sessions: packageSessions
   });
   const whatsapp_preview = `Congrats! You have ${packageSessions} sessions. PIN: ${row.pin_code}. Expires: ${membership_expiry_iso}`;
   // eslint-disable-next-line no-console

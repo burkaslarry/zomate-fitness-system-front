@@ -47,18 +47,24 @@ export function computeMembershipExpiryIso(packageSessions: 10 | 30, startDate: 
   return d.toISOString();
 }
 
+export const genderSchema = z.enum(["male", "female"], { message: "請選擇性別" });
+
 export const onboardingStep1Schema = z.object({
-  full_name: z.string().min(1, "請填寫姓名"),
+  chinese_name: z.string().min(1, "請填寫中文姓名"),
+  full_name: z.string().min(1, "請填寫英文姓名"),
+  nickname: z.string().optional(),
+  gender: genderSchema,
   hkid: hkidSchema,
   phone: phoneHkSchema,
-  email: z.union([z.literal(""), z.string().email()]),
   date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: "請選擇出生日期" }),
   emergency_contact_name: z.string().min(1, "請填寫緊急聯絡人姓名"),
+  emergency_contact_relationship: z.string().min(1, "請填寫與申請人之關係"),
   emergency_contact_phone: phoneHkSchema,
   form_type: z.enum(["new", "renewal"])
 });
 
 export const onboardingStep3Schema = z.object({
+  pdpo_acknowledged: z.boolean().refine((v) => v === true, { message: "請確認已閱讀收集個人資料聲明" }),
   cooling_off_acknowledged: z.boolean().refine((v) => v === true, { message: "請確認已閱讀 7 天冷靜期條款" }),
   disclaimer_accepted: z.boolean().refine((v) => v === true, { message: "請同意免責聲明" }),
   digital_signature: z.string()
@@ -67,16 +73,20 @@ export const onboardingStep3Schema = z.object({
 /** Full POST body after wizard steps — medical clearance filename is optional (候補). */
 export const studentRegistrationPayloadSchema = z
   .object({
+    chinese_name: z.string().min(1),
     full_name: z.string().min(1),
+    nickname: z.string().optional(),
+    gender: genderSchema,
     hkid: hkidSchema,
     phone: phoneHkSchema,
-    email: z.union([z.literal(""), z.string().email()]).optional(),
     date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     emergency_contact_name: z.string().min(1),
+    emergency_contact_relationship: z.string().min(1),
     emergency_contact_phone: phoneHkSchema,
     form_type: z.enum(["new", "renewal"]),
     parq: parqQuestionsSchema,
     medical_clearance_file_name: z.string(),
+    pdpo_acknowledged: z.boolean(),
     cooling_off_acknowledged: z.boolean(),
     disclaimer_accepted: z.boolean(),
     digital_signature: z.string().min(1, "請在簽名框手寫簽署"),
@@ -88,6 +98,10 @@ export const studentRegistrationPayloadSchema = z
   })
   .refine((d) => d.coach_id >= 1, { message: "請先選擇教練", path: ["coach_username"] })
   .refine((d) => d.course_category_id >= 1, { message: "請選擇課程種類", path: ["course_category_id"] })
+  .refine((d) => d.pdpo_acknowledged, {
+    message: "請確認已閱讀收集個人資料聲明",
+    path: ["pdpo_acknowledged"]
+  })
   .refine((d) => d.cooling_off_acknowledged, {
     message: "請確認已閱讀 7 天冷靜期條款",
     path: ["cooling_off_acknowledged"]

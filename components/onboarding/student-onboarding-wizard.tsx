@@ -84,15 +84,19 @@ const fieldClass =
  * Logic: `full_name` overridden by `quickName` prop when present.
  */
 const defaults: Partial<StudentRegistrationPayload> = {
+  chinese_name: "",
   full_name: "",
+  nickname: "",
+  gender: "male",
   hkid: "",
   phone: "",
-  email: "",
   date_of_birth: "",
   emergency_contact_name: "",
+  emergency_contact_relationship: "",
   emergency_contact_phone: "",
   form_type: "new",
   parq: defaultParq,
+  pdpo_acknowledged: false,
   cooling_off_acknowledged: false,
   disclaimer_accepted: false,
   digital_signature: "",
@@ -140,17 +144,20 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
 
   const selectedCoachId = form.watch("coach_id");
   const selectedCoachUsername = form.watch("coach_username");
+  const pdpoWatch = form.watch("pdpo_acknowledged");
   const coolingOffWatch = form.watch("cooling_off_acknowledged");
   const disclaimerWatch = form.watch("disclaimer_accepted");
   const digitalSignatureWatch = form.watch("digital_signature");
   const courseCategoryWatch = form.watch("course_category_id");
   const step1Watch = form.watch([
+    "chinese_name",
     "full_name",
+    "gender",
     "hkid",
     "phone",
-    "email",
     "date_of_birth",
     "emergency_contact_name",
+    "emergency_contact_relationship",
     "emergency_contact_phone",
     "form_type"
   ]);
@@ -166,28 +173,33 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
 
   const step1Ready = useMemo(() => {
     const [
+      chinese_name,
       full_name,
+      gender,
       hkid,
       phone,
-      email,
       date_of_birth,
       emergency_contact_name,
+      emergency_contact_relationship,
       emergency_contact_phone,
       form_type
     ] = step1Watch;
     return onboardingStep1Schema.safeParse({
+      chinese_name: (chinese_name || "").trim(),
       full_name: (full_name || "").trim(),
+      gender,
       hkid: (hkid || "").trim(),
       phone: (phone || "").trim(),
-      email: (email ?? "").trim(),
       date_of_birth,
       emergency_contact_name: (emergency_contact_name || "").trim(),
+      emergency_contact_relationship: (emergency_contact_relationship || "").trim(),
       emergency_contact_phone: (emergency_contact_phone || "").trim(),
       form_type
     }).success;
   }, [step1Watch]);
 
   const step3SubmitEnabled =
+    Boolean(pdpoWatch) &&
     Boolean(coolingOffWatch) &&
     Boolean(disclaimerWatch) &&
     Boolean((selectedCoachUsername || "").trim()) &&
@@ -313,23 +325,28 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     if (step === 1) {
       setDupToastMsg(null);
       form.clearErrors([
+        "chinese_name",
         "full_name",
+        "gender",
         "hkid",
         "phone",
-        "email",
         "date_of_birth",
         "emergency_contact_name",
+        "emergency_contact_relationship",
         "emergency_contact_phone",
         "form_type"
       ]);
       const vals = form.getValues();
       const step1Payload = {
+        chinese_name: vals.chinese_name.trim(),
         full_name: vals.full_name.trim(),
+        nickname: (vals.nickname ?? "").trim(),
+        gender: vals.gender,
         hkid: vals.hkid.trim(),
         phone: vals.phone.trim(),
-        email: (vals.email ?? "").trim(),
         date_of_birth: vals.date_of_birth,
         emergency_contact_name: vals.emergency_contact_name.trim(),
+        emergency_contact_relationship: vals.emergency_contact_relationship.trim(),
         emergency_contact_phone: vals.emergency_contact_phone.trim(),
         form_type: vals.form_type
       };
@@ -338,12 +355,14 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         const flat = parsed.error.flatten().fieldErrors;
         (
           [
+            "chinese_name",
             "full_name",
+            "gender",
             "hkid",
             "phone",
-            "email",
             "date_of_birth",
             "emergency_contact_name",
+            "emergency_contact_relationship",
             "emergency_contact_phone",
             "form_type"
           ] as const
@@ -411,16 +430,20 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     setShowSuccessDialog(false);
     try {
       const res = (await api.createMember({
+        chinese_name: values.chinese_name,
         full_name: values.full_name,
+        nickname: values.nickname,
+        gender: values.gender,
         hkid: values.hkid,
         phone: values.phone,
-        email: values.email,
         date_of_birth: values.date_of_birth,
         emergency_contact_name: values.emergency_contact_name,
+        emergency_contact_relationship: values.emergency_contact_relationship,
         emergency_contact_phone: values.emergency_contact_phone,
         parq: values.parq,
         medical_clearance_file_name: (values.medical_clearance_file_name || "").trim(),
         medical_clearance_file: parqClearanceFileRef.current,
+        pdpo_acknowledged: values.pdpo_acknowledged,
         cooling_off_acknowledged: values.cooling_off_acknowledged,
         disclaimer_accepted: values.disclaimer_accepted,
         digital_signature: signatureData,
@@ -448,7 +471,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     <main className="mx-auto min-h-screen max-w-lg space-y-6 bg-canvas p-6 text-ink">
       {/* [F001][S001] Page chrome — title + step indicator */}
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold tracking-tight text-ink">新人入會 · F01</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-ink">Zomate Fitness Membership Form 新人入會</h1>
         <Link href="/student" className="text-sm text-ink/70 underline underline-offset-4 hover:text-ink">
           返回
         </Link>
@@ -482,9 +505,24 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
             <p className="text-sm leading-relaxed text-ink [text-wrap:pretty]">
               新人入會：掃描後台「登記 QR」填此表。簽到：掃「簽到 QR」→ 搜尋自己姓名 → 輸入 PIN 扣堂。
             </p>
-            <input className={fieldClass} placeholder="姓名 *" {...form.register("full_name")} />
+            <input className={fieldClass} placeholder="中文姓名 *" {...form.register("chinese_name")} />
+            {form.formState.errors.chinese_name && (
+              <p className="text-xs text-rose-400">{form.formState.errors.chinese_name.message}</p>
+            )}
+            <input className={fieldClass} placeholder="英文姓名 *" {...form.register("full_name")} />
             {form.formState.errors.full_name && (
               <p className="text-xs text-rose-400">{form.formState.errors.full_name.message}</p>
+            )}
+            <input className={fieldClass} placeholder="花名（可選）" {...form.register("nickname")} />
+            <label className="block space-y-1 text-sm">
+              <span className="text-ink/70">性別 *</span>
+              <select className={fieldClass} {...form.register("gender")}>
+                <option value="male">男</option>
+                <option value="female">女</option>
+              </select>
+            </label>
+            {form.formState.errors.gender && (
+              <p className="text-xs text-rose-400">{form.formState.errors.gender.message}</p>
             )}
             <div>
               <input
@@ -535,7 +573,6 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                 <p className="text-xs text-rose-400">{form.formState.errors.phone.message}</p>
               )}
             </div>
-            <input className={fieldClass} placeholder="電郵（可選）" {...form.register("email")} />
             <label className="block space-y-1 text-sm">
               <span className="text-ink/70">出生日期 Date of Birth *</span>
               <input
@@ -549,6 +586,13 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
               <p className="text-xs text-rose-400">{form.formState.errors.date_of_birth.message}</p>
             )}
             <input className={fieldClass} placeholder="緊急聯絡人姓名 *" {...form.register("emergency_contact_name")} />
+            {form.formState.errors.emergency_contact_name && (
+              <p className="text-xs text-rose-400">{form.formState.errors.emergency_contact_name.message}</p>
+            )}
+            <input className={fieldClass} placeholder="關係 *" {...form.register("emergency_contact_relationship")} />
+            {form.formState.errors.emergency_contact_relationship && (
+              <p className="text-xs text-rose-400">{form.formState.errors.emergency_contact_relationship.message}</p>
+            )}
             <div className="space-y-1">
               <p className="text-[11px] font-medium text-ink/70">緊急聯絡人電話 · +852 八位數</p>
               <div className="flex max-w-full items-stretch overflow-hidden rounded-lg border border-ink/15 bg-canvas shadow-sm ring-ink/10 focus-within:ring-2 focus-within:ring-primary/35">
@@ -589,10 +633,21 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         {/* [F001][S002] Step 2 — PAR-Q checkboxes + conditional medical file (≤3MB) */}
         {step === 2 && (
           <div className="space-y-4">
-            <p className="text-xs leading-relaxed text-ink/80">
-              PAR-Q：請如實勾選。若任一項答「是」，可<strong>選擇</strong>上傳醫生證明（PDF 或圖片，上限 3MB）作候補紀錄；<strong>唔會阻礙</strong>
-              進入下一步。
-            </p>
+            <div className="space-y-2 text-xs leading-relaxed text-ink/85">
+              <p className="text-sm font-bold text-ink">體能活動適應能力問卷與你</p>
+              <p className="font-bold text-ink">（一份適用於 15 至 69 歲人士的問卷）</p>
+              <p>
+                經常進行體能活動不但有益身心，而且樂趣無窮，因此，愈來愈多人開始每天多做運動。對大部分人來說，多做運動是很安全的。不過，有些人則應在增加運動量前，先行徵詢醫生的意見。
+              </p>
+              <p>
+                如果你計劃增加運動量，請先回答下列 7 條問題。如果你介乎 15 至 69 歲之間，這份體能活動適應能力問卷會告訴你應否在開始前諮詢醫生。如果你超過 69 歲及沒有經常運動，請徵詢醫生的意見。
+              </p>
+              <p>普通常識是回答這些問題的最佳指引。請仔細閱讀下列問題，然後誠實回答：</p>
+              <p>
+                請如實勾選。若任一項答「是」，可<strong>選擇</strong>上傳醫生證明（PDF 或圖片，上限 3MB）作候補紀錄；<strong>唔會阻礙</strong>
+                進入下一步。
+              </p>
+            </div>
             {PARQ_LABELS.map(({ key, label }) => (
               <Controller
                 key={key}
@@ -700,35 +755,86 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                 ) : null}
               </label>
             </div>
-            <div data-cooling-copy className="rounded-lg border border-ink/10 bg-canvas p-4 text-xs leading-relaxed text-ink/85">
-              <p className="font-semibold text-ink">7 天冷靜期</p>
+            <div className="space-y-3 rounded-lg border border-ink/10 bg-canvas p-4 text-xs leading-relaxed text-ink/85">
+              <p className="font-semibold text-ink">收集個人資料聲明</p>
+              <label
+                data-pdpo-ack
+                className="relative flex items-start touch-manipulation gap-3 rounded-lg border border-ink/[0.08] bg-surface p-3 text-sm text-ink cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-primary"
+                  {...form.register("pdpo_acknowledged")}
+                />
+                <p className="text-xs leading-relaxed text-ink/85">
+                  本收集個人資料聲明是根據《個人資料（私隱）條例》（&quot;該條例&quot;）的規定向閣下提供有關 Zomate Fitness
+                  可能向閣下收集的個人資料的信息。Zomate Fitness 可能向閣下收集的個人資料包括閣下的姓名、通訊地址、聯絡電話號碼、電郵地址、職業、職位。
+                </p>
+              </label>
+              {form.formState.errors.pdpo_acknowledged && (
+                <p className="text-xs text-rose-400">{String(form.formState.errors.pdpo_acknowledged.message)}</p>
+              )}
+            </div>
+            <div className="rounded-lg border border-ink/10 bg-canvas p-4 text-xs leading-relaxed text-ink/85">
+              <p className="font-semibold text-ink">使用個人資料</p>
+              <p className="mt-2">Zomate Fitness 收集的個人資料可能有以下用途：</p>
+              <ol className="mt-2 list-decimal space-y-1 pl-4">
+                <li>處理閣下向 Zomate Fitness 訂購產品的訂單；</li>
+                <li>處理閣下的登記或購買 Zomate Fitness 服務的訂單；</li>
+                <li>進行研究及客戶調查；</li>
+                <li>收費及追討欠款；</li>
+                <li>處理閣下的建議、查詢及投訴；</li>
+                <li>與閣下的一般溝通。</li>
+              </ol>
+            </div>
+            <div className="rounded-lg border border-ink/10 bg-canvas p-4 text-xs leading-relaxed text-ink/85">
+              <p className="font-semibold text-ink">政策及程序</p>
+              <ol className="mt-2 list-decimal space-y-2 pl-4">
+                <li>訓練時，會員須簽署個人訓練記錄。</li>
+                <li>會員須支付合約費用，方可開始訓練。</li>
+                <li>
+                  在合約有效期內，閣下必須使用全部課程，否則將失去使用權，有關費用將不予退還。（10 堂有效期為 3 個月；30 堂有效期為 6
+                  個月）
+                </li>
+                <li>閣下是購買課程而非購買任何一位教練之服務。如教練沒法提供課程之服務，將由另一位教練補上。</li>
+                <li>
+                  （課程）和教練未必可隨時應約，閣下必須最少 72 小時前預約每個（課程），閣下需在約定時間準時到達。如欲取消或更改預約上課時間，閣下必須於該課堂開始前
+                  24 小時通知，否則照計算一堂使用，不作補課。
+                </li>
+                <li>課程只限於本健身室進行。</li>
+              </ol>
+            </div>
+            <div className="rounded-lg border border-ink/10 bg-canvas p-4 text-xs leading-relaxed text-ink/85">
+              <p className="font-semibold text-ink">責任聲明</p>
               <p className="mt-2">
-                會員可在簽署後 7 個曆日內書面通知中心終止合約（扣除合理行政費用之條款以實際合約為準）
+                本人聲明本人的健康及體能良好並適宜使用 Zomate Fitness 之設施及參加由 Zomate Fitness
+                舉辦之活動／課程／訓練班並全面承擔有關風險。本人同意如本人因參加有關活動／課程／訓練班而引致死亡／受傷或財物損失，Zomate
+                Fitness 及／或其教練無需負上任何責任。
+              </p>
+              <p className="mt-2">
+                為保障消費者權益，會員簽訂健身服務合約後在 7 天冷靜期內可無條件取消合約及獲得扣除行政費後的退款。如以信用卡付款，最多只可退回
+                95%。
               </p>
             </div>
-            <label 
-  data-cooling-ack
-  className="relative flex items-start touch-manipulation gap-3 rounded-lg border border-ink/[0.08] bg-canvas p-3 text-sm text-ink cursor-pointer"
->
-  <input
-    type="checkbox"
-    className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-primary" 
-    {...form.register("cooling_off_acknowledged")}
-  />
-  <p className="text-xs leading-relaxed text-ink/85">
-    本人確認已閱讀並理解冷靜期條款。
-  </p>
-</label>
+            <label
+              data-cooling-ack
+              className="relative flex items-start touch-manipulation gap-3 rounded-lg border border-ink/[0.08] bg-canvas p-3 text-sm text-ink cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-primary"
+                {...form.register("cooling_off_acknowledged")}
+              />
+              <p className="text-xs leading-relaxed text-ink/85">本人確認已閱讀並理解以上責任聲明及冷靜期條款。</p>
+            </label>
             {form.formState.errors.cooling_off_acknowledged && (
               <p className="text-xs text-rose-400">{String(form.formState.errors.cooling_off_acknowledged.message)}</p>
             )}
             <div className="rounded-lg border border-ink/10 bg-canvas p-4 text-xs leading-relaxed text-ink/85">
               <p className="font-semibold text-ink">免責聲明</p>
-              <p className="mt-2">
-                參加本中心訓練前，請確認已理解運動風險；如有長期病患請先諮詢醫生
-              </p>
+              <p className="mt-2">參加本中心訓練前，請確認已理解運動風險；如有長期病患請先諮詢醫生。</p>
             </div>
-            
+
               <div>
 
               <label
