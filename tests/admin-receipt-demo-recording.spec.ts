@@ -35,14 +35,16 @@ test("record admin receipt + WhatsApp demo", async ({ page, context }) => {
     await page.waitForTimeout(1500);
   }
 
-  const uploadHeader = page.locator("button").filter({ hasText: /^上傳收據$/ });
-  if ((await uploadHeader.count()) > 0) {
-    await uploadHeader.first().click();
+  const uploadBtn = page.getByRole("button", { name: /^上傳收據$/ });
+  if ((await uploadBtn.count()) > 0) {
+    await uploadBtn.first().click();
   } else {
     await page.locator("button").filter({ hasText: /^課程記錄$/ }).click();
+    await uploadBtn.first().click();
   }
-  await expect(page.getByText("收據／上傳憑證")).toBeVisible({ timeout: 10_000 });
-  await page.waitForTimeout(2500);
+  await expect(page.getByRole("dialog")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByLabel("上傳收據（圖片／PDF）")).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(1500);
 
   await page.locator("button").filter({ hasText: /^付款紀錄$/ }).click();
   await expect(page.getByText("Payment Record")).toBeVisible({ timeout: 10_000 });

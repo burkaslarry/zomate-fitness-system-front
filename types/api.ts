@@ -224,6 +224,7 @@ export type PaymentRecordRow = {
   coach_id?: number | null;
   coach_name?: string | null;
   label: string;
+  category_name?: string | null;
   receipt_id?: number | null;
   receipt_url?: string | null;
   installment_no?: number;
@@ -253,10 +254,12 @@ export type MemberFull = {
     coach_id?: number | null;
     branch_id?: number | null;
     name: string;
+    category_name?: string | null;
     lessons: number;
     coach: string | null;
     amount: number | null;
     payment_method: string | null;
+    remarks?: string | null;
     renewal_date?: string;
     created_at: string;
   }>;

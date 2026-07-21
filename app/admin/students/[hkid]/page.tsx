@@ -3,11 +3,11 @@
 /**
  * [F001][S001]
  * Feature: Student Onboarding
- * Step: Admin student-id detail — profile, course PINs, trials, category ledger, renewals, activity
- * Logic: Tabs without legacy 帳戶 PIN; installment rows link to receipt upload with期數 context; receipts under 課程記錄.
+ * Step: Admin student-id detail — profile, course PINs, category ledger, renewals, activity
+ * Logic: Tabs without legacy 帳戶 PIN; receipt upload in modal; payment records show receipt link or WhatsApp.
  */
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import BackendShell from "../../../../components/backend-shell";
@@ -127,12 +127,13 @@ export default function AdminStudentDetailPage() {
   const [medicalUploading, setMedicalUploading] = useState(false);
   const [photoFailed, setPhotoFailed] = useState(false);
   const [signatureFailed, setSignatureFailed] = useState(false);
-  /** When staff picks an unpaid installment, scroll to receipt form and label it (分期第 N 期). */
+  /** When staff picks an unpaid installment, pre-fill receipt modal (分期第 N 期). */
   const [receiptInstallmentCtx, setReceiptInstallmentCtx] = useState<{
     installmentNo: number;
     categoryName: string;
     installmentPlanId: number;
   } | null>(null);
+  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const [receiptWaLinks, setReceiptWaLinks] = useState<Array<{ label: string; url: string }>>([]);
   const [receiptPromptBusy, setReceiptPromptBusy] = useState(false);
   const [receiptUploadPromptBusyId, setReceiptUploadPromptBusyId] = useState<string | null>(null);
@@ -140,8 +141,22 @@ export default function AdminStudentDetailPage() {
   const [transferBusy, setTransferBusy] = useState<number | null>(null);
   const [transferCoachPick, setTransferCoachPick] = useState<Record<number, number | "">>({});
   const isAdmin = getAuthSession()?.role === "ADMIN";
-  const receiptSectionRef = useRef<HTMLDivElement | null>(null);
   const studentId = decodeURIComponent(params.hkid);
+
+  function openReceiptModal(ctx?: {
+    installmentNo: number;
+    categoryName: string;
+    installmentPlanId: number;
+  }) {
+    setReceiptInstallmentCtx(ctx ?? null);
+    setReceiptWaLinks([]);
+    setReceiptModalOpen(true);
+  }
+
+  function closeReceiptModal() {
+    setReceiptModalOpen(false);
+    setReceiptInstallmentCtx(null);
+  }
 
   const reload = useCallback(() => {
     void api.memberFullById(studentId).then((row) => setData(row as MemberFull)).catch(alertApiError);
@@ -212,9 +227,7 @@ export default function AdminStudentDetailPage() {
 
   function focusReceiptUploadSection() {
     setTab("課程記錄");
-    window.setTimeout(() => {
-      receiptSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 80);
+    openReceiptModal();
   }
 
   async function promptReceiptUploadViaWhatsApp(courseEnrollmentId?: number) {
@@ -304,7 +317,7 @@ export default function AdminStudentDetailPage() {
       setReceiptWaLinks(links);
       setToast(links.length > 0 ? "已上傳收據並產生 WhatsApp 訊息" : "已上傳收據");
       event.currentTarget.reset();
-      setReceiptInstallmentCtx(null);
+      closeReceiptModal();
       reload();
     } catch (e) {
       alertApiError(e);
@@ -340,9 +353,8 @@ export default function AdminStudentDetailPage() {
     categoryName: string;
     installmentPlanId: number;
   }) {
-    setReceiptInstallmentCtx(payload);
-    setReceiptWaLinks([]);
     setTab("課程記錄");
+    openReceiptModal(payload);
   }
 
   async function onDeleteStudent() {
@@ -390,12 +402,13 @@ export default function AdminStudentDetailPage() {
   }
 
   useEffect(() => {
-    if (tab !== "課程記錄" || !receiptInstallmentCtx) return;
-    const t = window.setTimeout(() => {
-      receiptSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 80);
-    return () => window.clearTimeout(t);
-  }, [tab, receiptInstallmentCtx]);
+    if (!receiptModalOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") closeReceiptModal();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [receiptModalOpen]);
 
   const pins = data?.course_checkin_pins ?? [];
   const catEnr = data?.category_enrollments ?? [];
@@ -415,8 +428,11 @@ export default function AdminStudentDetailPage() {
   const receiptContexts = [
     ...pins.map((p) => `Course：${p.course_title}`),
     ...catEnr.map((c) => `Category：${c.category_name}`),
-    ...packages.map((p) => `Package：${p.name}`)
+    ...packages
+      .filter((p) => p.category_name || p.name)
+      .map((p) => (p.category_name ? `Category：${p.category_name}` : `Package：${p.name}`))
   ];
+  const uniqueReceiptContexts = [...new Set(receiptContexts)];
 
   return (
     <BackendShell title="學生詳情">
@@ -735,6 +751,9 @@ export default function AdminStudentDetailPage() {
                             <p className="mt-1 text-xs text-ink/60">
                               堂數 {pkg.lessons} · 教練 {pkg.coach ?? "—"} · {pkg.payment_method ?? "—"}
                             </p>
+                            {pkg.category_name ? (
+                              <p className="mt-1 text-xs font-medium text-ink/75">種類 {pkg.category_name}</p>
+                            ) : null}
                             <p className="mt-1 text-xs text-ink/50">
                               {pkg.renewal_date ? `續會日 ${pkg.renewal_date} · ` : ""}
                               建立 {fmtDateTime(pkg.created_at)}
@@ -814,30 +833,6 @@ export default function AdminStudentDetailPage() {
                 )}
               </div>
 
-              <div>
-                <h3 className="mb-3 text-sm font-semibold text-ink">試堂／加堂紀錄</h3>
-                {(data.trial_classes ?? []).length === 0 ? (
-                  <p className="text-sm text-ink/55">暫無試堂／加堂紀錄。</p>
-                ) : (
-                  <ul className="grid gap-3 sm:grid-cols-2">
-                    {(data.trial_classes ?? []).map((t) => (
-                      <li key={t.id} className="rounded-lg border border-ink/10 bg-canvas p-3 text-sm">
-                        <div className="font-medium text-ink">
-                          {t.type === "TRIAL" ? "試堂" : "加堂"}
-                          {t.trial_kind_label_zh ? ` · ${t.trial_kind_label_zh}` : ""}
-                        </div>
-                        <div className="mt-1 text-xs text-ink/65">
-                          日期 {t.class_date} · 教練 {t.coach_name ?? (t.coach_id ? `#${t.coach_id}` : "—")} ·{" "}
-                          分店 {t.branch_name ?? (t.branch_id ? `#${t.branch_id}` : "—")}
-                        </div>
-                        {t.note ? <p className="mt-2 text-xs text-ink/60">{t.note}</p> : null}
-                        <p className="mt-1 text-[11px] text-ink/45">建立 {fmtDateTime(t.created_at)}</p>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
               <div className="rounded-xl border border-primary/35 bg-primary/5 p-4">
                 <h3 className="mb-3 text-sm font-semibold text-ink">從課程種類入帳堂數（Admin）</h3>
                 <p className="mb-3 text-xs text-ink/60">
@@ -906,16 +901,23 @@ export default function AdminStudentDetailPage() {
                 )}
               </div>
 
-              <div ref={receiptSectionRef}>
-                <h3 className="mb-3 text-sm font-semibold text-ink">
-                  收據／上傳憑證
-                  {receiptInstallmentCtx
-                    ? ` — 第 ${receiptInstallmentCtx.installmentNo} 期（${receiptInstallmentCtx.categoryName}）`
-                    : ""}
-                </h3>
+              <div>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-ink">收據／上傳憑證</h3>
+                    <p className="mt-1 text-xs text-ink/55">上傳付款收據或補回分期憑證；詳細付款紀錄見「付款紀錄」分頁。</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openReceiptModal(receiptInstallmentCtx ?? undefined)}
+                    className="rounded-lg bg-primary/90 px-4 py-2 text-sm font-medium text-black shadow-sm hover:bg-primary"
+                  >
+                    上傳收據
+                  </button>
+                </div>
                 {receiptInstallmentCtx ? (
                   <p className="mb-3 text-xs text-ink/55">
-                    上傳後系統會於備註自動加上「分期第{receiptInstallmentCtx.installmentNo}期」標籤，方便對照。
+                    待補：第 {receiptInstallmentCtx.installmentNo} 期（{receiptInstallmentCtx.categoryName}）
                     <button
                       type="button"
                       className="ml-2 underline decoration-ink/30"
@@ -925,90 +927,6 @@ export default function AdminStudentDetailPage() {
                     </button>
                   </p>
                 ) : null}
-                <form
-                  onSubmit={(event) => void onUploadReceipt(event)}
-                  className="mb-4 grid gap-3 rounded-xl border border-ink/10 bg-canvas p-4 text-sm md:grid-cols-2"
-                >
-                  <label className="block text-xs text-ink/55 md:col-span-2">
-                    上傳收據（圖片／PDF）
-                    <input
-                      name="file"
-                      type="file"
-                      accept="image/*,.pdf,application/pdf"
-                      required
-                      className="mt-1 block w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink"
-                    />
-                  </label>
-                  <label className="block text-xs text-ink/55">
-                    金額（選填）
-                    <input
-                      name="amount"
-                      inputMode="decimal"
-                      placeholder="例如 7932"
-                      className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink"
-                    />
-                  </label>
-                  <label className="block text-xs text-ink/55">
-                    付款方式（選填）
-                    <input
-                      name="payment_method"
-                      placeholder="cash / fps / card"
-                      className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink"
-                    />
-                  </label>
-                  <label className="block text-xs text-ink/55 md:col-span-2">
-                    對應 Course（分期 PIN 解鎖，選填）
-                    <select
-                      name="course_enrollment_id"
-                      className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink"
-                    >
-                      <option value="">不指定（僅 category 分期）</option>
-                      {pins.map((p) => (
-                        <option key={p.course_id} value={String(p.course_id)}>
-                          {p.course_title} · PIN {p.checkin_pin}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="flex items-center gap-2 text-xs text-ink/70 md:col-span-2">
-                    <input type="checkbox" name="send_whatsapp" defaultChecked className="rounded border-ink/20" />
-                    上傳後產生 WhatsApp 提醒（學生）
-                  </label>
-                  <label className="flex items-center gap-2 text-xs text-ink/70 md:col-span-2">
-                    <input type="checkbox" name="notify_coach" defaultChecked className="rounded border-ink/20" />
-                    同時通知教練
-                  </label>
-                  <label className="block text-xs text-ink/55 md:col-span-2">
-                    備註（選填）
-                    <input
-                      name="note"
-                      placeholder="例如：補回第一期收據"
-                      className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink"
-                    />
-                  </label>
-                  <label className="block text-xs text-ink/55 md:col-span-2">
-                    對應 Course / Category 備註（選填）
-                    <select
-                      name="context"
-                      disabled={receiptInstallmentCtx != null}
-                      className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink disabled:opacity-60"
-                    >
-                      <option value="">不指定</option>
-                      {receiptContexts.map((ctx) => (
-                        <option key={ctx} value={ctx}>
-                          {ctx}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    type="submit"
-                    disabled={receiptUploading}
-                    className="rounded-lg bg-primary/90 px-4 py-2 text-sm font-medium text-black disabled:opacity-50 md:justify-self-start"
-                  >
-                    {receiptUploading ? "上傳中…" : "上傳收據"}
-                  </button>
-                </form>
                 {receiptWaLinks.length > 0 ? (
                   <div className="mb-4 flex flex-wrap gap-2 rounded-lg border border-emerald-200 bg-emerald-50/80 p-3">
                     {receiptWaLinks.map((link) => (
@@ -1071,6 +989,136 @@ export default function AdminStudentDetailPage() {
           )}
         </section>
       </div>
+
+      {receiptModalOpen ? (
+        <div
+          className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 px-4 py-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="receipt-upload-title"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) closeReceiptModal();
+          }}
+        >
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-ink/15 bg-surface p-5 text-ink shadow-xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 id="receipt-upload-title" className="text-lg font-semibold text-ink">
+                  收據／上傳憑證
+                  {receiptInstallmentCtx
+                    ? ` — 第 ${receiptInstallmentCtx.installmentNo} 期（${receiptInstallmentCtx.categoryName}）`
+                    : ""}
+                </h2>
+                {receiptInstallmentCtx ? (
+                  <p className="mt-1 text-xs text-ink/55">
+                    上傳後系統會於備註自動加上「分期第{receiptInstallmentCtx.installmentNo}期」標籤。
+                  </p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={closeReceiptModal}
+                className="rounded-lg border border-ink/15 px-2 py-1 text-sm text-ink/70 hover:bg-canvas"
+                aria-label="關閉"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={(event) => void onUploadReceipt(event)} className="grid gap-3 text-sm">
+              <label className="block text-xs text-ink/55">
+                上傳收據（圖片／PDF）
+                <input
+                  name="file"
+                  type="file"
+                  accept="image/*,.pdf,application/pdf"
+                  required
+                  className="mt-1 block w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink"
+                />
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-xs text-ink/55">
+                  金額（選填）
+                  <input
+                    name="amount"
+                    inputMode="decimal"
+                    placeholder="例如 7932"
+                    className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink"
+                  />
+                </label>
+                <label className="block text-xs text-ink/55">
+                  付款方式（選填）
+                  <input
+                    name="payment_method"
+                    placeholder="cash / fps / card"
+                    className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink"
+                  />
+                </label>
+              </div>
+              <label className="block text-xs text-ink/55">
+                對應 Course（分期 PIN 解鎖，選填）
+                <select
+                  name="course_enrollment_id"
+                  className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink"
+                >
+                  <option value="">不指定（僅 category 分期）</option>
+                  {pins.map((p) => (
+                    <option key={p.course_id} value={String(p.course_id)}>
+                      {p.course_title} · PIN {p.checkin_pin}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center gap-2 text-xs text-ink/70">
+                <input type="checkbox" name="send_whatsapp" defaultChecked className="rounded border-ink/20" />
+                上傳後產生 WhatsApp 提醒（學生）
+              </label>
+              <label className="flex items-center gap-2 text-xs text-ink/70">
+                <input type="checkbox" name="notify_coach" defaultChecked className="rounded border-ink/20" />
+                同時通知教練
+              </label>
+              <label className="block text-xs text-ink/55">
+                備註（選填）
+                <input
+                  name="note"
+                  placeholder="例如：補回第一期收據"
+                  className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink"
+                />
+              </label>
+              <label className="block text-xs text-ink/55">
+                對應 Course / Category 備註（選填）
+                <select
+                  name="context"
+                  disabled={receiptInstallmentCtx != null}
+                  className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-3 py-2 text-sm text-ink disabled:opacity-60"
+                >
+                  <option value="">不指定</option>
+                  {uniqueReceiptContexts.map((ctx) => (
+                    <option key={ctx} value={ctx}>
+                      {ctx}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  type="submit"
+                  disabled={receiptUploading}
+                  className="rounded-lg bg-primary/90 px-4 py-2 text-sm font-medium text-black disabled:opacity-50"
+                >
+                  {receiptUploading ? "上傳中…" : "上傳收據"}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeReceiptModal}
+                  className="rounded-lg border border-ink/15 px-4 py-2 text-sm text-ink/75 hover:bg-canvas"
+                >
+                  取消
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </BackendShell>
   );
 }
@@ -1129,7 +1177,7 @@ function CategoryEnrollmentCard({
                               })
                             }
                           >
-                            （收據／上傳憑證）
+                            （上傳收據）
                           </button>
                         </>
                       )}
