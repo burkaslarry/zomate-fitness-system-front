@@ -46,6 +46,8 @@ test("record admin receipt + WhatsApp demo", async ({ page, context }) => {
   await expect(page.getByLabel("上傳收據（圖片／PDF）")).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(1500);
 
+  // Success dialog appears only after a real upload — verify upload modal is reachable.
+
   await page.locator("button").filter({ hasText: /^付款紀錄$/ }).click();
   await expect(page.getByText("Payment Record")).toBeVisible({ timeout: 10_000 });
   await page.waitForTimeout(2500);

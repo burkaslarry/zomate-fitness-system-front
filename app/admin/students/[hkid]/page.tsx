@@ -4,7 +4,7 @@
  * [F001][S001]
  * Feature: Student Onboarding
  * Step: Admin student-id detail — profile, course PINs, category ledger, renewals, activity
- * Logic: Tabs without legacy 帳戶 PIN; receipt upload in modal; payment records show receipt link or WhatsApp.
+ * Logic: Tabs without legacy 帳戶 PIN; receipt upload modal + post-upload success WhatsApp popup.
  */
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
@@ -134,7 +134,13 @@ export default function AdminStudentDetailPage() {
     installmentPlanId: number;
   } | null>(null);
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
-  const [receiptWaLinks, setReceiptWaLinks] = useState<Array<{ label: string; url: string }>>([]);
+  const [receiptUploadSuccess, setReceiptUploadSuccess] = useState<{
+    isInstallment: boolean;
+    pinUnlocked?: string;
+    studentMessage?: string;
+    studentWaUrl?: string;
+    coachWaUrl?: string;
+  } | null>(null);
   const [receiptPromptBusy, setReceiptPromptBusy] = useState(false);
   const [receiptUploadPromptBusyId, setReceiptUploadPromptBusyId] = useState<string | null>(null);
   const [coaches, setCoaches] = useState<CoachDto[]>([]);
@@ -149,13 +155,17 @@ export default function AdminStudentDetailPage() {
     installmentPlanId: number;
   }) {
     setReceiptInstallmentCtx(ctx ?? null);
-    setReceiptWaLinks([]);
+    setReceiptUploadSuccess(null);
     setReceiptModalOpen(true);
   }
 
   function closeReceiptModal() {
     setReceiptModalOpen(false);
     setReceiptInstallmentCtx(null);
+  }
+
+  function closeReceiptSuccessModal() {
+    setReceiptUploadSuccess(null);
   }
 
   const reload = useCallback(() => {
@@ -303,19 +313,23 @@ export default function AdminStudentDetailPage() {
         notify_coach: notifyCoach
       })) as {
         whatsapp?: {
-          student?: { wa_me_url?: string };
+          is_installment?: boolean;
+          pin_unlocked?: string;
+          student?: { wa_me_url?: string; message?: string; template_key?: string };
           coach?: { wa_me_url?: string };
         };
       };
-      const links: Array<{ label: string; url: string }> = [];
-      if (res.whatsapp?.student?.wa_me_url) {
-        links.push({ label: "學生 WhatsApp", url: res.whatsapp.student.wa_me_url });
-      }
-      if (res.whatsapp?.coach?.wa_me_url) {
-        links.push({ label: "教練 WhatsApp", url: res.whatsapp.coach.wa_me_url });
-      }
-      setReceiptWaLinks(links);
-      setToast(links.length > 0 ? "已上傳收據並產生 WhatsApp 訊息" : "已上傳收據");
+      const studentKey = res.whatsapp?.student?.template_key ?? "";
+      const isInstallment =
+        res.whatsapp?.is_installment === true || studentKey === "payment_student_installment";
+      setReceiptUploadSuccess({
+        isInstallment,
+        pinUnlocked: res.whatsapp?.pin_unlocked,
+        studentMessage: res.whatsapp?.student?.message,
+        studentWaUrl: res.whatsapp?.student?.wa_me_url,
+        coachWaUrl: notifyCoach ? res.whatsapp?.coach?.wa_me_url : undefined
+      });
+      setToast(isInstallment ? "收據已上傳（分期）" : "收據已上傳（全數付款）");
       event.currentTarget.reset();
       closeReceiptModal();
       reload();
@@ -402,13 +416,16 @@ export default function AdminStudentDetailPage() {
   }
 
   useEffect(() => {
-    if (!receiptModalOpen) return;
+    if (!receiptModalOpen && !receiptUploadSuccess) return;
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") closeReceiptModal();
+      if (event.key === "Escape") {
+        if (receiptModalOpen) closeReceiptModal();
+        else closeReceiptSuccessModal();
+      }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [receiptModalOpen]);
+  }, [receiptModalOpen, receiptUploadSuccess]);
 
   const pins = data?.course_checkin_pins ?? [];
   const catEnr = data?.category_enrollments ?? [];
@@ -927,13 +944,6 @@ export default function AdminStudentDetailPage() {
                     </button>
                   </p>
                 ) : null}
-                {receiptWaLinks.length > 0 ? (
-                  <div className="mb-4 flex flex-wrap gap-2 rounded-lg border border-emerald-200 bg-emerald-50/80 p-3">
-                    {receiptWaLinks.map((link) => (
-                      <WhatsAppButton key={link.label} href={link.url} label={link.label} />
-                    ))}
-                  </div>
-                ) : null}
                 {(data.receipts ?? []).length === 0 ? (
                   <p className="text-sm text-ink/55">暫無收據檔案。</p>
                 ) : (
@@ -1116,6 +1126,64 @@ export default function AdminStudentDetailPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {receiptUploadSuccess ? (
+        <div
+          className="fixed inset-0 z-[160] flex items-center justify-center bg-black/40 px-4 py-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="receipt-success-title"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) closeReceiptSuccessModal();
+          }}
+        >
+          <div className="w-full max-w-md space-y-4 rounded-xl border border-emerald-200 bg-surface p-5 text-ink shadow-xl">
+            <div>
+              <h2 id="receipt-success-title" className="text-lg font-semibold text-emerald-800">
+                {receiptUploadSuccess.isInstallment ? "收據已上傳（分期）" : "收據已上傳（全數付款）"}
+              </h2>
+              <p className="mt-2 text-sm text-ink/75">
+                {receiptUploadSuccess.isInstallment
+                  ? "已按分期範本產生 WhatsApp 訊息；請確認後 Send 俾學生。"
+                  : "已按全數付款範本產生 WhatsApp 訊息；請確認後 Send 俾學生。"}
+              </p>
+              {receiptUploadSuccess.pinUnlocked && receiptUploadSuccess.pinUnlocked !== "—" ? (
+                <p className="mt-2 rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-sm font-medium text-ink">
+                  課堂 PIN：{receiptUploadSuccess.pinUnlocked}
+                </p>
+              ) : null}
+            </div>
+            {receiptUploadSuccess.studentMessage ? (
+              <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-ink/10 bg-canvas p-3 text-xs text-ink/80">
+                {receiptUploadSuccess.studentMessage}
+              </pre>
+            ) : null}
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              {receiptUploadSuccess.studentWaUrl ? (
+                <WhatsAppButton
+                  href={receiptUploadSuccess.studentWaUrl}
+                  label="WhatsApp 訊息（學生）"
+                  className="w-full justify-center sm:w-auto"
+                />
+              ) : null}
+              {receiptUploadSuccess.coachWaUrl ? (
+                <WhatsAppButton
+                  href={receiptUploadSuccess.coachWaUrl}
+                  label="WhatsApp 訊息（教練）"
+                  className="w-full justify-center sm:w-auto"
+                />
+              ) : null}
+              <button
+                type="button"
+                onClick={closeReceiptSuccessModal}
+                className="w-full rounded-lg bg-primary/90 px-4 py-2 text-sm font-semibold text-black sm:ml-auto sm:w-auto"
+              >
+                完成
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
