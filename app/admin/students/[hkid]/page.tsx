@@ -12,9 +12,11 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import BackendShell from "../../../../components/backend-shell";
 import PaymentRecordsTable from "../../../../components/payment-records-table";
+import WhatsAppButton from "../../../../components/whatsapp-button";
 import { alertApiError, api, apiAssetUrl } from "../../../../lib/api";
 import { getAuthSession } from "../../../../lib/auth";
-import type { CategoryEnrollmentRow, CoachDto, MemberFull } from "../../../../types/api";
+import { openWhatsAppLink } from "../../../../lib/whatsapp-utils";
+import type { CategoryEnrollmentRow, CoachDto, MemberFull, PaymentRecordRow } from "../../../../types/api";
 
 const PARQ_LABELS: Record<string, string> = {
   q1_heart_condition: "心臟問題（只宜醫生建議下運動）",
@@ -132,6 +134,8 @@ export default function AdminStudentDetailPage() {
     installmentPlanId: number;
   } | null>(null);
   const [receiptWaLinks, setReceiptWaLinks] = useState<Array<{ label: string; url: string }>>([]);
+  const [receiptPromptBusy, setReceiptPromptBusy] = useState(false);
+  const [receiptUploadPromptBusyId, setReceiptUploadPromptBusyId] = useState<string | null>(null);
   const [coaches, setCoaches] = useState<CoachDto[]>([]);
   const [transferBusy, setTransferBusy] = useState<number | null>(null);
   const [transferCoachPick, setTransferCoachPick] = useState<Record<number, number | "">>({});
@@ -203,6 +207,53 @@ export default function AdminStudentDetailPage() {
       alertApiError(e);
     } finally {
       setSaving(false);
+    }
+  }
+
+  function focusReceiptUploadSection() {
+    setTab("課程記錄");
+    window.setTimeout(() => {
+      receiptSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  }
+
+  async function promptReceiptUploadViaWhatsApp(courseEnrollmentId?: number) {
+    if (!data?.profile.id) return;
+    setReceiptPromptBusy(true);
+    try {
+      const res = (await api.requestReceiptUpload(data.profile.id, {
+        course_enrollment_id: courseEnrollmentId
+      })) as { whatsapp?: { wa_me_url?: string; message?: string } };
+      const url = res.whatsapp?.wa_me_url;
+      if (url) {
+        openWhatsAppLink(url);
+        setToast("已開啟 WhatsApp — 請確認訊息後人手 Send");
+      } else {
+        setToast("已記錄提醒訊息");
+      }
+    } catch (e) {
+      alertApiError(e);
+    } finally {
+      setReceiptPromptBusy(false);
+    }
+  }
+
+  async function handlePaymentRowReceiptUpload(row: PaymentRecordRow) {
+    if (!data?.profile.id || row.status !== "missing_receipt") return;
+    setReceiptUploadPromptBusyId(row.id);
+    try {
+      const res = (await api.requestReceiptUpload(data.profile.id)) as {
+        whatsapp?: { wa_me_url?: string };
+      };
+      const url = res.whatsapp?.wa_me_url;
+      if (url) {
+        openWhatsAppLink(url);
+        setToast(`已開啟 WhatsApp → ${row.student_name || data.profile.full_name}`);
+      }
+    } catch (e) {
+      alertApiError(e);
+    } finally {
+      setReceiptUploadPromptBusyId(null);
     }
   }
 
@@ -382,6 +433,18 @@ export default function AdminStudentDetailPage() {
               {data?.profile.is_active && (
                 <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-sm text-emerald-800">活躍</span>
               )}
+              <WhatsAppButton
+                label={receiptPromptBusy ? "產生中…" : "WhatsApp 請上傳收據"}
+                disabled={receiptPromptBusy || !data?.profile.phone}
+                onClick={() => void promptReceiptUploadViaWhatsApp(pins[0]?.course_id)}
+              />
+              <button
+                type="button"
+                onClick={focusReceiptUploadSection}
+                className="rounded-lg border border-ink/20 bg-surface px-4 py-2 text-sm font-medium text-ink shadow-sm hover:bg-canvas"
+              >
+                上傳收據
+              </button>
               {/* [F002][S001] Deprecated direct trial grant; all purchases now start at unified payment. */}
               <Link
                 href={`/regCourse?type=renewal&student=${encodeURIComponent(String(data?.profile.phone ?? ""))}`}
@@ -947,17 +1010,10 @@ export default function AdminStudentDetailPage() {
                   </button>
                 </form>
                 {receiptWaLinks.length > 0 ? (
-                  <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50/80 p-3 text-xs text-emerald-900">
-                    <p className="font-medium">WhatsApp 快速連結</p>
-                    <ul className="mt-2 space-y-1">
-                      {receiptWaLinks.map((link) => (
-                        <li key={link.label}>
-                          <a href={link.url} target="_blank" rel="noreferrer" className="underline">
-                            {link.label}
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
+                  <div className="mb-4 flex flex-wrap gap-2 rounded-lg border border-emerald-200 bg-emerald-50/80 p-3">
+                    {receiptWaLinks.map((link) => (
+                      <WhatsAppButton key={link.label} href={link.url} label={link.label} />
+                    ))}
                   </div>
                 ) : null}
                 {(data.receipts ?? []).length === 0 ? (
@@ -990,7 +1046,11 @@ export default function AdminStudentDetailPage() {
                 <h3 className="text-sm font-semibold text-ink">付款紀錄 Payment Record</h3>
                 <p className="mt-1 text-xs text-ink/55">續會／報 Course、獨立收據、種類分期 — 含缺收據狀態。</p>
               </div>
-              <PaymentRecordsTable rows={data.payment_records ?? []} />
+              <PaymentRecordsTable
+                rows={data.payment_records ?? []}
+                onRequestReceiptUpload={handlePaymentRowReceiptUpload}
+                receiptUploadBusyId={receiptUploadPromptBusyId}
+              />
             </div>
           )}
           {tab === "活動紀錄" && data && (

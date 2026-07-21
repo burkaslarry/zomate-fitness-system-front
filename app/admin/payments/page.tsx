@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import BackendShell from "../../../components/backend-shell";
 import PaymentRecordsTable from "../../../components/payment-records-table";
 import { alertApiError, api } from "../../../lib/api";
+import { openWhatsAppLink } from "../../../lib/whatsapp-utils";
 import type { PaymentRecordRow } from "../../../types/api";
 
 const STATUS_OPTIONS = [
@@ -25,6 +26,7 @@ export default function AdminPaymentsPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [receiptUploadBusyId, setReceiptUploadBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -74,6 +76,22 @@ export default function AdminPaymentsPage() {
     }
   }
 
+  async function handleRequestReceiptUpload(row: PaymentRecordRow) {
+    if (row.status !== "missing_receipt") return;
+    setReceiptUploadBusyId(row.id);
+    try {
+      const res = (await api.requestReceiptUpload(row.student_id)) as {
+        whatsapp?: { wa_me_url?: string };
+      };
+      const url = res.whatsapp?.wa_me_url;
+      if (url) openWhatsAppLink(url);
+    } catch (e) {
+      alertApiError(e);
+    } finally {
+      setReceiptUploadBusyId(null);
+    }
+  }
+
   return (
     <BackendShell title="付款紀錄">
       <div className="mx-auto max-w-6xl space-y-5">
@@ -116,6 +134,8 @@ export default function AdminPaymentsPage() {
           showStudent
           emptyText="沒有符合條件的付款紀錄。"
           onDelete={handleDelete}
+          onRequestReceiptUpload={handleRequestReceiptUpload}
+          receiptUploadBusyId={receiptUploadBusyId}
         />
       </div>
     </BackendShell>

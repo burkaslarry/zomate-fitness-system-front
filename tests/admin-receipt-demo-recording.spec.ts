@@ -1,0 +1,48 @@
+/**
+ * [F005][S003]
+ * Demo: Admin student detail — signature, WhatsApp receipt prompt, upload receipt UI
+ */
+
+import { test, expect } from "@playwright/test";
+
+const STUDENT_ID = process.env.DEMO_STUDENT_ID ?? "40";
+
+test.use({
+  viewport: { width: 1280, height: 720 },
+  video: { mode: "on", size: { width: 1280, height: 720 } },
+  launchOptions: { slowMo: 350 }
+});
+
+test("record admin receipt + WhatsApp demo", async ({ page, context }) => {
+  test.setTimeout(180_000);
+
+  await page.goto("/login?logout=1");
+  await page.getByLabel("帳號").fill("masterzoe");
+  await page.getByLabel("密碼").fill("12345678");
+  await page.getByRole("button", { name: "登入", exact: true }).click();
+  await page.waitForURL("**/admin**", { timeout: 30_000 });
+  await page.waitForTimeout(1200);
+
+  await page.goto(`/admin/students/${STUDENT_ID}`);
+  await expect(page.getByRole("heading", { level: 2 })).toBeVisible({ timeout: 20_000 });
+  await page.waitForTimeout(1500);
+
+  await expect(page.getByText("簽名圖")).toBeVisible();
+  await page.waitForTimeout(2000);
+
+  const waBtn = page.getByRole("button", { name: /WhatsApp 請上傳收據/ });
+  await expect(waBtn).toBeVisible();
+  const popupPromise = context.waitForEvent("page", { timeout: 8000 }).catch(() => null);
+  await waBtn.click();
+  await popupPromise;
+  await page.waitForTimeout(1500);
+
+  await page.getByRole("button", { name: "上傳收據" }).click();
+  await expect(page.getByText("收據／上傳憑證")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("button", { name: "上傳收據" }).last()).toBeVisible();
+  await page.waitForTimeout(2500);
+
+  await page.getByRole("button", { name: "付款紀錄" }).click();
+  await expect(page.getByText("Payment Record")).toBeVisible({ timeout: 10_000 });
+  await page.waitForTimeout(2000);
+});

@@ -10,10 +10,12 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { alertApiError, api } from "../lib/api";
+import { buildPinWhatsAppMessage, waMeLink } from "../lib/whatsapp-utils";
 import type { CoachDto, CourseCategoryDto, InstallmentSegmentPinDto, MemberProfile } from "../types/api";
 import FileUpload from "./forms/file-upload";
 import MobileRadioList from "./mobile-radio-list";
 import PaymentMethodRadio from "./forms/payment-method-radio";
+import WhatsAppButton from "./whatsapp-button";
 
 function inputToLookupPhone(raw: string): string {
   const digits = raw.replace(/\D/g, "");
@@ -78,12 +80,14 @@ const NEW_STUDENT_CATEGORY_PREFIX = "新學生";
 type PurchaseSummary = {
   studentId: number;
   studentName: string;
+  studentPhone: string;
   packageName: string;
   coursePackageType: string;
   amountPaid: string;
   remainingBalance: number | null;
   paymentMethod: string;
   coachName: string;
+  branchName: string;
   totalInstallments: number;
   checkinPin: string;
   installmentSegments: InstallmentSegmentPinDto[];
@@ -312,12 +316,14 @@ export default function RegCourseWizard({
       setPurchaseSummary({
         studentId: member.id,
         studentName: member.full_name,
+        studentPhone: member.phone,
         packageName: `${lessons} 堂`,
         coursePackageType: selectedKind.name,
         amountPaid: amount.trim().replace(/,/g, ""),
         remainingBalance: balanceRes.lesson_balance,
         paymentMethod: method,
         coachName: selectedCoach?.full_name ?? "—",
+        branchName: selectedCoach?.branch_name ?? "Zomate Fitness",
         totalInstallments,
         checkinPin: enr?.checkin_pin ?? "—",
         installmentSegments: enr?.installment_segments ?? [],
@@ -605,6 +611,23 @@ export default function RegCourseWizard({
               <dd>{purchaseSummary.remainingBalance ?? "—"} 堂</dd>
             </div>
           </dl>
+
+          {purchaseSummary.studentPhone && purchaseSummary.checkinPin !== "—" ? (
+            <WhatsAppButton
+              href={waMeLink(
+                purchaseSummary.studentPhone,
+                buildPinWhatsAppMessage({
+                  studentName: purchaseSummary.studentName,
+                  courseTitle: purchaseSummary.coursePackageType,
+                  checkinPin: purchaseSummary.checkinPin,
+                  branchName: purchaseSummary.branchName,
+                  installmentSegments: purchaseSummary.installmentSegments
+                })
+              )}
+              label="WhatsApp 發 PIN 俾學生"
+              className="w-full py-3 text-sm"
+            />
+          ) : null}
 
           {mode === "staff" ? (
             <Link

@@ -50,10 +50,15 @@ export function apiAssetUrl(relativeOrAbsolute: string | null | undefined): stri
   if (relativeOrAbsolute.startsWith("data:")) return relativeOrAbsolute;
   if (/^https?:\/\//i.test(relativeOrAbsolute)) return relativeOrAbsolute;
   let path = relativeOrAbsolute.startsWith("/") ? relativeOrAbsolute : `/${relativeOrAbsolute}`;
+  const base =
+    API_BASE_URL ||
+    (process.env.NODE_ENV === "production" ? DEFAULT_PRODUCTION_BACKEND_ORIGIN : "");
+  if (path.startsWith("/api/")) {
+    return base ? `${base}${path}` : path;
+  }
   if (!path.startsWith("/uploads/") && !path.startsWith("/api/uploads/") && !path.includes("://")) {
     path = `/uploads/${path.replace(/^\/+/, "")}`;
   }
-  const base = API_BASE_URL;
   if (path.startsWith("/uploads/")) {
     return base ? `${base}${path}` : `/api${path}`;
   }
@@ -537,6 +542,14 @@ export const api = {
     request(`/api/admin/students/${studentId}/send-payment-reminder`, {
       method: "POST",
       body: JSON.stringify(payload)
+    }),
+  requestReceiptUpload: (
+    studentId: number,
+    payload?: { course_enrollment_id?: number }
+  ) =>
+    request(`/api/admin/students/${studentId}/request-receipt-upload`, {
+      method: "POST",
+      body: JSON.stringify(payload ?? {})
     }),
   auditLogs: (limit?: number) =>
     request(

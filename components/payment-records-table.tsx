@@ -10,6 +10,7 @@ import Link from "next/link";
 import type { PaymentRecordRow } from "../types/api";
 import { apiAssetUrl } from "../lib/api";
 import { formatHktDateTime } from "../lib/format-hkt";
+import WhatsAppButton from "./whatsapp-button";
 
 function statusBadge(status: PaymentRecordRow["status"]) {
   if (status === "paid") {
@@ -29,12 +30,17 @@ export default function PaymentRecordsTable({
   rows,
   showStudent = false,
   emptyText = "暫無付款紀錄。",
-  onDelete
+  onDelete,
+  onRequestReceiptUpload,
+  receiptUploadBusyId
 }: {
   rows: PaymentRecordRow[];
   showStudent?: boolean;
   emptyText?: string;
   onDelete?: (row: PaymentRecordRow) => void | Promise<void>;
+  /** [F005][S003] Opens wa.me with receipt-upload template for missing-receipt rows. */
+  onRequestReceiptUpload?: (row: PaymentRecordRow) => void | Promise<void>;
+  receiptUploadBusyId?: string | null;
 }) {
   if (!rows.length) {
     return <p className="text-sm text-ink/55">{emptyText}</p>;
@@ -85,6 +91,15 @@ export default function PaymentRecordsTable({
               >
                 查看收據
               </a>
+            ) : null}
+            {row.status === "missing_receipt" && onRequestReceiptUpload ? (
+              <div className="mt-2">
+                <WhatsAppButton
+                  label={receiptUploadBusyId === row.id ? "產生中…" : "WhatsApp 請上傳收據"}
+                  disabled={receiptUploadBusyId === row.id}
+                  onClick={() => void onRequestReceiptUpload(row)}
+                />
+              </div>
             ) : null}
             {onDelete && (row.record_type === "renewal" || row.record_type === "receipt") ? (
               <button
@@ -139,6 +154,13 @@ export default function PaymentRecordsTable({
                     >
                       查看
                     </a>
+                  ) : row.status === "missing_receipt" && onRequestReceiptUpload ? (
+                    <WhatsAppButton
+                      label={receiptUploadBusyId === row.id ? "…" : "請上傳收據"}
+                      disabled={receiptUploadBusyId === row.id}
+                      className="px-2 py-1 text-[10px]"
+                      onClick={() => void onRequestReceiptUpload(row)}
+                    />
                   ) : (
                     "—"
                   )}
