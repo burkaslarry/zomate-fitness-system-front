@@ -51,12 +51,28 @@ export function permissionsForRole(accessRole: AccessRole): string[] {
   return ACCESS_FEATURES.filter((f) => f.roles.includes(accessRole)).map((f) => f.key);
 }
 
-export function canAccessHref(accessRole: AccessRole, href: string): boolean {
+export const EDITABLE_ACCESS_FEATURES = ACCESS_FEATURES.filter((f) => f.key !== "system_users");
+
+export function permissionsAllowHref(permissions: string[], href: string): boolean {
+  return ACCESS_FEATURES.some((f) => {
+    if (!permissions.includes(f.key)) return false;
+    if (href === f.href) return true;
+    if (f.href === "/admin") return false;
+    return href.startsWith(`${f.href}/`);
+  });
+}
+
+export function canAccessHref(accessRole: AccessRole, href: string, permissions?: string[]): boolean {
   if (accessRole === "MASTER_ADMIN") return true;
+  if (permissions?.length) return permissionsAllowHref(permissions, href);
   return ACCESS_FEATURES.some((f) => {
     if (!f.roles.includes(accessRole)) return false;
     if (href === f.href) return true;
     if (f.href === "/admin") return false;
     return href.startsWith(`${f.href}/`);
   });
+}
+
+export function labelForPermissionKey(key: string): string {
+  return ACCESS_FEATURES.find((f) => f.key === key)?.label_zh ?? key;
 }

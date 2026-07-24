@@ -909,7 +909,14 @@ export const api = {
   }) => request("/api/admin/system-users", { method: "POST", body: JSON.stringify(payload) }),
   updateSystemUser: (
     userId: number,
-    payload: { password?: string; role?: "CLERK" | "COACH" | "MASTER_ADMIN"; is_active?: boolean; coach_id?: number }
+    payload: {
+      password?: string;
+      role?: "CLERK" | "COACH" | "MASTER_ADMIN";
+      is_active?: boolean;
+      coach_id?: number;
+      permissions?: string[];
+      reset_permissions?: boolean;
+    }
   ) =>
     request(`/api/admin/system-users/${userId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteSystemUser: (userId: number) =>

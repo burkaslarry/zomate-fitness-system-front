@@ -89,7 +89,7 @@ test.describe("Access rights demo recordings", () => {
     await page.getByRole("link", { name: "系統帳號 · Access Rights" }).click();
     await page.waitForURL("**/admin/system-users**", { timeout: 30_000 });
     await expect(page.getByRole("heading", { name: /系統帳號 · Access Rights/ })).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText("可以開波")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Access Rights 表" })).toBeVisible();
     await page.waitForTimeout(1500);
 
     await expect(page.getByRole("heading", { name: "Access Rights 表" })).toBeVisible();

@@ -284,23 +284,28 @@ export default function BackendShell({
     return session.accessRole ?? normalizeAccessRole(session.role, session.username);
   }, [verifiedSession, storedSession]);
 
+  const sessionPermissions = useMemo(() => {
+    const session = verifiedSession ?? storedSession;
+    return session?.permissions;
+  }, [verifiedSession, storedSession]);
+
   const filteredMenuSections = useMemo(
     () =>
       MENU_SECTIONS.map((section) => ({
         ...section,
-        items: section.items.filter((item) => canAccessHref(accessRole, item.href))
+        items: section.items.filter((item) => canAccessHref(accessRole, item.href, sessionPermissions))
       })).filter((section) => section.items.length > 0),
-    [accessRole]
+    [accessRole, sessionPermissions]
   );
 
   const filteredMobileCoachTabs = useMemo(
-    () => ADMIN_MOBILE_COACH_TABS.filter((tab) => canAccessHref(accessRole, tab.href)),
-    [accessRole]
+    () => ADMIN_MOBILE_COACH_TABS.filter((tab) => canAccessHref(accessRole, tab.href, sessionPermissions)),
+    [accessRole, sessionPermissions]
   );
 
   const filteredMobileMainTabs = useMemo(
-    () => ADMIN_MOBILE_MAIN_TABS.filter((tab) => canAccessHref(accessRole, tab.href)),
-    [accessRole]
+    () => ADMIN_MOBILE_MAIN_TABS.filter((tab) => canAccessHref(accessRole, tab.href, sessionPermissions)),
+    [accessRole, sessionPermissions]
   );
 
   const provisional = storedSession;

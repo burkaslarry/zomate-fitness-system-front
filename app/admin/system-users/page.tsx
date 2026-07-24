@@ -3,15 +3,21 @@
 /**
  * [F007][S003]
  * Feature: Access Rights (Excel matrix)
- * Step: Master admin system account CRUD — masterzoe / masterfung only
- * Logic: Add clerk/coach logins, set password, disable accounts; display permission matrix.
+ * Step: Master admin system account CRUD + per-user permission tick boxes
+ * Logic: masterzoe / masterfung manage logins; existing users get checkbox overrides with confirm dialog.
  */
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import BackendShell from "../../../components/backend-shell";
 import { alertApiError, api } from "../../../lib/api";
 import { getAuthSession, mergeAuthSessionFromMe, setAuthSession } from "../../../lib/auth";
+import {
+  EDITABLE_ACCESS_FEATURES,
+  labelForPermissionKey,
+  permissionsForRole,
+  type AccessRole
+} from "../../../lib/access-rights";
 
 type MatrixRow = {
   key: string;
@@ -29,10 +35,28 @@ type SystemUser = {
   is_master_admin: boolean;
   is_active: boolean;
   coach_id: number | null;
+  permissions: string[];
+  uses_custom_permissions: boolean;
   created_at: string;
 };
 
 type CoachOption = { id: number; full_name: string };
+
+type ConfirmState = {
+  userId: number;
+  username: string;
+  before: string[];
+  after: string[];
+};
+
+function permissionDiff(before: string[], after: string[]) {
+  const beforeSet = new Set(before);
+  const afterSet = new Set(after);
+  return {
+    added: after.filter((k) => !beforeSet.has(k)),
+    removed: before.filter((k) => !afterSet.has(k))
+  };
+}
 
 export default function SystemUsersPage() {
   const router = useRouter();
@@ -46,6 +70,9 @@ export default function SystemUsersPage() {
   const [coachId, setCoachId] = useState<number | "">("");
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState("");
+  const [expandedUserId, setExpandedUserId] = useState<number | null>(null);
+  const [draftPermissions, setDraftPermissions] = useState<Record<number, string[]>>({});
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
   const reload = useCallback(async () => {
     const [m, u, c] = await Promise.all([
@@ -54,7 +81,9 @@ export default function SystemUsersPage() {
       api.publicCoaches() as Promise<CoachOption[]>
     ]);
     setMatrix(m.rows ?? []);
-    setUsers(Array.isArray(u) ? u : []);
+    const list = Array.isArray(u) ? u : [];
+    setUsers(list);
+    setDraftPermissions(Object.fromEntries(list.map((row) => [row.id, row.permissions ?? []])));
     setCoaches(Array.isArray(c) ? c.filter((x) => x && "id" in x) : []);
   }, []);
 
@@ -78,6 +107,58 @@ export default function SystemUsersPage() {
     })();
   }, [reload, router]);
 
+  const featureRows = useMemo(() => EDITABLE_ACCESS_FEATURES, []);
+
+  function togglePermission(userId: number, key: string, checked: boolean) {
+    setDraftPermissions((prev) => {
+      const current = new Set(prev[userId] ?? []);
+      if (checked) current.add(key);
+      else current.delete(key);
+      return { ...prev, [userId]: [...current] };
+    });
+  }
+
+  function openConfirmSave(user: SystemUser) {
+    const before = user.permissions ?? [];
+    const after = draftPermissions[user.id] ?? before;
+    if (before.slice().sort().join(",") === after.slice().sort().join(",")) {
+      setToast(`${user.username} 權限未有變更`);
+      return;
+    }
+    setConfirm({ userId: user.id, username: user.username, before, after });
+  }
+
+  async function applyPermissionSave() {
+    if (!confirm) return;
+    setBusy(true);
+    setToast("");
+    try {
+      await api.updateSystemUser(confirm.userId, { permissions: confirm.after });
+      setToast(`已更新 ${confirm.username} 的 Access Rights`);
+      setConfirm(null);
+      setExpandedUserId(null);
+      await reload();
+    } catch (e) {
+      alertApiError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resetToRoleDefaults(user: SystemUser) {
+    if (!window.confirm(`將「${user.username}」權限重設為 ${user.access_role} 角色預設？`)) return;
+    setBusy(true);
+    try {
+      await api.updateSystemUser(user.id, { reset_permissions: true });
+      setToast(`已重設 ${user.username} 為角色預設權限`);
+      await reload();
+    } catch (e) {
+      alertApiError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onCreate(ev: FormEvent) {
     ev.preventDefault();
     setBusy(true);
@@ -92,7 +173,7 @@ export default function SystemUsersPage() {
       setUsername("");
       setPassword("");
       setCoachId("");
-      setToast("已建立帳號，對方可以登入開波。");
+      setToast("已建立帳號");
       await reload();
     } catch (e) {
       alertApiError(e);
@@ -140,17 +221,11 @@ export default function SystemUsersPage() {
 
   if (!allowed) return null;
 
+  const confirmDiff = confirm ? permissionDiff(confirm.before, confirm.after) : null;
+
   return (
     <BackendShell title="系統帳號 · Access Rights">
       <div className="mx-auto max-w-5xl space-y-6">
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
-          <p className="font-semibold">可以開波</p>
-          <p className="mt-1 text-emerald-900/90">
-            以 masterzoe / masterfung 登入後，在此建立櫃台（clerk）或教練（PT）帳號並設定密碼，即可開始營運。權限表依{" "}
-            <code className="text-xs">docs/access-rights-matrix.xlsx</code>。
-          </p>
-        </div>
-
         {toast ? (
           <p className="rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink">{toast}</p>
         ) : null}
@@ -250,44 +325,162 @@ export default function SystemUsersPage() {
         </section>
 
         <section className="rounded-xl border border-ink/10 bg-surface p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-ink">帳號列表</h2>
-          <ul className="mt-4 space-y-2">
-            {users.map((u) => (
-              <li
-                key={u.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm"
-              >
-                <div>
-                  <span className="font-medium text-ink">{u.username}</span>
-                  <span className="ml-2 text-xs text-ink/55">
-                    {u.access_role}
-                    {!u.is_active ? " · 已停用" : ""}
-                    {u.is_master_admin ? " · Master" : ""}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    disabled={busy || u.is_master_admin}
-                    className="rounded border border-ink/15 px-2 py-1 text-xs disabled:opacity-40"
-                    onClick={() => void resetPassword(u.id, u.username)}
-                  >
-                    重設密碼
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy || u.is_master_admin || !u.is_active}
-                    className="rounded border border-rose-200 px-2 py-1 text-xs text-rose-800 disabled:opacity-40"
-                    onClick={() => void disableUser(u.id, u.username)}
-                  >
-                    停用
-                  </button>
-                </div>
-              </li>
-            ))}
+          <h2 className="text-lg font-semibold text-ink">帳號列表 · 修改權限</h2>
+          <ul className="mt-4 space-y-3">
+            {users.map((u) => {
+              const expanded = expandedUserId === u.id;
+              const draft = draftPermissions[u.id] ?? u.permissions ?? [];
+              const roleDefaults = permissionsForRole(u.access_role as AccessRole);
+              return (
+                <li key={u.id} className="rounded-lg border border-ink/10 bg-canvas">
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm">
+                    <div>
+                      <span className="font-medium text-ink">{u.username}</span>
+                      <span className="ml-2 text-xs text-ink/55">
+                        {u.access_role}
+                        {!u.is_active ? " · 已停用" : ""}
+                        {u.is_master_admin ? " · Master" : ""}
+                        {u.uses_custom_permissions ? " · 自訂權限" : ""}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {!u.is_master_admin && u.is_active ? (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          className="rounded border border-primary/30 px-2 py-1 text-xs text-ink"
+                          onClick={() => setExpandedUserId(expanded ? null : u.id)}
+                        >
+                          {expanded ? "收合權限" : "修改權限"}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={busy || u.is_master_admin}
+                        className="rounded border border-ink/15 px-2 py-1 text-xs disabled:opacity-40"
+                        onClick={() => void resetPassword(u.id, u.username)}
+                      >
+                        重設密碼
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy || u.is_master_admin || !u.is_active}
+                        className="rounded border border-rose-200 px-2 py-1 text-xs text-rose-800 disabled:opacity-40"
+                        onClick={() => void disableUser(u.id, u.username)}
+                      >
+                        停用
+                      </button>
+                    </div>
+                  </div>
+                  {expanded && !u.is_master_admin ? (
+                    <div className="border-t border-ink/10 px-3 py-3">
+                      <p className="text-xs text-ink/55">
+                        角色預設（{u.access_role}）：{roleDefaults.map(labelForPermissionKey).join("、")}
+                      </p>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {featureRows.map((feat) => (
+                          <label key={feat.key} className="flex items-start gap-2 text-sm text-ink">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5"
+                              checked={draft.includes(feat.key)}
+                              disabled={busy}
+                              onChange={(e) => togglePermission(u.id, feat.key, e.target.checked)}
+                            />
+                            <span>{feat.label_zh}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={busy}
+                          className="rounded-lg bg-primary/90 px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-50"
+                          onClick={() => openConfirmSave(u)}
+                        >
+                          儲存權限
+                        </button>
+                        {u.uses_custom_permissions ? (
+                          <button
+                            type="button"
+                            disabled={busy}
+                            className="rounded-lg border border-ink/15 px-3 py-1.5 text-xs text-ink disabled:opacity-50"
+                            onClick={() => void resetToRoleDefaults(u)}
+                          >
+                            重設為角色預設
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         </section>
       </div>
+
+      {confirm && confirmDiff ? (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 p-4"
+          role="presentation"
+          onClick={() => !busy && setConfirm(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-ink/10 bg-surface p-5 shadow-lg"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="perm-confirm-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="perm-confirm-title" className="text-lg font-semibold text-ink">
+              確認修改 Access Rights
+            </h2>
+            <p className="mt-2 text-sm text-ink/70">帳號：<strong>{confirm.username}</strong></p>
+            {confirmDiff.added.length ? (
+              <div className="mt-3">
+                <p className="text-xs font-medium text-emerald-800">新增權限</p>
+                <ul className="mt-1 list-inside list-disc text-sm text-ink">
+                  {confirmDiff.added.map((k) => (
+                    <li key={k}>{labelForPermissionKey(k)}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {confirmDiff.removed.length ? (
+              <div className="mt-3">
+                <p className="text-xs font-medium text-rose-800">移除權限</p>
+                <ul className="mt-1 list-inside list-disc text-sm text-ink">
+                  {confirmDiff.removed.map((k) => (
+                    <li key={k}>{labelForPermissionKey(k)}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {!confirmDiff.added.length && !confirmDiff.removed.length ? (
+              <p className="mt-3 text-sm text-ink/60">未有變更</p>
+            ) : null}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                className="rounded-lg border border-ink/15 px-3 py-2 text-sm"
+                onClick={() => setConfirm(null)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                className="rounded-lg bg-primary/90 px-3 py-2 text-sm font-semibold text-black disabled:opacity-50"
+                onClick={() => void applyPermissionSave()}
+              >
+                {busy ? "儲存中…" : "確認儲存"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </BackendShell>
   );
 }
