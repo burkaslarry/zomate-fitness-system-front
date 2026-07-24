@@ -101,10 +101,11 @@ test.describe("Access rights demo recordings", () => {
       await page.locator('input[type="password"]').first().fill(CLERK_PASS);
       await page.getByRole("combobox").first().selectOption("CLERK");
       await page.getByRole("button", { name: "建立帳號" }).click();
-      await expect(page.getByText(/已建立帳號|clerk/)).toBeVisible({ timeout: 20_000 });
+      await expect(page.getByText("已建立帳號，對方可以登入開波。")).toBeVisible({ timeout: 20_000 });
+      await expect(page.locator("li").filter({ hasText: CLERK_USER }).first()).toBeVisible();
       await page.waitForTimeout(1800);
     } else {
-      await expect(page.getByText(CLERK_USER)).toBeVisible();
+      await expect(page.locator("li").filter({ hasText: CLERK_USER }).first()).toBeVisible();
       await page.waitForTimeout(1200);
     }
 
