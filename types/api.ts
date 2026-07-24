@@ -47,6 +47,8 @@ export type InstallmentSegmentPinDto = {
   paid?: boolean;
   /** Default WhatsApp reminder lesson, e.g. 9 / 19 / 29 for a 30-lesson package. */
   reminder_lesson?: number | null;
+  /** HKD due for this installment tranche (when staff split total across periods). */
+  amount_hkd?: number | null;
 };
 
 export type CourseCheckinPinRow = {

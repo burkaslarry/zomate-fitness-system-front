@@ -38,6 +38,29 @@ function isValidRenewalAmount(raw: string): boolean {
   return Number.isFinite(n) && n > 0;
 }
 
+function parseAmount(raw: string): number | null {
+  const t = raw.trim().replace(/,/g, "");
+  if (!t) return null;
+  const n = Number(t);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function splitInstallmentAmounts(total: number, count: 2 | 3): string[] {
+  const per = Math.floor(total / count);
+  const remainder = total - per * count;
+  const amounts = Array.from({ length: count }, () => per);
+  amounts[count - 1] += remainder;
+  return amounts.map(String);
+}
+
+function amountsMatchTotal(parts: string[], totalRaw: string): boolean {
+  const total = parseAmount(totalRaw);
+  if (total == null) return false;
+  if (!parts.every((raw) => parseAmount(raw) != null)) return false;
+  const sum = parts.reduce((acc, raw) => acc + (parseAmount(raw) ?? 0), 0);
+  return Math.abs(sum - total) < 0.01;
+}
+
 function digitsOnlyLessons(raw: string): string {
   return raw.replace(/\D/g, "").slice(0, 2);
 }
@@ -53,6 +76,7 @@ function buildAutoCoursePayload(opts: {
   studentId: number;
   totalLessons: number;
   totalInstallments: number;
+  installmentAmounts?: number[];
   remarks?: string;
 }) {
   const now = new Date();
@@ -71,6 +95,7 @@ function buildAutoCoursePayload(opts: {
     lesson_weekdays: [pythonWeekdayFromDate(now)],
     total_lessons: opts.totalLessons,
     total_installments: opts.totalInstallments,
+    installment_amounts: opts.installmentAmounts,
     coach_schedule_note: opts.remarks?.trim() || undefined
   };
 }
@@ -128,6 +153,8 @@ export default function RegCourseWizard({
   const [fullPay, setFullPay] = useState(true);
   const [installmentPay, setInstallmentPay] = useState(false);
   const [installmentCount, setInstallmentCount] = useState<2 | 3>(2);
+  const [installmentAmounts, setInstallmentAmounts] = useState<string[]>(["", ""]);
+  const [installmentAmountsTouched, setInstallmentAmountsTouched] = useState(false);
   const [remarks, setRemarks] = useState("");
 
   useEffect(() => {
@@ -174,14 +201,47 @@ export default function RegCourseWizard({
 
   const totalInstallments = installmentPay ? installmentCount : 1;
 
+  const installmentSum = useMemo(
+    () => installmentAmounts.reduce((acc, raw) => acc + (parseAmount(raw) ?? 0), 0),
+    [installmentAmounts]
+  );
+
+  const installmentAmountsValid = useMemo(() => {
+    if (!installmentPay) return true;
+    return amountsMatchTotal(installmentAmounts, amount);
+  }, [installmentPay, installmentAmounts, amount]);
+
+  useEffect(() => {
+    if (!installmentPay || installmentAmountsTouched) return;
+    const total = parseAmount(amount);
+    if (total == null) return;
+    setInstallmentAmounts(splitInstallmentAmounts(total, installmentCount));
+  }, [amount, installmentCount, installmentPay, installmentAmountsTouched]);
+
   function selectFullPay() {
     setFullPay(true);
     setInstallmentPay(false);
+    setInstallmentAmountsTouched(false);
   }
 
   function selectInstallmentPay() {
     setFullPay(false);
     setInstallmentPay(true);
+    setInstallmentAmountsTouched(false);
+  }
+
+  function selectInstallmentCount(n: 2 | 3) {
+    setInstallmentCount(n);
+    setInstallmentAmountsTouched(false);
+  }
+
+  function updateInstallmentAmount(index: number, raw: string) {
+    setInstallmentAmountsTouched(true);
+    setInstallmentAmounts((prev) => {
+      const next = [...prev];
+      next[index] = raw.replace(/[^\d.]/g, "");
+      return next;
+    });
   }
 
   async function lookup() {
@@ -203,6 +263,8 @@ export default function RegCourseWizard({
       setAmount("");
       selectFullPay();
       setInstallmentCount(2);
+      setInstallmentAmounts(["", ""]);
+      setInstallmentAmountsTouched(false);
       setRemarks("");
       setPurchaseSummary(null);
     } catch (err) {
@@ -257,7 +319,11 @@ export default function RegCourseWizard({
     const selectedKind = filteredCategories.find((k) => k.id === categoryId);
     if (!selectedKind) return;
     if (!isValidRenewalAmount(amount)) {
-      alertApiError(new Error("請輸入有效應付金額"));
+      alertApiError(new Error("請輸入有效應付總金額"));
+      return;
+    }
+    if (installmentPay && !installmentAmountsValid) {
+      alertApiError(new Error("各期金額加總須等於應付總金額"));
       return;
     }
     const form = new FormData(event.currentTarget);
@@ -273,10 +339,18 @@ export default function RegCourseWizard({
       return;
     }
     const receipt = form.get("receipt");
+    const totalAmount = amount.trim().replace(/,/g, "");
+    const firstInstallmentAmount = installmentPay ? (installmentAmounts[0]?.trim().replace(/,/g, "") || totalAmount) : totalAmount;
+    const installmentBreakdown = installmentPay
+      ? installmentAmounts.map((raw, i) => `第${i + 1}期 HKD ${parseAmount(raw) ?? 0}`).join(" + ")
+      : null;
     const noteParts = [`[${selectedKind.name}] 教練 ${selectedCoach?.full_name ?? coachId}`];
     if (remarks.trim()) noteParts.push(remarks.trim());
-    if (installmentPay) noteParts.push(`分期 ${totalInstallments} 期`);
-    else noteParts.push("一次付清");
+    if (installmentPay) {
+      noteParts.push(`分期 ${totalInstallments} 期 · 總 HKD ${totalAmount}（${installmentBreakdown}）`);
+    } else {
+      noteParts.push("一次付清");
+    }
     try {
       setRenewalSubmitting(true);
       await api.createRenewal({
@@ -284,7 +358,7 @@ export default function RegCourseWizard({
         total_lessons: lessons,
         coach_id: Number(coachId),
         branch_id: branchId,
-        amount: amount.trim().replace(/,/g, ""),
+        amount: firstInstallmentAmount,
         payment_method: method,
         transaction_type: selectedKind.name.startsWith(NEW_STUDENT_CATEGORY_PREFIX) ? "new_package" : "renewal",
         course_package_type_code: `cat_${selectedKind.id}`,
@@ -300,6 +374,9 @@ export default function RegCourseWizard({
         studentId: member.id,
         totalLessons: lessons,
         totalInstallments,
+        installmentAmounts: installmentPay
+          ? installmentAmounts.map((raw) => parseAmount(raw) ?? 0)
+          : undefined,
         remarks
       });
       const courseRes = (await (mode === "coach"
@@ -319,7 +396,7 @@ export default function RegCourseWizard({
         studentPhone: member.phone,
         packageName: `${lessons} 堂`,
         coursePackageType: selectedKind.name,
-        amountPaid: amount.trim().replace(/,/g, ""),
+        amountPaid: totalAmount,
         remainingBalance: balanceRes.lesson_balance,
         paymentMethod: method,
         coachName: selectedCoach?.full_name ?? "—",
@@ -487,13 +564,16 @@ export default function RegCourseWizard({
           </p>
 
           <label className="block text-sm">
-            <span className="text-ink/70">應付金額（HKD）</span>
+            <span className="text-ink/70">應付總金額（HKD）</span>
             <input
               inputMode="decimal"
               required
-              placeholder="HKD"
+              placeholder="例如 21000"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => {
+                setAmount(e.target.value);
+                setInstallmentAmountsTouched(false);
+              }}
               className="mt-1 w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2.5 text-base sm:text-sm"
             />
           </label>
@@ -502,44 +582,82 @@ export default function RegCourseWizard({
             <legend className="px-1 text-ink/70">付款安排</legend>
             <label className="flex cursor-pointer items-center gap-2.5">
               <input
-                type="checkbox"
+                type="radio"
+                name="payment_plan"
                 checked={fullPay}
-                onChange={() => selectFullPay()}
-                className="h-4 w-4 rounded border-ink/20"
+                onChange={selectFullPay}
+                className="h-4 w-4 border-ink/20"
               />
               一次付清（Full pay）— 開課後出 PIN 俾學生簽到
             </label>
             <label className="flex cursor-pointer items-center gap-2.5">
               <input
-                type="checkbox"
+                type="radio"
+                name="payment_plan"
                 checked={installmentPay}
-                onChange={() => selectInstallmentPay()}
-                className="h-4 w-4 rounded border-ink/20"
+                onChange={selectInstallmentPay}
+                className="h-4 w-4 border-ink/20"
               />
               分期付款（Installment）
             </label>
             {installmentPay ? (
-              <div className="ml-6 flex flex-wrap gap-4 pt-1">
-                {([2, 3] as const).map((n) => (
-                  <label key={n} className="flex cursor-pointer items-center gap-2 text-xs sm:text-sm">
-                    <input
-                      type="checkbox"
-                      checked={installmentCount === n}
-                      onChange={() => setInstallmentCount(n)}
-                      className="h-4 w-4 rounded border-ink/20"
-                    />
-                    {n} 期
-                  </label>
-                ))}
-                <p className="w-full text-xs text-amber-900/85">
-                  第 1 期付款後可開課；第 2／3 期未付時簽到頁會提示學生先付款。
+              <div className="ml-1 space-y-3 border-l-2 border-amber-200 pl-4 pt-1">
+                <div className="flex flex-wrap gap-4">
+                  {([2, 3] as const).map((n) => (
+                    <label key={n} className="flex cursor-pointer items-center gap-2 text-xs sm:text-sm">
+                      <input
+                        type="radio"
+                        name="installment_count"
+                        checked={installmentCount === n}
+                        onChange={() => selectInstallmentCount(n)}
+                        className="h-4 w-4 border-ink/20"
+                      />
+                      {n} 期
+                    </label>
+                  ))}
+                </div>
+                <div className="space-y-2">
+                  <p className="text-xs text-ink/60">
+                    各期金額（預設總額 ÷ 期數，可改；加總須等於應付總金額）
+                  </p>
+                  {installmentAmounts.slice(0, installmentCount).map((raw, index) => (
+                    <label key={index} className="flex items-center gap-2 text-sm">
+                      <span className="w-14 shrink-0 text-ink/65">第 {index + 1} 期</span>
+                      <input
+                        inputMode="decimal"
+                        value={raw}
+                        onChange={(e) => updateInstallmentAmount(index, e.target.value)}
+                        className="flex-1 rounded-lg border border-ink/10 bg-white px-3 py-2 text-base sm:text-sm"
+                        placeholder={parseAmount(amount) != null ? String(Math.floor(parseAmount(amount)! / installmentCount)) : "HKD"}
+                      />
+                    </label>
+                  ))}
+                  <p
+                    className={`text-xs ${installmentAmountsValid ? "text-emerald-800" : "text-rose-700"}`}
+                  >
+                    各期加總：HKD {installmentSum.toLocaleString("en-HK")}
+                    {parseAmount(amount) != null
+                      ? ` · 應付總金額 HKD ${parseAmount(amount)!.toLocaleString("en-HK")}`
+                      : ""}
+                    {!installmentAmountsValid && parseAmount(amount) != null ? " — 金額不符" : ""}
+                  </p>
+                </div>
+                <p className="text-xs text-amber-900/85">
+                  第 1 期付款後可開課；第 2／3 期須收款後才可簽到（屆時再 full pay 並上載收據）。
                 </p>
               </div>
             ) : null}
           </fieldset>
 
           <PaymentMethodRadio />
-          <FileUpload name="receipt" label="收據上傳（選填，可候補）" />
+          {installmentPay ? (
+            <div className="space-y-2">
+              <FileUpload name="receipt" label="第 1 期收據（PDF / PNG，選填）" />
+              <p className="text-xs text-ink/55">第 2、3 期收款時再補上載收據。</p>
+            </div>
+          ) : (
+            <FileUpload name="receipt" label="收據上傳（選填，可候補）" />
+          )}
 
           <div className="flex flex-col gap-2 sm:flex-row">
             <button type="button" onClick={() => setStep(2)} className="flex-1 rounded-md border border-ink/15 px-4 py-2.5 text-sm">
@@ -547,7 +665,7 @@ export default function RegCourseWizard({
             </button>
             <button
               type="submit"
-              disabled={renewalSubmitting || !isValidRenewalAmount(amount)}
+              disabled={renewalSubmitting || !isValidRenewalAmount(amount) || !installmentAmountsValid}
               className="flex-1 rounded-md bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
             >
               {renewalSubmitting ? "提交中…" : "確認報名"}
@@ -585,6 +703,7 @@ export default function RegCourseWizard({
                 >
                   <span>
                     第 {seg.installment_no} 期 · 第 {seg.lesson_from}–{seg.lesson_to} 堂
+                    {seg.amount_hkd != null ? ` · HKD ${seg.amount_hkd.toLocaleString("en-HK")}` : ""}
                   </span>
                   <span className="font-mono font-semibold text-ink">{seg.pin}</span>
                   <span className="text-[10px]">{seg.paid ? "可簽到" : "待付款"}</span>
@@ -603,7 +722,7 @@ export default function RegCourseWizard({
               <dd>{purchaseSummary.coursePackageType}</dd>
             </div>
             <div className="flex justify-between gap-2">
-              <dt className="text-emerald-800/70">金額</dt>
+              <dt className="text-emerald-800/70">應付總金額</dt>
               <dd>HKD {purchaseSummary.amountPaid}</dd>
             </div>
             <div className="flex justify-between gap-2">
