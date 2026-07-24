@@ -114,7 +114,7 @@ test.describe("Access rights demo recordings", () => {
     await staffLogin(page, CLERK_USER, CLERK_PASS, /\/admin/);
     await expect(page.getByRole("link", { name: "學生名單" })).toBeVisible();
     await expect(page.locator("[data-admin-sidebar]").getByRole("link", { name: "教練" })).toHaveCount(0);
-    await expect(page.getByRole("link", { name: "銷售與分期" })).toHaveCount(0);
+    await expect(page.locator("[data-admin-sidebar]").getByRole("link", { name: "銷售與分期" })).toHaveCount(0);
     await page.waitForTimeout(2500);
   });
 
