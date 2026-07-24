@@ -57,13 +57,13 @@ async function prepClerkAccount() {
   if (!listRes.ok) throw new Error(`list system users failed: ${listRes.status}`);
   const users = (await listRes.json()) as Array<{ id: number; username: string; is_active: boolean }>;
   const existing = users.find((u) => u.username === CLERK_USER);
-  if (!existing) return true;
-  await fetch(`${API}/api/admin/system-users/${existing.id}`, {
-    method: "PATCH",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ password: CLERK_PASS, is_active: true, role: "CLERK" })
-  });
-  return false;
+  if (existing?.is_active) {
+    await fetch(`${API}/api/admin/system-users/${existing.id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` }
+    });
+  }
+  return true;
 }
 
 test.describe("Access rights demo recordings", () => {
