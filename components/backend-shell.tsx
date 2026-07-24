@@ -293,6 +293,16 @@ export default function BackendShell({
     [accessRole]
   );
 
+  const filteredMobileCoachTabs = useMemo(
+    () => ADMIN_MOBILE_COACH_TABS.filter((tab) => canAccessHref(accessRole, tab.href)),
+    [accessRole]
+  );
+
+  const filteredMobileMainTabs = useMemo(
+    () => ADMIN_MOBILE_MAIN_TABS.filter((tab) => canAccessHref(accessRole, tab.href)),
+    [accessRole]
+  );
+
   const provisional = storedSession;
   const verifying = Boolean(provisional && !verifiedSession && !rejected);
   const displaySession = verifiedSession ?? provisional;
@@ -513,7 +523,7 @@ export default function BackendShell({
             className="fixed bottom-0 left-0 right-0 z-40 border-t border-ink/10 bg-surface/95 backdrop-blur-md md:hidden"
           >
             <div className="mx-auto flex max-w-lg">
-              {ADMIN_MOBILE_COACH_TABS.map((tab) => {
+              {filteredMobileCoachTabs.map((tab) => {
                 const active = tab.match(pathname);
                 return (
                   <Link
@@ -533,13 +543,13 @@ export default function BackendShell({
               })}
             </div>
           </nav>
-        ) : showAdminMobileMainTabs ? (
+        ) : showAdminMobileMainTabs && filteredMobileMainTabs.length > 0 ? (
           <nav
             data-admin-bottom-nav
             className="fixed bottom-0 left-0 right-0 z-40 border-t border-ink/10 bg-surface/95 backdrop-blur-md md:hidden"
           >
             <div className="mx-auto flex max-w-lg">
-              {ADMIN_MOBILE_MAIN_TABS.map((tab) => {
+              {filteredMobileMainTabs.map((tab) => {
                 const active = tab.match(pathname);
                 return (
                   <Link

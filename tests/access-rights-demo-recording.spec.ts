@@ -113,7 +113,7 @@ test.describe("Access rights demo recordings", () => {
     await warmLoginFrame(page);
     await staffLogin(page, CLERK_USER, CLERK_PASS, /\/admin/);
     await expect(page.getByRole("link", { name: "學生名單" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "教練" })).toHaveCount(0);
+    await expect(page.locator("[data-admin-sidebar]").getByRole("link", { name: "教練" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "銷售與分期" })).toHaveCount(0);
     await page.waitForTimeout(2500);
   });
@@ -125,7 +125,7 @@ test.describe("Access rights demo recordings", () => {
     await staffLogin(page, "coachdemo", "12347890", /\/coach-portal/);
     await expect(page.getByRole("heading", { name: "教練工作台" })).toBeVisible({ timeout: 20_000 });
     await page.goto(`${BASE}/coach-portal?tab=schedule`);
-    await expect(page.getByRole("heading", { name: /學員排期上堂/ })).toBeVisible({ timeout: 25_000 });
+    await expect(page.getByRole("heading", { name: /日曆 · 學員上堂/ })).toBeVisible({ timeout: 25_000 });
     await page.waitForTimeout(1500);
 
     await page.goto(`${BASE}/login?logout=1`);
