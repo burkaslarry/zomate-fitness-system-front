@@ -9,7 +9,47 @@ export type AuthSession = {
   token: string;
   username: string;
   role: "ADMIN" | "CLERK" | "COACH";
+  accessRole?: "MASTER_ADMIN" | "CLERK" | "COACH";
+  isMasterAdmin?: boolean;
+  permissions?: string[];
 };
+
+export function mergeAuthSessionFromMe(
+  base: AuthSession,
+  me: {
+    token?: string;
+    username?: string;
+    role?: string;
+    access_role?: string;
+    is_master_admin?: boolean;
+    permissions?: string[];
+  }
+): AuthSession {
+  const username = me.username ?? base.username;
+  const roleRaw = me.role ?? base.role;
+  const role =
+    roleRaw === "ADMIN" || roleRaw === "CLERK" || roleRaw === "COACH" ? roleRaw : base.role;
+  let accessRole = base.accessRole;
+  if (me.access_role === "MASTER_ADMIN" || me.access_role === "CLERK" || me.access_role === "COACH") {
+    accessRole = me.access_role;
+  } else if (username.toLowerCase() === "masterzoe" || username.toLowerCase() === "masterfung") {
+    accessRole = "MASTER_ADMIN";
+  } else if (role === "COACH") {
+    accessRole = "COACH";
+  } else if (role === "ADMIN") {
+    accessRole = "MASTER_ADMIN";
+  } else {
+    accessRole = "CLERK";
+  }
+  return {
+    token: me.token ?? base.token,
+    username,
+    role,
+    accessRole,
+    isMasterAdmin: Boolean(me.is_master_admin ?? accessRole === "MASTER_ADMIN"),
+    permissions: Array.isArray(me.permissions) ? me.permissions : base.permissions
+  };
+}
 
 const AUTH_STORAGE_KEY = "zomate_auth_session";
 const AUTH_SESSION_CHANGED_EVENT = "zomate_auth_session_changed";

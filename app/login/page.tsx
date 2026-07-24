@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation";
 import { usePeriodicHealthPing } from "../../hooks/use-periodic-health-ping";
 import { api } from "../../lib/api";
 import BuildFooter from "../../components/build-footer";
-import { clearAuthSession, getAuthSession, setAuthSession } from "../../lib/auth";
+import { clearAuthSession, getAuthSession, mergeAuthSessionFromMe, setAuthSession } from "../../lib/auth";
 
 export default function LoginPage() {
   usePeriodicHealthPing();
@@ -46,14 +46,18 @@ export default function LoginPage() {
         token: string;
         username: string;
         role: "ADMIN" | "CLERK" | "COACH";
+        access_role?: string;
+        is_master_admin?: boolean;
+        permissions?: string[];
       };
       const role: "ADMIN" | "CLERK" | "COACH" =
         data.role === "ADMIN" || data.role === "CLERK" || data.role === "COACH" ? data.role : "CLERK";
-      setAuthSession({
-        token: data.token,
-        username: data.username,
-        role
-      });
+      setAuthSession(
+        mergeAuthSessionFromMe(
+          { token: data.token, username: data.username, role },
+          data
+        )
+      );
       router.push(role === "COACH" ? "/coach-portal" : "/admin");
     } catch (err) {
       setError((err as Error).message ?? "Login failed");
@@ -130,18 +134,21 @@ export default function LoginPage() {
             </div>
             <ul className="mt-4 space-y-2 text-sm text-black">
               <li>
-                <strong>masterzoe</strong> / 12345678（ADMIN）
+                <strong>masterzoe</strong> / 12345678（Master admin）
               </li>
               <li>
-                <strong>worker</strong> / 12347890（CLERK）
+                <strong>masterfung</strong> / 12345678（Master admin）
               </li>
               <li>
-                <strong>coachdemo</strong> / 12347890（COACH·僅教練日程）
+                <strong>worker</strong> / 12347890（CLERK · 櫃台）
               </li>
               <li>
-                <strong>funglo</strong> / 12345666（教練）
+                <strong>coachdemo</strong> / 12347890（COACH · 教練日程）
               </li>
             </ul>
+            <p className="mt-3 text-xs text-slate-600">
+              Master admin 可於「系統帳號 · Access Rights」新增帳號、重設密碼、停用帳號。
+            </p>
             <p className="mt-4 text-xs font-medium text-amber-800">（切勿公開，只限 DEMO）</p>
             <button
               type="button"

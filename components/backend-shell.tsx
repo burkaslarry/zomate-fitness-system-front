@@ -8,10 +8,11 @@
  */
 
 import Link from "next/link";
-import { ReactNode, useEffect, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
-import { clearAuthSession, getAuthSession, waitForSessionReplacement, type AuthSession } from "../lib/auth";
+import { clearAuthSession, getAuthSession, mergeAuthSessionFromMe, setAuthSession, waitForSessionReplacement, type AuthSession } from "../lib/auth";
+import { canAccessHref, normalizeAccessRole } from "../lib/access-rights";
 import { api, getResolvedApiBaseUrl, isUsingNextMockApi } from "../lib/api";
 import { PERIODIC_HEALTH_INTERVAL_MS } from "../hooks/use-periodic-health-ping";
 import BuildFooter from "./build-footer";
@@ -49,9 +50,14 @@ const MENU_SECTIONS: { frameClass: string; items: NavItem[] }[] = [
   {
     frameClass: "rounded-xl border-2 border-ink/12 bg-surface/60 p-2.5",
     items: [
-      /** [F004][S001] Expenses + payroll excluded: coaches self-mark attendance. */
-      { href: "/admin/finance/sales", label: "銷售與分期" }
+      { href: "/admin/finance/sales", label: "銷售與分期" },
+      { href: "/admin/finance/expenses", label: "支出管理" },
+      { href: "/admin/finance/payroll", label: "薪酬 / 出勤報表" }
     ]
+  },
+  {
+    frameClass: "rounded-xl border-2 border-primary/40 bg-primary/10 p-2.5",
+    items: [{ href: "/admin/system-users", label: "系統帳號 · Access Rights" }]
   },
   {
     frameClass: "rounded-xl border-2 border-ink/10 bg-canvas p-2.5",
@@ -153,8 +159,13 @@ export default function BackendShell({
     }
     void (async () => {
       try {
-        await api.me();
-        if (!cancelled) setVerifiedSession(s);
+        const me = (await api.me()) as Parameters<typeof mergeAuthSessionFromMe>[1];
+        const merged = mergeAuthSessionFromMe(s, me);
+        setAuthSession(merged);
+        if (!cancelled) {
+          setStoredSession(merged);
+          setVerifiedSession(merged);
+        }
         return;
       } catch {
         /** [F006][S002] Silent session token healing — one background retry before logout. */
@@ -292,9 +303,24 @@ export default function BackendShell({
   const showAdminMobileCoachTabs = showAdminSidebar && isCoachSectionPath(pathname);
   const showAdminMobileMainTabs = showAdminSidebar && showAdminMobileBottomNav && !isCoachSectionPath(pathname);
 
+  const accessRole = useMemo(() => {
+    const session = verifiedSession ?? storedSession;
+    if (!session) return "CLERK" as const;
+    return session.accessRole ?? normalizeAccessRole(session.role, session.username);
+  }, [verifiedSession, storedSession]);
+
+  const filteredMenuSections = useMemo(
+    () =>
+      MENU_SECTIONS.map((section) => ({
+        ...section,
+        items: section.items.filter((item) => canAccessHref(accessRole, item.href))
+      })).filter((section) => section.items.length > 0),
+    [accessRole]
+  );
+
   const navSections = (
     <>
-      {MENU_SECTIONS.map((section, si) => (
+      {filteredMenuSections.map((section, si) => (
         <div key={si} className={section.frameClass}>
           <div className="space-y-0.5">
             {section.items.map((item) => {

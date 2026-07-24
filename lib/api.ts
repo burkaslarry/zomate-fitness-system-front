@@ -894,5 +894,21 @@ export const api = {
     if (query?.month) sp.set("month", query.month);
     const qs = sp.toString();
     return request(`/api/v1/reports/coach-attendance${qs ? `?${qs}` : ""}`);
-  }
+  },
+  /** [F007][S003] Master admin — Excel access matrix. */
+  accessRightsMatrix: () => request("/api/admin/access-rights"),
+  listSystemUsers: () => request("/api/admin/system-users"),
+  createSystemUser: (payload: {
+    username: string;
+    password: string;
+    role: "CLERK" | "COACH" | "MASTER_ADMIN";
+    coach_id?: number;
+  }) => request("/api/admin/system-users", { method: "POST", body: JSON.stringify(payload) }),
+  updateSystemUser: (
+    userId: number,
+    payload: { password?: string; role?: "CLERK" | "COACH" | "MASTER_ADMIN"; is_active?: boolean; coach_id?: number }
+  ) =>
+    request(`/api/admin/system-users/${userId}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteSystemUser: (userId: number) =>
+    request(`/api/admin/system-users/${userId}`, { method: "DELETE" })
 };
