@@ -53,7 +53,10 @@ export function permissionsForRole(accessRole: AccessRole): string[] {
 
 export function canAccessHref(accessRole: AccessRole, href: string): boolean {
   if (accessRole === "MASTER_ADMIN") return true;
-  return ACCESS_FEATURES.some(
-    (f) => f.roles.includes(accessRole) && (href === f.href || href.startsWith(`${f.href}/`))
-  );
+  return ACCESS_FEATURES.some((f) => {
+    if (!f.roles.includes(accessRole)) return false;
+    if (href === f.href) return true;
+    if (f.href === "/admin") return false;
+    return href.startsWith(`${f.href}/`);
+  });
 }
