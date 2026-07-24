@@ -906,6 +906,7 @@ export const api = {
     password: string;
     role: "CLERK" | "COACH" | "MASTER_ADMIN";
     coach_id?: number;
+    permissions?: string[];
   }) => request("/api/admin/system-users", { method: "POST", body: JSON.stringify(payload) }),
   updateSystemUser: (
     userId: number,

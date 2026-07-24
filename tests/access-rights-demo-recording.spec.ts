@@ -89,7 +89,8 @@ test.describe("Access rights demo recordings", () => {
     await page.getByRole("link", { name: "系統帳號 · Access Rights" }).click();
     await page.waitForURL("**/admin/system-users**", { timeout: 30_000 });
     await expect(page.getByRole("heading", { name: /系統帳號 · Access Rights/ })).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByRole("heading", { name: "Access Rights 表" })).toBeVisible();
+    await page.getByRole("button", { name: "+ 新增系統帳號" }).click();
+    await expect(page.getByRole("heading", { name: "新增系統帳號" })).toBeVisible();
     await page.waitForTimeout(1500);
 
     await expect(page.getByRole("heading", { name: "Access Rights 表" })).toBeVisible();
@@ -101,7 +102,7 @@ test.describe("Access rights demo recordings", () => {
       await page.locator('input[type="password"]').first().fill(CLERK_PASS);
       await page.getByRole("combobox").first().selectOption("CLERK");
       await page.getByRole("button", { name: "建立帳號" }).click();
-      await expect(page.getByText("已建立帳號，對方可以登入開波。")).toBeVisible({ timeout: 20_000 });
+      await expect(page.getByText("已建立帳號")).toBeVisible({ timeout: 20_000 });
       await expect(page.locator("li").filter({ hasText: CLERK_USER }).first()).toBeVisible();
       await page.waitForTimeout(1800);
     } else {

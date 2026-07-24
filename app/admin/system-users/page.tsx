@@ -4,7 +4,7 @@
  * [F007][S003]
  * Feature: Access Rights (Excel matrix)
  * Step: Master admin system account CRUD + per-user permission tick boxes
- * Logic: masterzoe / masterfung manage logins; existing users get checkbox overrides with confirm dialog.
+ * Logic: Two-column checkbox grid; create form revealed by + 新增 button.
  */
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
@@ -16,16 +16,9 @@ import {
   EDITABLE_ACCESS_FEATURES,
   labelForPermissionKey,
   permissionsForRole,
+  type AccessFeature,
   type AccessRole
 } from "../../../lib/access-rights";
-
-type MatrixRow = {
-  key: string;
-  label_zh: string;
-  href: string;
-  remark?: string | null;
-  matrix: Record<string, boolean>;
-};
 
 type SystemUser = {
   id: number;
@@ -58,16 +51,60 @@ function permissionDiff(before: string[], after: string[]) {
   };
 }
 
+function splitFeatureColumns(features: AccessFeature[]): [AccessFeature[], AccessFeature[]] {
+  const mid = Math.ceil(features.length / 2);
+  return [features.slice(0, mid), features.slice(mid)];
+}
+
+function PermissionCheckboxGrid({
+  values,
+  disabled,
+  onToggle
+}: {
+  values: string[];
+  disabled?: boolean;
+  onToggle: (key: string, checked: boolean) => void;
+}) {
+  const [left, right] = useMemo(() => splitFeatureColumns(EDITABLE_ACCESS_FEATURES), []);
+
+  const renderColumn = (items: AccessFeature[]) => (
+    <div className="space-y-2">
+      {items.map((feat) => (
+        <label key={feat.key} className="flex cursor-pointer items-center gap-2.5 text-sm leading-snug text-ink">
+          <input
+            type="checkbox"
+            className="h-4 w-4 shrink-0 rounded border-ink/25"
+            checked={values.includes(feat.key)}
+            disabled={disabled}
+            onChange={(e) => onToggle(feat.key, e.target.checked)}
+          />
+          <span>{feat.label_zh}</span>
+        </label>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2">
+      {renderColumn(left)}
+      {renderColumn(right)}
+    </div>
+  );
+}
+
 export default function SystemUsersPage() {
   const router = useRouter();
   const [allowed, setAllowed] = useState<boolean | null>(null);
-  const [matrix, setMatrix] = useState<MatrixRow[]>([]);
   const [users, setUsers] = useState<SystemUser[]>([]);
   const [coaches, setCoaches] = useState<CoachOption[]>([]);
+  const [showCreateForm, setShowCreateForm] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"CLERK" | "COACH">("CLERK");
   const [coachId, setCoachId] = useState<number | "">("");
+  const [newUserPermissions, setNewUserPermissions] = useState<string[]>(() =>
+    permissionsForRole("CLERK")
+  );
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState("");
   const [expandedUserId, setExpandedUserId] = useState<number | null>(null);
@@ -75,12 +112,10 @@ export default function SystemUsersPage() {
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
 
   const reload = useCallback(async () => {
-    const [m, u, c] = await Promise.all([
-      api.accessRightsMatrix() as Promise<{ rows: MatrixRow[] }>,
+    const [u, c] = await Promise.all([
       api.listSystemUsers() as Promise<SystemUser[]>,
       api.publicCoaches() as Promise<CoachOption[]>
     ]);
-    setMatrix(m.rows ?? []);
     const list = Array.isArray(u) ? u : [];
     setUsers(list);
     setDraftPermissions(Object.fromEntries(list.map((row) => [row.id, row.permissions ?? []])));
@@ -107,8 +142,6 @@ export default function SystemUsersPage() {
     })();
   }, [reload, router]);
 
-  const featureRows = useMemo(() => EDITABLE_ACCESS_FEATURES, []);
-
   function togglePermission(userId: number, key: string, checked: boolean) {
     setDraftPermissions((prev) => {
       const current = new Set(prev[userId] ?? []);
@@ -116,6 +149,30 @@ export default function SystemUsersPage() {
       else current.delete(key);
       return { ...prev, [userId]: [...current] };
     });
+  }
+
+  function toggleNewUserPermission(key: string, checked: boolean) {
+    setNewUserPermissions((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(key);
+      else next.delete(key);
+      return [...next];
+    });
+  }
+
+  function onRoleChange(next: "CLERK" | "COACH") {
+    setRole(next);
+    setNewUserPermissions(permissionsForRole(next));
+    if (next === "CLERK") setCoachId("");
+  }
+
+  function resetCreateForm() {
+    setShowCreateForm(false);
+    setUsername("");
+    setPassword("");
+    setRole("CLERK");
+    setCoachId("");
+    setNewUserPermissions(permissionsForRole("CLERK"));
   }
 
   function openConfirmSave(user: SystemUser) {
@@ -168,11 +225,10 @@ export default function SystemUsersPage() {
         username: username.trim().toLowerCase(),
         password,
         role,
-        coach_id: role === "COACH" && coachId ? Number(coachId) : undefined
+        coach_id: role === "COACH" && coachId ? Number(coachId) : undefined,
+        permissions: newUserPermissions
       });
-      setUsername("");
-      setPassword("");
-      setCoachId("");
+      resetCreateForm();
       setToast("已建立帳號");
       await reload();
     } catch (e) {
@@ -231,88 +287,91 @@ export default function SystemUsersPage() {
         ) : null}
 
         <section className="rounded-xl border border-ink/10 bg-surface p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-ink">Access Rights 表</h2>
-          <p className="mt-1 text-xs text-ink/55">Masteradmin · PT · clerk（來源 Excel）</p>
-          <div className="mt-4 overflow-x-auto">
-            <table className="min-w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-ink/10 text-ink/70">
-                  <th className="px-2 py-2 font-medium">功能</th>
-                  <th className="px-2 py-2 font-medium">Masteradmin</th>
-                  <th className="px-2 py-2 font-medium">PT</th>
-                  <th className="px-2 py-2 font-medium">clerk</th>
-                  <th className="px-2 py-2 font-medium">備註</th>
-                </tr>
-              </thead>
-              <tbody>
-                {matrix.map((row) => (
-                  <tr key={row.key} className="border-b border-ink/5">
-                    <td className="px-2 py-2 font-medium text-ink">{row.label_zh}</td>
-                    <td className="px-2 py-2">{row.matrix.Masteradmin ? "✓" : "—"}</td>
-                    <td className="px-2 py-2">{row.matrix.PT ? "✓" : "—"}</td>
-                    <td className="px-2 py-2">{row.matrix.clerk ? "✓" : "—"}</td>
-                    <td className="max-w-xs px-2 py-2 text-ink/55">{row.remark ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="rounded-xl border border-ink/10 bg-surface p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-ink">新增系統帳號</h2>
-          <form onSubmit={onCreate} className="mt-4 grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm">
-              <span className="text-ink/70">登入帳號</span>
-              <input
-                className="mt-1 w-full rounded-lg border border-ink/15 bg-canvas px-3 py-2"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="coachfunglo"
-                required
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="text-ink/70">密碼（最少 6 字）</span>
-              <input
-                type="password"
-                className="mt-1 w-full rounded-lg border border-ink/15 bg-canvas px-3 py-2"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                minLength={6}
-                required
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="text-ink/70">角色</span>
-              <select
-                className="mt-1 w-full rounded-lg border border-ink/15 bg-canvas px-3 py-2"
-                value={role}
-                onChange={(e) => setRole(e.target.value as "CLERK" | "COACH")}
-              >
-                <option value="CLERK">clerk（櫃台）</option>
-                <option value="COACH">PT（教練）</option>
-              </select>
-            </label>
-            {role === "COACH" ? (
-              <label className="block text-sm">
-                <span className="text-ink/70">綁定教練</span>
-                <select
-                  className="mt-1 w-full rounded-lg border border-ink/15 bg-canvas px-3 py-2"
-                  value={coachId}
-                  onChange={(e) => setCoachId(e.target.value ? Number(e.target.value) : "")}
-                  required
+          {!showCreateForm ? (
+            <button
+              type="button"
+              disabled={busy}
+              className="rounded-lg bg-primary/90 px-4 py-2.5 text-sm font-semibold text-black disabled:opacity-50"
+              onClick={() => setShowCreateForm(true)}
+            >
+              + 新增系統帳號
+            </button>
+          ) : (
+            <form onSubmit={onCreate} className="space-y-5">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold text-ink">新增系統帳號</h2>
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="text-xs text-ink/55 underline-offset-2 hover:underline"
+                  onClick={resetCreateForm}
                 >
-                  <option value="">請選擇</option>
-                  {coaches.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.full_name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-            <div className="sm:col-span-2">
+                  取消
+                </button>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  <span className="text-ink/70">登入帳號</span>
+                  <input
+                    className="mt-1 w-full rounded-lg border border-ink/15 bg-canvas px-3 py-2"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="coachfunglo"
+                    required
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="text-ink/70">密碼（最少 6 字）</span>
+                  <input
+                    type="password"
+                    className="mt-1 w-full rounded-lg border border-ink/15 bg-canvas px-3 py-2"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    minLength={6}
+                    required
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="text-ink/70">角色</span>
+                  <select
+                    className="mt-1 w-full rounded-lg border border-ink/15 bg-canvas px-3 py-2"
+                    value={role}
+                    onChange={(e) => onRoleChange(e.target.value as "CLERK" | "COACH")}
+                  >
+                    <option value="CLERK">clerk（櫃台）</option>
+                    <option value="COACH">PT（教練）</option>
+                  </select>
+                </label>
+                {role === "COACH" ? (
+                  <label className="block text-sm">
+                    <span className="text-ink/70">綁定教練</span>
+                    <select
+                      className="mt-1 w-full rounded-lg border border-ink/15 bg-canvas px-3 py-2"
+                      value={coachId}
+                      onChange={(e) => setCoachId(e.target.value ? Number(e.target.value) : "")}
+                      required
+                    >
+                      <option value="">請選擇</option>
+                      {coaches.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.full_name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-ink">Access Rights</h3>
+                <p className="mt-1 text-xs text-ink/55">勾選此帳號可使用的功能（預設跟隨角色）</p>
+                <div className="mt-3 rounded-lg border border-ink/10 bg-canvas p-4">
+                  <PermissionCheckboxGrid
+                    values={newUserPermissions}
+                    disabled={busy}
+                    onToggle={toggleNewUserPermission}
+                  />
+                </div>
+              </div>
               <button
                 type="submit"
                 disabled={busy}
@@ -320,8 +379,8 @@ export default function SystemUsersPage() {
               >
                 {busy ? "處理中…" : "建立帳號"}
               </button>
-            </div>
-          </form>
+            </form>
+          )}
         </section>
 
         <section className="rounded-xl border border-ink/10 bg-surface p-5 shadow-sm">
@@ -377,19 +436,12 @@ export default function SystemUsersPage() {
                       <p className="text-xs text-ink/55">
                         角色預設（{u.access_role}）：{roleDefaults.map(labelForPermissionKey).join("、")}
                       </p>
-                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                        {featureRows.map((feat) => (
-                          <label key={feat.key} className="flex items-start gap-2 text-sm text-ink">
-                            <input
-                              type="checkbox"
-                              className="mt-0.5"
-                              checked={draft.includes(feat.key)}
-                              disabled={busy}
-                              onChange={(e) => togglePermission(u.id, feat.key, e.target.checked)}
-                            />
-                            <span>{feat.label_zh}</span>
-                          </label>
-                        ))}
+                      <div className="mt-3 rounded-lg border border-ink/10 bg-surface p-4">
+                        <PermissionCheckboxGrid
+                          values={draft}
+                          disabled={busy}
+                          onToggle={(key, checked) => togglePermission(u.id, key, checked)}
+                        />
                       </div>
                       <div className="mt-4 flex flex-wrap gap-2">
                         <button
@@ -436,7 +488,9 @@ export default function SystemUsersPage() {
             <h2 id="perm-confirm-title" className="text-lg font-semibold text-ink">
               確認修改 Access Rights
             </h2>
-            <p className="mt-2 text-sm text-ink/70">帳號：<strong>{confirm.username}</strong></p>
+            <p className="mt-2 text-sm text-ink/70">
+              帳號：<strong>{confirm.username}</strong>
+            </p>
             {confirmDiff.added.length ? (
               <div className="mt-3">
                 <p className="text-xs font-medium text-emerald-800">新增權限</p>
