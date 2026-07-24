@@ -278,6 +278,21 @@ export default function BackendShell({
     };
   }, []);
 
+  const accessRole = useMemo(() => {
+    const session = verifiedSession ?? storedSession;
+    if (!session) return "CLERK" as const;
+    return session.accessRole ?? normalizeAccessRole(session.role, session.username);
+  }, [verifiedSession, storedSession]);
+
+  const filteredMenuSections = useMemo(
+    () =>
+      MENU_SECTIONS.map((section) => ({
+        ...section,
+        items: section.items.filter((item) => canAccessHref(accessRole, item.href))
+      })).filter((section) => section.items.length > 0),
+    [accessRole]
+  );
+
   const provisional = storedSession;
   const verifying = Boolean(provisional && !verifiedSession && !rejected);
   const displaySession = verifiedSession ?? provisional;
@@ -302,21 +317,6 @@ export default function BackendShell({
   const showAdminMobileBottomNav = showAdminSidebar && isAdminMobileNavPath(pathname);
   const showAdminMobileCoachTabs = showAdminSidebar && isCoachSectionPath(pathname);
   const showAdminMobileMainTabs = showAdminSidebar && showAdminMobileBottomNav && !isCoachSectionPath(pathname);
-
-  const accessRole = useMemo(() => {
-    const session = verifiedSession ?? storedSession;
-    if (!session) return "CLERK" as const;
-    return session.accessRole ?? normalizeAccessRole(session.role, session.username);
-  }, [verifiedSession, storedSession]);
-
-  const filteredMenuSections = useMemo(
-    () =>
-      MENU_SECTIONS.map((section) => ({
-        ...section,
-        items: section.items.filter((item) => canAccessHref(accessRole, item.href))
-      })).filter((section) => section.items.length > 0),
-    [accessRole]
-  );
 
   const navSections = (
     <>
