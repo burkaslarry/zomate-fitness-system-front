@@ -11,8 +11,8 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "verify": "npm run typecheck && npm run build",
-    "audit:fix": "npm audit fix",
-    "audit:gate": "npm audit fix && npm audit --audit-level=high",
+    "audit:fix": "npm audit fix || true",
+    "audit:gate": "npm run audit:fix && npm audit --audit-level=high",
     "predeploy": "npm run audit:gate && npm run build",
     "deploy:vercel": "npm run predeploy && vercel --prod",
     "simulate": "node simulationTest.js"
@@ -41,6 +41,7 @@
     "typescript": "5.8.3"
   },
   "overrides": {
-    "postcss": "^8.5.10"
+    "postcss": "^8.5.10",
+    "sharp": "^0.35.0"
   }
 }

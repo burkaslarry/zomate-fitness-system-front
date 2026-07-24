@@ -10,7 +10,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 echo "==> [SRAA] npm audit fix (safe fixes only; never --force)"
-npm audit fix
+npm audit fix || true
 
 echo "==> [SRAA] npm audit gate (block high / critical)"
 npm audit --audit-level=high

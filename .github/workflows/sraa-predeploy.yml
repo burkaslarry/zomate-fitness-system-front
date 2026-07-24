@@ -22,7 +22,7 @@ jobs:
         run: npm ci
 
       - name: npm audit fix (safe)
-        run: npm audit fix
+        run: npm audit fix || true
 
       - name: npm audit gate (high/critical)
         run: npm audit --audit-level=high
