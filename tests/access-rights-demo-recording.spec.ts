@@ -66,25 +66,6 @@ async function prepClerkAccount() {
   return false;
 }
 
-function copyLatestVideo(testTitle: string, destName: string) {
-  const root = path.join(__dirname, "../test-results");
-  if (!fs.existsSync(root)) return;
-  const dirs = fs
-    .readdirSync(root, { withFileTypes: true })
-    .filter((d) => d.isDirectory() && d.name.includes(testTitle.slice(0, 24).replace(/\s+/g, "-")))
-    .map((d) => ({
-      name: d.name,
-      mtime: fs.statSync(path.join(root, d.name)).mtimeMs
-    }))
-    .sort((a, b) => b.mtime - a.mtime);
-  const hit = dirs[0];
-  if (!hit) return;
-  const videoPath = path.join(root, hit.name, "video.webm");
-  if (!fs.existsSync(videoPath)) return;
-  fs.mkdirSync(DOCS_OUT, { recursive: true });
-  fs.copyFileSync(videoPath, path.join(DOCS_OUT, destName));
-}
-
 test.describe("Access rights demo recordings", () => {
   test.beforeAll(async () => {
     test.setTimeout(120_000);
@@ -105,7 +86,8 @@ test.describe("Access rights demo recordings", () => {
     await warmLoginFrame(page);
     await staffLogin(page, "masterzoe", "12345678", /\/admin/);
 
-    await page.goto(`${BASE}/admin/system-users`);
+    await page.getByRole("link", { name: "系統帳號 · Access Rights" }).click();
+    await page.waitForURL("**/admin/system-users**", { timeout: 30_000 });
     await expect(page.getByRole("heading", { name: /系統帳號 · Access Rights/ })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText("可以開波")).toBeVisible();
     await page.waitForTimeout(1500);
@@ -139,23 +121,25 @@ test.describe("Access rights demo recordings", () => {
 
     await warmLoginFrame(page);
     await staffLogin(page, "coachdemo", "12347890", /\/coach-portal/);
-    await expect(page.getByRole("heading", { name: /教練入口|Coach/i })).toBeVisible({ timeout: 20_000 });
-    await page.waitForTimeout(1200);
-
     await page.goto(`${BASE}/coach-portal?tab=schedule`);
     await expect(page.getByRole("heading", { name: /日曆 · 學員上堂/ })).toBeVisible({ timeout: 25_000 });
-    await page.waitForTimeout(1200);
+    await page.waitForTimeout(1500);
 
     await page.goto(`${BASE}/login?logout=1`);
     await warmLoginFrame(page);
     await staffLogin(page, "coachdemo", "12347890", /\/coach-portal/);
     await page.goto(`${BASE}/admin`);
-    await page.waitForTimeout(1500);
+    await expect(page.getByText(/此頁面僅供|403|Role not allowed|後台登入|教練/i).first()).toBeVisible({ timeout: 15_000 });
     await page.waitForTimeout(2500);
   });
 
   test.afterEach(async ({}, testInfo) => {
-    if (testInfo.title.includes("admin")) copyLatestVideo("admin", "access-rights-admin-demo.webm");
-    if (testInfo.title.includes("coach")) copyLatestVideo("coach", "access-rights-coach-demo.webm");
+    const videoPath = path.join(testInfo.outputDir, "video.webm");
+    if (!fs.existsSync(videoPath)) return;
+    fs.mkdirSync(DOCS_OUT, { recursive: true });
+    const destName = testInfo.title.includes("admin")
+      ? "access-rights-admin-demo.webm"
+      : "access-rights-coach-demo.webm";
+    fs.copyFileSync(videoPath, path.join(DOCS_OUT, destName));
   });
 });

@@ -34,6 +34,9 @@ function resolveApiBaseUrl(): string {
   if (process.env.NODE_ENV === "development") {
     return "http://127.0.0.1:8000";
   }
+  if (process.env.NODE_ENV === "production") {
+    return DEFAULT_PRODUCTION_BACKEND_ORIGIN;
+  }
   return "";
 }
 
