@@ -82,15 +82,29 @@ GitHub Actions workflow `.github/workflows/sraa-predeploy.yml` runs the same gat
 
 ### GitHub Actions → Vercel (auto-deploy on merge)
 
-Add these repository secrets in GitHub (**Settings → Secrets and variables → Actions**):
+**Option A — commit `.vercel/project.json` (recommended)**
 
-| Secret | Where to find it |
-|--------|------------------|
+1. Locally run `vercel link` (if not already linked).
+2. Commit `.vercel/project.json` (now tracked in git; contains `orgId` + `projectId`).
+3. Add one GitHub secret: `VERCEL_TOKEN` from [Vercel account tokens](https://vercel.com/account/tokens).
+
+**Option B — GitHub secrets only**
+
+Run locally (reads your `.vercel/project.json` and sets all three secrets):
+
+```bash
+./scripts/setup-vercel-github-secrets.sh
+```
+
+Or set manually in GitHub (**Settings → Secrets and variables → Actions**):
+
+| Secret | Source |
+|--------|--------|
 | `VERCEL_TOKEN` | [Vercel account tokens](https://vercel.com/account/tokens) |
-| `VERCEL_ORG_ID` | Project **Settings → General** (Team / Personal ID), or `.vercel/project.json` after `vercel link` |
-| `VERCEL_PROJECT_ID` | Same page as org ID, or `.vercel/project.json` |
+| `VERCEL_ORG_ID` | `.vercel/project.json` → `orgId` |
+| `VERCEL_PROJECT_ID` | `.vercel/project.json` → `projectId` |
 
-After secrets are set, every push to `main` (including merged PRs) runs SRAA → build → `vercel deploy --prod`. Production URL: `https://zomate-fitness-system-front.vercel.app`.
+After setup, every push to `main` (including merged PRs) runs SRAA → build → `vercel deploy --prod`. Production URL: `https://zomate-fitness-system-front.vercel.app`.
 
 Manual deploy (optional):
 

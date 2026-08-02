@@ -1,7 +1,9 @@
 node_modules
 .next
 *.tsbuildinfo
-.vercel
+.vercel/*
+!.vercel/project.json
+!.vercel/project.json.example
 .env.local
 npm-debug.log*
 .env*.local
