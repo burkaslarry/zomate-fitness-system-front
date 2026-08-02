@@ -43,9 +43,6 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
-    env:
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -53,6 +50,19 @@ jobs:
         with:
           node-version: "20"
           cache: npm
+
+      - name: Load Vercel project link
+        run: |
+          if [[ -f .vercel/project.json ]]; then
+            echo "VERCEL_ORG_ID=$(jq -r .orgId .vercel/project.json)" >> "$GITHUB_ENV"
+            echo "VERCEL_PROJECT_ID=$(jq -r .projectId .vercel/project.json)" >> "$GITHUB_ENV"
+          elif [[ -n "${{ secrets.VERCEL_ORG_ID }}" && -n "${{ secrets.VERCEL_PROJECT_ID }}" ]]; then
+            echo "VERCEL_ORG_ID=${{ secrets.VERCEL_ORG_ID }}" >> "$GITHUB_ENV"
+            echo "VERCEL_PROJECT_ID=${{ secrets.VERCEL_PROJECT_ID }}" >> "$GITHUB_ENV"
+          else
+            echo "::error::Missing Vercel project link. Commit .vercel/project.json (after vercel link) or set VERCEL_ORG_ID and VERCEL_PROJECT_ID secrets."
+            exit 1
+          fi
 
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
