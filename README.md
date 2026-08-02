@@ -78,7 +78,21 @@ npm run deploy:vercel      # gate + vercel --prod (requires Vercel CLI)
 
 Do **not** use `npm audit fix --force` — it can downgrade Next.js and break the app.
 
-GitHub Actions workflow `.github/workflows/sraa-predeploy.yml` runs the same gate on `main` PRs and pushes.
+GitHub Actions workflow `.github/workflows/sraa-predeploy.yml` runs the same gate on `main` PRs and pushes. **When a PR is merged to `main`, the workflow also deploys to Vercel production** (after the SRAA gate passes).
+
+### GitHub Actions → Vercel (auto-deploy on merge)
+
+Add these repository secrets in GitHub (**Settings → Secrets and variables → Actions**):
+
+| Secret | Where to find it |
+|--------|------------------|
+| `VERCEL_TOKEN` | [Vercel account tokens](https://vercel.com/account/tokens) |
+| `VERCEL_ORG_ID` | Project **Settings → General** (Team / Personal ID), or `.vercel/project.json` after `vercel link` |
+| `VERCEL_PROJECT_ID` | Same page as org ID, or `.vercel/project.json` |
+
+After secrets are set, every push to `main` (including merged PRs) runs SRAA → build → `vercel deploy --prod`. Production URL: `https://zomate-fitness-system-front.vercel.app`.
+
+Manual deploy (optional):
 
 1. Keep `vercel.json` in this folder.
 2. In Vercel project settings, set:
