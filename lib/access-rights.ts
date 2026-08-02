@@ -29,7 +29,6 @@ export const ACCESS_FEATURES: AccessFeature[] = [
   { key: "session_ledger", label_zh: "Session Ledger · 扣堂原因", href: "/admin/students", roles: ["MASTER_ADMIN"] },
   { key: "student_portal", label_zh: "學生入口", href: "/student", roles: ["MASTER_ADMIN"] },
   { key: "finance_sales", label_zh: "銷售與分期", href: "/admin/finance/sales", roles: ["MASTER_ADMIN"] },
-  { key: "finance_expenses", label_zh: "支出管理", href: "/admin/finance/expenses", roles: ["MASTER_ADMIN"] },
   { key: "finance_payroll", label_zh: "薪酬 / 出勤報表", href: "/admin/finance/payroll", roles: ["MASTER_ADMIN"] },
   { key: "whatsapp_settings", label_zh: "Whatsapp 設定", href: "/admin/settings/whatsapp", roles: ["MASTER_ADMIN"] },
   { key: "system_users", label_zh: "系統帳號", href: "/admin/system-users", roles: ["MASTER_ADMIN"] },
