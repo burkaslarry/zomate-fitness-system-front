@@ -42,7 +42,6 @@ const MENU_SECTIONS: { frameClass: string; items: NavItem[] }[] = [
       { href: "/admin/branches", label: "課堂和分店管理" },
       { href: "/coach/calendar", label: "學生上堂" },
       { href: "/coach", label: "教練上堂" },
-      { href: "/coach/attendance", label: "教練出勤" },
       { href: "/admin/attendance/qr-console", label: "QR 簽到中心" },
       { href: "/student", label: "學生入口" }
     ]
@@ -83,11 +82,6 @@ const ADMIN_MOBILE_COACH_TABS = [
     href: "/coach/calendar",
     label: "學生上堂",
     match: (p: string) => p.startsWith("/coach/calendar")
-  },
-  {
-    href: "/coach/attendance",
-    label: "教練出勤",
-    match: (p: string) => p.startsWith("/coach/attendance")
   }
 ] as const;
 
