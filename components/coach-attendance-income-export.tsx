@@ -313,7 +313,7 @@ export default function CoachAttendanceIncomeExport() {
                     <th className="px-3 py-2.5 font-semibold">教練</th>
                     <th className="px-3 py-2.5 font-semibold">課程</th>
                     <th className="px-3 py-2.5 font-semibold">學員</th>
-                    <th className="px-3 py-2.5 font-semibold">出勤時間</th>
+                    <th className="px-3 py-2.5 font-semibold">出勤記錄</th>
                   </tr>
                 </thead>
                 <tbody>

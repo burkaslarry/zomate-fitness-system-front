@@ -5,6 +5,16 @@
  * Logic: Naive ISO from backend is UTC; always render in Asia/Hong_Kong.
  */
 
+/** Calendar date `YYYY-MM-DD` in Asia/Hong_Kong (for attendance / schedule comparisons). */
+export function todayHktDate(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Hong_Kong",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date());
+}
+
 export function formatHktDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   const trimmed = iso.trim();

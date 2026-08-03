@@ -8,6 +8,7 @@
 import { api } from "./api";
 import { buildCsvContent, downloadUtf8CsvBom } from "./csv-rfc4180";
 import type { CoachSessionRow } from "./coach-sessions";
+import { todayHktDate } from "./format-hkt";
 
 export type StudentAttendanceSession = {
   sessionDate: string;
@@ -100,7 +101,7 @@ export function formatStudentLessonLabel(session: StudentAttendanceSession): str
 /** 已簽到 · 待上堂 (future) · 未簽到 (past, not checked in). */
 export function studentSessionStatusLabel(session: StudentAttendanceSession): string {
   if (session.isAttended) return "已簽到";
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayHktDate();
   if (session.sessionDate > today) return "待上堂";
   return "未簽到";
 }
@@ -110,7 +111,7 @@ export function isNextUpcomingLesson(
   allSessions: StudentAttendanceSession[]
 ): boolean {
   if (session.isAttended) return false;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayHktDate();
   const next = [...allSessions]
     .filter((s) => !s.isAttended && s.sessionDate >= today)
     .sort(
@@ -211,6 +212,17 @@ function buildStudentScheduleSessions(
   );
 }
 
+/** All checked-in dates for students on a row (full package history, not limited to filter range). */
+export function collectAttendedDates(details: StudentAttendanceDetail[]): string {
+  const dates = new Set<string>();
+  for (const detail of details) {
+    for (const session of detail.sessions) {
+      if (session.isAttended) dates.add(session.sessionDate);
+    }
+  }
+  return [...dates].sort().join(",");
+}
+
 function aggregateCoachCourseRows(
   completedSessions: (CoachSessionRow & { coachName: string })[],
   allScheduleSessions: (CoachSessionRow & { coachName: string })[],
@@ -279,12 +291,13 @@ function aggregateCoachCourseRows(
           };
         });
       const studentNames = studentDetails.map((d) => d.studentName);
+      const attendanceDates = collectAttendedDates(studentDetails);
       return {
         coachName: b.coachName,
         courseName: b.courseName,
         studentNames,
         students: studentNames.join(","),
-        attendanceDates: [...b.dates].sort().join(","),
+        attendanceDates,
         studentDetails
       };
     })
