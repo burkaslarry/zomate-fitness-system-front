@@ -20,6 +20,10 @@ export type CoachSessionRow = {
   coach_time_confirmed: boolean;
   attendance_status: string;
   course_title: string;
+  /** 1-based index within the enrollment package series */
+  lesson_no?: number | null;
+  /** Total lessons in the enrollment package */
+  total_lessons?: number | null;
 };
 
 export type CoachDayCourse = {
@@ -69,6 +73,51 @@ export function sessionCountsByDate(
     counts[s.session_date] = (counts[s.session_date] ?? 0) + 1;
   }
   return counts;
+}
+
+/** [F003][S002] Confirmed sessions on a calendar day, sorted by start time. */
+export function sessionsForDay(
+  sessions: CoachSessionRow[],
+  day: string,
+  options?: { confirmedOnly?: boolean }
+): CoachSessionRow[] {
+  return sessions
+    .filter((s) => s.session_date === day && (!options?.confirmedOnly || s.coach_time_confirmed))
+    .sort((a, b) => a.start_time.localeCompare(b.start_time) || a.student_name.localeCompare(b.student_name));
+}
+
+export const CALENDAR_CHIP_PALETTE = [
+  "border-blue-200/80 bg-blue-50 text-blue-950",
+  "border-emerald-200/80 bg-emerald-50 text-emerald-950",
+  "border-violet-200/80 bg-violet-50 text-violet-950",
+  "border-amber-200/80 bg-amber-50 text-amber-950",
+  "border-rose-200/80 bg-rose-50 text-rose-950",
+  "border-cyan-200/80 bg-cyan-50 text-cyan-950"
+] as const;
+
+export function calendarChipClass(studentId: number): string {
+  return CALENDAR_CHIP_PALETTE[Math.abs(studentId) % CALENDAR_CHIP_PALETTE.length] ?? CALENDAR_CHIP_PALETTE[0];
+}
+
+export function calendarChipLabel(session: CoachSessionRow): string {
+  const time = session.start_time.slice(0, 5);
+  const name = session.student_name.trim();
+  const short = name.length > 8 ? `${name.slice(0, 7)}…` : name;
+  return `${time} ${short}`;
+}
+
+export function calendarCellPreview(
+  sessions: CoachSessionRow[],
+  day: string,
+  maxVisible = 5,
+  options?: { confirmedOnly?: boolean }
+): { visible: CoachSessionRow[]; overflow: number; total: number } {
+  const daySessions = sessionsForDay(sessions, day, options);
+  return {
+    visible: daySessions.slice(0, maxVisible),
+    overflow: Math.max(0, daySessions.length - maxVisible),
+    total: daySessions.length
+  };
 }
 
 /** Map session rows on *day* into CourseOut-shaped cards for hourly calendar components. */

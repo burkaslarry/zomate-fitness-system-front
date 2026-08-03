@@ -4,20 +4,31 @@
  * [F004][S005]
  * Feature: Admin Reports & Financials
  * Step: Coach Attendance Income Export UI
- * Logic: Date range + optional course-type filter; preview table (no HKD column); UTF-8 CSV export.
+ * Logic: Date range + coach filter; clickable student names open session detail modal.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Loader2, X } from "lucide-react";
 import { alertApiError, api } from "../lib/api";
 import {
   type CoachAttendanceIncomeRow,
+  type StudentAttendanceDetail,
   defaultCoachIncomeDateRange,
   downloadCoachAttendanceIncomeCsv,
-  fetchCoachAttendanceIncomeRows
+  fetchCoachAttendanceIncomeRows,
+  formatStudentLessonLabel,
+  formatStudentSessionDateTime
 } from "../lib/coach-attendance-income-export";
 
 type CourseCategoryOption = { id: number; name: string };
+type CoachOption = { id: number; full_name: string; active?: boolean };
+
+type StudentDetailModalState = {
+  coachName: string;
+  courseName: string;
+  detail: StudentAttendanceDetail;
+};
 
 function groupLabel(name: string): string {
   if (name.includes("泰拳")) return "泰拳";
@@ -26,10 +37,45 @@ function groupLabel(name: string): string {
   return "其他";
 }
 
+function StudentNamesCell({
+  row,
+  onSelect
+}: {
+  row: CoachAttendanceIncomeRow;
+  onSelect: (detail: StudentAttendanceDetail) => void;
+}) {
+  if (row.studentNames.length === 0) return <>—</>;
+  return (
+    <>
+      {row.studentNames.map((name, index) => {
+        const detail = row.studentDetails.find((d) => d.studentName === name);
+        return (
+          <span key={name}>
+            {index > 0 ? ", " : null}
+            {detail ? (
+              <button
+                type="button"
+                className="font-medium text-primary underline-offset-2 hover:underline"
+                onClick={() => onSelect(detail)}
+              >
+                {name}
+              </button>
+            ) : (
+              name
+            )}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
 export default function CoachAttendanceIncomeExport() {
   const defaults = useMemo(() => defaultCoachIncomeDateRange(), []);
   const [fromDate, setFromDate] = useState(defaults.fromDate);
   const [toDate, setToDate] = useState(defaults.toDate);
+  const [coachId, setCoachId] = useState<number | "">("");
+  const [coaches, setCoaches] = useState<CoachOption[]>([]);
   const [categoryIds, setCategoryIds] = useState<number[]>([]);
   const [categories, setCategories] = useState<CourseCategoryOption[]>([]);
   const [rows, setRows] = useState<CoachAttendanceIncomeRow[]>([]);
@@ -37,8 +83,18 @@ export default function CoachAttendanceIncomeExport() {
   const [exporting, setExporting] = useState(false);
   const [status, setStatus] = useState("");
   const [rangeError, setRangeError] = useState("");
+  const [studentModal, setStudentModal] = useState<StudentDetailModalState | null>(null);
+  const [portalReady, setPortalReady] = useState(false);
 
   useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  useEffect(() => {
+    void api
+      .coaches()
+      .then((list) => setCoaches(list as CoachOption[]))
+      .catch(() => setCoaches([]));
     void api
       .courseCategories()
       .then((list) => {
@@ -74,6 +130,7 @@ export default function CoachAttendanceIncomeExport() {
       const data = await fetchCoachAttendanceIncomeRows({
         fromDate,
         toDate,
+        coachId,
         categoryIds: categoryIds.length ? categoryIds : undefined
       });
       setRows(data);
@@ -90,7 +147,7 @@ export default function CoachAttendanceIncomeExport() {
     } finally {
       setLoading(false);
     }
-  }, [fromDate, toDate, categoryIds]);
+  }, [fromDate, toDate, coachId, categoryIds]);
 
   useEffect(() => {
     void loadPreview();
@@ -98,6 +155,14 @@ export default function CoachAttendanceIncomeExport() {
 
   function toggleCategory(id: number) {
     setCategoryIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  function openStudentModal(row: CoachAttendanceIncomeRow, detail: StudentAttendanceDetail) {
+    setStudentModal({
+      coachName: row.coachName,
+      courseName: row.courseName,
+      detail
+    });
   }
 
   async function handleExport() {
@@ -112,7 +177,9 @@ export default function CoachAttendanceIncomeExport() {
     setExporting(true);
     setStatus("");
     try {
-      downloadCoachAttendanceIncomeCsv(rows, fromDate, toDate);
+      const coachName =
+        coachId !== "" ? coaches.find((c) => c.id === coachId)?.full_name : undefined;
+      downloadCoachAttendanceIncomeCsv(rows, fromDate, toDate, coachName);
       console.log("[F004][S005] Success: CSV exported", { fromDate, toDate, rows: rows.length });
     } catch (e) {
       alertApiError(e);
@@ -130,7 +197,7 @@ export default function CoachAttendanceIncomeExport() {
           <h1 className="text-lg font-bold tracking-tight text-ink sm:text-xl">教練出勤收入匯出</h1>
           <p className="mt-1 text-sm text-ink/55">
             Coach Attendance Income Export — 依教練與課程匯出出勤與學員名單，供 Excel 手動計算佣金。
-            「金額 (HKD)」欄位留空，由管理員自行填寫。
+            點擊學員姓名可查看 package 堂數與上堂時間。「金額 (HKD)」欄位留空。
           </p>
         </div>
         <button
@@ -145,6 +212,24 @@ export default function CoachAttendanceIncomeExport() {
 
       <section className="rounded-xl border border-ink/10 bg-surface p-3 shadow-sm sm:p-4">
         <div className="grid grid-cols-1 gap-3 sm:flex sm:flex-wrap">
+          <label className="block w-full text-sm text-ink sm:min-w-[12rem] sm:w-auto">
+            教練
+            <select
+              value={coachId}
+              onChange={(e) =>
+                setCoachId(e.target.value === "" ? "" : Number(e.target.value))
+              }
+              className="mt-1 block w-full rounded-lg border border-ink/15 bg-canvas px-2 py-2 text-ink"
+            >
+              <option value="">全部教練</option>
+              {coaches.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.full_name}
+                  {c.active === false ? "（已停用）" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="block w-full text-sm text-ink sm:w-auto">
             開始日期
             <input
@@ -209,12 +294,15 @@ export default function CoachAttendanceIncomeExport() {
           <p className="px-4 py-16 text-center text-sm text-ink/50">
             {rangeError
               ? "請修正日期範圍。"
-              : "所選日期範圍內沒有符合條件的已完成出勤紀錄（已簽到）。"}
+              : coachId !== ""
+                ? "所選教練在此日期範圍內沒有符合條件的已完成出勤紀錄（已簽到）。"
+                : "所選日期範圍內沒有符合條件的已完成出勤紀錄（已簽到）。"}
           </p>
         ) : (
           <>
             <p className="border-b border-ink/10 px-4 py-2.5 text-xs text-ink/55">
-              預覽 {rows.length} 列（每列 = 一位教練 × 一種課程）。匯出 CSV 會額外包含空白「金額 (HKD)」欄。
+              預覽 {rows.length} 列（每列 = 一位教練 × 一種課程）。點學員姓名查看堂數與上堂時間。匯出 CSV
+              會額外包含空白「金額 (HKD)」欄。
             </p>
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
@@ -234,7 +322,12 @@ export default function CoachAttendanceIncomeExport() {
                     >
                       <td className="px-3 py-2.5 font-medium text-ink">{r.coachName}</td>
                       <td className="px-3 py-2.5 text-ink/85">{r.courseName}</td>
-                      <td className="px-3 py-2.5 text-ink/85">{r.students || "—"}</td>
+                      <td className="px-3 py-2.5 text-ink/85">
+                        <StudentNamesCell
+                          row={r}
+                          onSelect={(detail) => openStudentModal(r, detail)}
+                        />
+                      </td>
                       <td className="px-3 py-2.5 text-ink/85">{r.attendanceDates || "—"}</td>
                     </tr>
                   ))}
@@ -244,6 +337,84 @@ export default function CoachAttendanceIncomeExport() {
           </>
         )}
       </section>
+
+      {portalReady && studentModal
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[20000] flex items-center justify-center bg-ink/50 p-4"
+              role="presentation"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) setStudentModal(null);
+              }}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="student-attendance-detail-title"
+                className="w-[min(92vw,28rem)] max-h-[85vh] overflow-y-auto rounded-xl border border-ink/15 bg-surface p-5 text-left text-sm text-ink shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 id="student-attendance-detail-title" className="text-base font-semibold text-ink">
+                      {studentModal.detail.studentName}
+                    </h3>
+                    <p className="mt-1 text-xs text-ink/55">
+                      教練：{studentModal.coachName} · 課程：{studentModal.courseName}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="關閉"
+                    className="rounded-md p-1 text-ink/50 hover:bg-canvas hover:text-ink"
+                    onClick={() => setStudentModal(null)}
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                {studentModal.detail.sessions.length === 0 ? (
+                  <p className="mt-6 text-sm text-ink/50">此學員在所選範圍內沒有已簽到紀錄。</p>
+                ) : (
+                  <table className="mt-4 w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-ink/10 text-ink/55">
+                        <th className="py-2 pr-2 font-semibold">Package 堂數</th>
+                        <th className="py-2 font-semibold">上堂時間</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {studentModal.detail.sessions.map((session) => (
+                        <tr
+                          key={`${session.sessionDate}-${session.startTime}`}
+                          className="border-b border-ink/[0.06] align-top"
+                        >
+                          <td className="py-2 pr-2 text-ink/85">
+                            {formatStudentLessonLabel(session)}
+                          </td>
+                          <td className="py-2 text-ink/85">
+                            {formatStudentSessionDateTime(session)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+
+                <div className="mt-5 flex justify-end border-t border-ink/[0.06] pt-4">
+                  <button
+                    type="button"
+                    className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-black"
+                    onClick={() => setStudentModal(null)}
+                  >
+                    關閉
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   );
 }
