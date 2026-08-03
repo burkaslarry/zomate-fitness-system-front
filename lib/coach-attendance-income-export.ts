@@ -98,6 +98,24 @@ export function formatStudentLessonLabel(session: StudentAttendanceSession): str
   return "—";
 }
 
+/** CSV 學員欄：`Gary Man (第1堂),Jessie Yeung (第1堂、第2堂)` */
+export function formatStudentCsvLabel(detail: StudentAttendanceDetail): string {
+  const lessonNos = [
+    ...new Set(
+      detail.sessions
+        .filter((s) => s.isAttended && s.lessonNo != null)
+        .map((s) => s.lessonNo as number)
+    )
+  ].sort((a, b) => a - b);
+  if (lessonNos.length === 0) return detail.studentName;
+  const lessonText = lessonNos.map((n) => `第${n}堂`).join("、");
+  return `${detail.studentName} (${lessonText})`;
+}
+
+export function formatStudentsCsvCell(details: StudentAttendanceDetail[]): string {
+  return details.map(formatStudentCsvLabel).join(",");
+}
+
 /** 已簽到 · 待上堂 (future) · 未簽到 (past, not checked in). */
 export function studentSessionStatusLabel(session: StudentAttendanceSession): string {
   if (session.isAttended) return "已簽到";
@@ -364,7 +382,13 @@ export async function fetchCoachAttendanceIncomeRows(params: {
 export function coachAttendanceIncomeRowsToCsv(rows: CoachAttendanceIncomeRow[]): string {
   return buildCsvContent(
     [...COACH_INCOME_CSV_HEADERS],
-    rows.map((r) => [r.coachName, r.courseName, r.students, r.attendanceDates, ""])
+    rows.map((r) => [
+      r.coachName,
+      r.courseName,
+      formatStudentsCsvCell(r.studentDetails),
+      r.attendanceDates,
+      ""
+    ])
   );
 }
 

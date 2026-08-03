@@ -51,5 +51,13 @@ test("record coach attendance income export demo", async ({ page }) => {
   }
 
   await page.getByRole("button", { name: "匯出 CSV" }).scrollIntoViewIfNeeded();
-  await page.waitForTimeout(1500);
+  const downloadPromise = page.waitForEvent("download", { timeout: 15_000 }).catch(() => null);
+  await page.getByRole("button", { name: "匯出 CSV" }).click();
+  const download = await downloadPromise;
+  if (download) {
+    const path = await download.path();
+    console.log("[F004][S005] CSV downloaded:", download.suggestedFilename(), path);
+    await page.waitForTimeout(1200);
+  }
+  await page.waitForTimeout(2000);
 });
