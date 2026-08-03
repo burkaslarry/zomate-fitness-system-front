@@ -23,7 +23,7 @@ test("record coach attendance income export demo", async ({ page }) => {
   await page.waitForTimeout(1200);
 
   await page.goto("/admin/finance/payroll");
-  await expect(page.getByRole("heading", { name: "教練出勤收入匯出" })).toBeVisible({
+  await expect(page.getByRole("main").getByRole("heading", { name: "教練出勤收入匯出" })).toBeVisible({
     timeout: 20_000
   });
   await page.waitForTimeout(2000);
@@ -43,9 +43,10 @@ test("record coach attendance income export demo", async ({ page }) => {
   const studentLink = page.locator("tbody button").first();
   if (await studentLink.isVisible().catch(() => false)) {
     await studentLink.click();
-    await expect(page.getByRole("dialog")).toBeVisible({ timeout: 10_000 });
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible({ timeout: 10_000 });
     await page.waitForTimeout(2500);
-    await page.getByRole("button", { name: "關閉" }).click();
+    await dialog.getByRole("button", { name: "關閉" }).last().click();
     await page.waitForTimeout(800);
   }
 
