@@ -199,7 +199,7 @@ export default function CoachAttendanceIncomeExport() {
           <h1 className="text-lg font-bold tracking-tight text-ink sm:text-xl">教練出勤收入匯出</h1>
           <p className="mt-1 text-sm text-ink/55">
             Coach Attendance Income Export — 依教練與課程匯出出勤與學員名單，供 Excel 手動計算佣金。
-            點擊學員姓名可查看 package 堂數與上堂時間。CSV「學員」欄會顯示所選日期內已簽到堂數（例如 Jessie Yeung (第2堂)），並有「總堂數」欄。「金額 (HKD)」欄位留空。
+            點擊學員姓名可查看 package 堂數與上堂時間。CSV 每堂一行（同一學生可有多行），「學員」欄顯示姓名與堂數（例如 Jessie Yeung (第2堂)），「總堂數」為 1。「金額 (HKD)」欄位留空。
           </p>
         </div>
         <button
@@ -304,7 +304,7 @@ export default function CoachAttendanceIncomeExport() {
           <>
             <p className="border-b border-ink/10 px-4 py-2.5 text-xs text-ink/55">
               預覽 {rows.length} 列（每列 = 一位教練 × 一種課程）。點學員姓名查看堂數與上堂時間。匯出 CSV
-              的「學員」欄會附所選日期內堂數、「總堂數」同空白「金額 (HKD)」欄。
+              的「學員」欄每堂一行附堂數、「總堂數」=1，同空白「金額 (HKD)」欄。
             </p>
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">

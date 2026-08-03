@@ -105,35 +105,52 @@ export function formatStudentLessonLabel(session: StudentAttendanceSession): str
   return "—";
 }
 
-/** CSV 學員欄（所選日期內）：`Gary Man (第1堂),Jessie Yeung (第2堂)` */
-export function formatStudentCsvLabel(
-  detail: StudentAttendanceDetail,
-  fromDate: string,
-  toDate: string
+/** CSV 學員欄（單堂）：`Jessie Yeung (第2堂)` */
+export function formatStudentLessonCsvLabel(
+  studentName: string,
+  session: StudentAttendanceSession
 ): string {
-  const lessonNos = [
-    ...new Set(
-      detail.sessions
-        .filter(
-          (s) =>
-            s.isAttended &&
-            s.lessonNo != null &&
-            sessionInRange(s.sessionDate, fromDate, toDate)
-        )
-        .map((s) => s.lessonNo as number)
-    )
-  ].sort((a, b) => a - b);
-  if (lessonNos.length === 0) return detail.studentName;
-  const lessonText = lessonNos.map((n) => `第${n}堂`).join("、");
-  return `${detail.studentName} (${lessonText})`;
+  if (session.lessonNo != null) return `${studentName} (第${session.lessonNo}堂)`;
+  return studentName;
 }
 
-export function formatStudentsCsvCell(
-  details: StudentAttendanceDetail[],
+export type CoachAttendanceIncomeCsvLessonRow = {
+  coachName: string;
+  courseName: string;
+  studentName: string;
+  session: StudentAttendanceSession;
+};
+
+/** One CSV row per checked-in lesson within the selected date range. */
+export function flattenCoachAttendanceIncomeCsvRows(
+  rows: CoachAttendanceIncomeRow[],
   fromDate: string,
   toDate: string
-): string {
-  return details.map((d) => formatStudentCsvLabel(d, fromDate, toDate)).join(",");
+): CoachAttendanceIncomeCsvLessonRow[] {
+  const out: CoachAttendanceIncomeCsvLessonRow[] = [];
+  for (const row of rows) {
+    for (const detail of row.studentDetails) {
+      for (const session of detail.sessions) {
+        if (session.isAttended && sessionInRange(session.sessionDate, fromDate, toDate)) {
+          out.push({
+            coachName: row.coachName,
+            courseName: row.courseName,
+            studentName: detail.studentName,
+            session
+          });
+        }
+      }
+    }
+  }
+  return out.sort(
+    (a, b) =>
+      a.coachName.localeCompare(b.coachName, "zh-Hant") ||
+      a.courseName.localeCompare(b.courseName, "zh-Hant") ||
+      a.studentName.localeCompare(b.studentName, "zh-Hant") ||
+      a.session.sessionDate.localeCompare(b.session.sessionDate) ||
+      a.session.startTime.localeCompare(b.session.startTime) ||
+      (a.session.lessonNo ?? 999) - (b.session.lessonNo ?? 999)
+  );
 }
 
 /** Checked-in dates within the selected export range. */
@@ -438,14 +455,15 @@ export function coachAttendanceIncomeRowsToCsv(
   fromDate: string,
   toDate: string
 ): string {
+  const lessonRows = flattenCoachAttendanceIncomeCsvRows(rows, fromDate, toDate);
   return buildCsvContent(
     [...COACH_INCOME_CSV_HEADERS],
-    rows.map((r) => [
-      r.coachName,
-      r.courseName,
-      formatStudentsCsvCell(r.studentDetails, fromDate, toDate),
-      collectAttendedDatesInPeriod(r.studentDetails, fromDate, toDate),
-      String(countAttendedSessionsInPeriod(r.studentDetails, fromDate, toDate)),
+    lessonRows.map(({ coachName, courseName, studentName, session }) => [
+      coachName,
+      courseName,
+      formatStudentLessonCsvLabel(studentName, session),
+      formatStudentSessionDateTime(session),
+      "1",
       ""
     ])
   );
