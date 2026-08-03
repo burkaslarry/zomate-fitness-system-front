@@ -50,8 +50,7 @@ const MENU_SECTIONS: { frameClass: string; items: NavItem[] }[] = [
   {
     frameClass: "rounded-xl border-2 border-ink/12 bg-surface/60 p-2.5",
     items: [
-      { href: "/admin/finance/sales", label: "銷售與分期" },
-      { href: "/admin/finance/payroll", label: "薪酬 / 出勤報表" }
+      { href: "/admin/finance/payroll", label: "教練出勤收入匯出" }
     ]
   },
   {

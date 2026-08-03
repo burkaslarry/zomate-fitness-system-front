@@ -10,10 +10,35 @@
  * Production CSV authority: ``zomate-fitness-system-back`` — never duplicate schema drift here.
  */
 
-export function csvEscapeCell(value: string | number): string {
+/** Prefix values that could be interpreted as spreadsheet formulas in Excel. */
+export function sanitizeCsvFormulaInjection(value: string): string {
   const s = String(value);
+  if (/^[=+\-@\t\r]/.test(s)) return `'${s}`;
+  return s;
+}
+
+export function csvEscapeCell(value: string | number): string {
+  const s = sanitizeCsvFormulaInjection(String(value));
   if (/[",\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
+}
+
+export function buildCsvContent(headers: string[], rows: (string | number)[][]): string {
+  const lines = [csvRow(headers), ...rows.map((r) => csvRow(r))];
+  return `${lines.join("\r\n")}\r\n`;
+}
+
+export function downloadUtf8CsvBom(filename: string, content: string): void {
+  const blob = new Blob(["\uFEFF", content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 export function csvRow(cells: (string | number)[]): string {
