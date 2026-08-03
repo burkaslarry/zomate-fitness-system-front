@@ -18,7 +18,9 @@ import {
   downloadCoachAttendanceIncomeCsv,
   fetchCoachAttendanceIncomeRows,
   formatStudentLessonLabel,
-  formatStudentSessionDateTime
+  formatStudentSessionDateTime,
+  isNextUpcomingLesson,
+  studentSessionStatusLabel
 } from "../lib/coach-attendance-income-export";
 
 type CourseCategoryOption = { id: number; name: string };
@@ -374,31 +376,64 @@ export default function CoachAttendanceIncomeExport() {
                 </div>
 
                 {studentModal.detail.sessions.length === 0 ? (
-                  <p className="mt-6 text-sm text-ink/50">此學員在所選範圍內沒有已簽到紀錄。</p>
+                  <p className="mt-6 text-sm text-ink/50">找不到此學員的 package 預約表。</p>
                 ) : (
-                  <table className="mt-4 w-full text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-ink/10 text-ink/55">
-                        <th className="py-2 pr-2 font-semibold">Package 堂數</th>
-                        <th className="py-2 font-semibold">上堂時間</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {studentModal.detail.sessions.map((session) => (
-                        <tr
-                          key={`${session.sessionDate}-${session.startTime}`}
-                          className="border-b border-ink/[0.06] align-top"
-                        >
-                          <td className="py-2 pr-2 text-ink/85">
-                            {formatStudentLessonLabel(session)}
-                          </td>
-                          <td className="py-2 text-ink/85">
-                            {formatStudentSessionDateTime(session)}
-                          </td>
+                  <>
+                    <p className="mt-3 text-xs text-ink/50">
+                      完整 package 預約表（含已上堂同未來堂數）
+                    </p>
+                    <table className="mt-3 w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-ink/10 text-ink/55">
+                          <th className="py-2 pr-2 font-semibold">Package 堂數</th>
+                          <th className="py-2 pr-2 font-semibold">上堂時間</th>
+                          <th className="py-2 font-semibold">狀態</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {studentModal.detail.sessions.map((session) => {
+                          const status = studentSessionStatusLabel(session);
+                          const isNext = isNextUpcomingLesson(
+                            session,
+                            studentModal.detail.sessions
+                          );
+                          return (
+                            <tr
+                              key={`${session.sessionDate}-${session.startTime}-${session.lessonNo}`}
+                              className={`border-b border-ink/[0.06] align-top ${
+                                isNext ? "bg-primary/10" : ""
+                              }`}
+                            >
+                              <td className="py-2 pr-2 text-ink/85">
+                                {formatStudentLessonLabel(session)}
+                                {isNext ? (
+                                  <span className="ml-1 rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-semibold text-black">
+                                    下一堂
+                                  </span>
+                                ) : null}
+                              </td>
+                              <td className="py-2 pr-2 text-ink/85">
+                                {formatStudentSessionDateTime(session)}
+                              </td>
+                              <td className="py-2">
+                                <span
+                                  className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                                    status === "已簽到"
+                                      ? "bg-emerald-500/15 text-emerald-800"
+                                      : status === "待上堂"
+                                        ? "bg-primary/15 text-black"
+                                        : "bg-ink/5 text-ink/55"
+                                  }`}
+                                >
+                                  {status}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </>
                 )}
 
                 <div className="mt-5 flex justify-end border-t border-ink/[0.06] pt-4">

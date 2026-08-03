@@ -15,6 +15,8 @@ export type StudentAttendanceSession = {
   endTime: string;
   lessonNo: number | null;
   totalLessons: number | null;
+  isAttended: boolean;
+  attendanceStatus: string;
 };
 
 export type StudentAttendanceDetail = {
@@ -95,6 +97,30 @@ export function formatStudentLessonLabel(session: StudentAttendanceSession): str
   return "—";
 }
 
+/** 已簽到 · 待上堂 (future) · 未簽到 (past, not checked in). */
+export function studentSessionStatusLabel(session: StudentAttendanceSession): string {
+  if (session.isAttended) return "已簽到";
+  const today = new Date().toISOString().slice(0, 10);
+  if (session.sessionDate > today) return "待上堂";
+  return "未簽到";
+}
+
+export function isNextUpcomingLesson(
+  session: StudentAttendanceSession,
+  allSessions: StudentAttendanceSession[]
+): boolean {
+  if (session.isAttended) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  const next = [...allSessions]
+    .filter((s) => !s.isAttended && s.sessionDate >= today)
+    .sort(
+      (a, b) =>
+        a.sessionDate.localeCompare(b.sessionDate) || a.startTime.localeCompare(b.startTime)
+    )[0];
+  if (!next) return false;
+  return next.sessionDate === session.sessionDate && next.startTime === session.startTime;
+}
+
 /**
  * Completed attendance only — matches staff UI (`已簽到`) and excludes cancelled / void rows.
  */
@@ -122,12 +148,15 @@ function courseLabel(session: CoachSessionRow): string {
 }
 
 function toStudentSession(session: CoachSessionRow): StudentAttendanceSession {
+  const attended = isValidCompletedAttendanceSession(session);
   return {
     sessionDate: session.session_date.trim().slice(0, 10),
     startTime: String(session.start_time ?? "").slice(0, 5),
     endTime: String(session.end_time ?? "").slice(0, 5),
     lessonNo: session.lesson_no ?? null,
-    totalLessons: session.total_lessons ?? null
+    totalLessons: session.total_lessons ?? null,
+    isAttended: attended,
+    attendanceStatus: String(session.attendance_status ?? "").trim() || (attended ? "已簽到" : "未簽到")
   };
 }
 
@@ -157,8 +186,34 @@ function enrichSessionLessonMeta<T extends CoachSessionRow>(sessions: T[]): T[] 
   });
 }
 
+function buildStudentScheduleSessions(
+  studentName: string,
+  enrollmentIds: number[],
+  allSchedule: (CoachSessionRow & { coachName: string })[]
+): StudentAttendanceSession[] {
+  const idSet = new Set(enrollmentIds);
+  const seen = new Set<string>();
+  const out: StudentAttendanceSession[] = [];
+  for (const s of allSchedule) {
+    if (s.student_name.trim() !== studentName) continue;
+    if (!idSet.has(s.enrollment_id)) continue;
+    const detail = toStudentSession(s);
+    const key = `${detail.sessionDate}T${detail.startTime}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(detail);
+  }
+  return out.sort(
+    (a, c) =>
+      (a.lessonNo ?? 999) - (c.lessonNo ?? 999) ||
+      a.sessionDate.localeCompare(c.sessionDate) ||
+      a.startTime.localeCompare(c.startTime)
+  );
+}
+
 function aggregateCoachCourseRows(
-  sessions: (CoachSessionRow & { coachName: string })[],
+  completedSessions: (CoachSessionRow & { coachName: string })[],
+  allScheduleSessions: (CoachSessionRow & { coachName: string })[],
   fromDate: string,
   toDate: string
 ): CoachAttendanceIncomeRow[] {
@@ -168,47 +223,61 @@ function aggregateCoachCourseRows(
       coachName: string;
       courseName: string;
       dates: Set<string>;
-      byStudent: Map<string, { studentId: number; sessions: StudentAttendanceSession[] }>;
+      attendedStudents: Set<string>;
+      enrollmentIdsByStudent: Map<string, Set<number>>;
     }
   >();
 
-  for (const s of sessions) {
+  for (const s of completedSessions) {
     if (!sessionInRange(s.session_date, fromDate, toDate)) continue;
     const courseName = courseLabel(s);
     const key = `${s.coachName}\0${courseName}`;
     let bucket = buckets.get(key);
     if (!bucket) {
-      bucket = { coachName: s.coachName, courseName, dates: new Set(), byStudent: new Map() };
+      bucket = {
+        coachName: s.coachName,
+        courseName,
+        dates: new Set(),
+        attendedStudents: new Set(),
+        enrollmentIdsByStudent: new Map()
+      };
       buckets.set(key, bucket);
     }
     const studentName = String(s.student_name ?? "").trim();
     if (!studentName) continue;
     bucket.dates.add(s.session_date.trim().slice(0, 10));
-    let studentBucket = bucket.byStudent.get(studentName);
-    if (!studentBucket) {
-      studentBucket = { studentId: s.student_id, sessions: [] };
-      bucket.byStudent.set(studentName, studentBucket);
+    bucket.attendedStudents.add(studentName);
+    let ids = bucket.enrollmentIdsByStudent.get(studentName);
+    if (!ids) {
+      ids = new Set();
+      bucket.enrollmentIdsByStudent.set(studentName, ids);
     }
-    const detail = toStudentSession(s);
-    const dedupeKey = `${detail.sessionDate}T${detail.startTime}`;
-    if (!studentBucket.sessions.some((x) => `${x.sessionDate}T${x.startTime}` === dedupeKey)) {
-      studentBucket.sessions.push(detail);
-    }
+    ids.add(s.enrollment_id);
   }
 
   return [...buckets.values()]
     .map((b) => {
-      const studentDetails = [...b.byStudent.entries()]
-        .sort(([a], [c]) => a.localeCompare(c, "zh-Hant"))
-        .map(([studentName, info]) => ({
-          studentName,
-          studentId: info.studentId,
-          sessions: [...info.sessions].sort(
-            (a, c) =>
-              a.sessionDate.localeCompare(c.sessionDate) ||
-              a.startTime.localeCompare(c.startTime)
-          )
-        }));
+      const studentDetails = [...b.attendedStudents]
+        .sort((a, c) => a.localeCompare(c, "zh-Hant"))
+        .map((studentName) => {
+          const enrollmentIds = [...(b.enrollmentIdsByStudent.get(studentName) ?? [])];
+          return {
+            studentName,
+            studentId:
+              allScheduleSessions.find(
+                (s) => s.student_name.trim() === studentName && enrollmentIds.includes(s.enrollment_id)
+              )?.student_id ??
+              completedSessions.find((s) => s.student_name.trim() === studentName)?.student_id ??
+              0,
+            sessions: buildStudentScheduleSessions(
+              studentName,
+              enrollmentIds,
+              allScheduleSessions.filter(
+                (s) => s.coachName === b.coachName && courseLabel(s) === b.courseName
+              )
+            )
+          };
+        });
       const studentNames = studentDetails.map((d) => d.studentName);
       return {
         coachName: b.coachName,
@@ -247,22 +316,36 @@ export async function fetchCoachAttendanceIncomeRows(params: {
   }
 
   if (list.length === 0) return [];
+
+  const categoryIds = params.categoryIds?.length ? params.categoryIds : undefined;
+
   const batches = await Promise.all(
     list.map(async (coach) => {
-      const rows = (await api.coachSessions(coach.id, {
-        fromDate: params.fromDate,
-        toDate: params.toDate,
-        categoryIds: params.categoryIds?.length ? params.categoryIds : undefined
-      })) as CoachSessionRow[];
-      return enrichSessionLessonMeta(
-        rows
-          .filter(isValidCompletedAttendanceSession)
-          .map((row) => ({ ...row, coachName: coach.full_name }))
-      );
+      const [inRange, fullSchedule] = await Promise.all([
+        api.coachSessions(coach.id, {
+          fromDate: params.fromDate,
+          toDate: params.toDate,
+          categoryIds
+        }) as Promise<CoachSessionRow[]>,
+        api.coachSessions(coach.id, { categoryIds }) as Promise<CoachSessionRow[]>
+      ]);
+
+      const withCoach = (rows: CoachSessionRow[]) =>
+        enrichSessionLessonMeta(rows.map((row) => ({ ...row, coachName: coach.full_name })));
+
+      return {
+        completed: withCoach(inRange).filter(isValidCompletedAttendanceSession),
+        schedule: withCoach(fullSchedule)
+      };
     })
   );
 
-  return aggregateCoachCourseRows(batches.flat(), params.fromDate, params.toDate);
+  return aggregateCoachCourseRows(
+    batches.flatMap((b) => b.completed),
+    batches.flatMap((b) => b.schedule),
+    params.fromDate,
+    params.toDate
+  );
 }
 
 export function coachAttendanceIncomeRowsToCsv(rows: CoachAttendanceIncomeRow[]): string {
