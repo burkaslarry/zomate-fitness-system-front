@@ -22,7 +22,7 @@ export const ACCESS_FEATURES: AccessFeature[] = [
   { key: "register_course", label_zh: "加會員報堂", href: "/regCourse", roles: ["MASTER_ADMIN", "COACH", "CLERK"] },
   { key: "student_list", label_zh: "學生名單", href: "/admin/students", roles: ["MASTER_ADMIN", "COACH", "CLERK"] },
   { key: "coaches", label_zh: "教練", href: "/admin/coaches", roles: ["MASTER_ADMIN"] },
-  { key: "branches", label_zh: "分店/課堂類嘅別管理", href: "/admin/branches", roles: ["MASTER_ADMIN"] },
+  { key: "branches", label_zh: "分店/課堂類別管理", href: "/admin/branches", roles: ["MASTER_ADMIN"] },
   { key: "coach_schedule_checkin", label_zh: "教練日程 · 簽到", href: "/coach/calendar", roles: ["MASTER_ADMIN", "COACH", "CLERK"] },
   { key: "coach_sessions", label_zh: "教練課表", href: "/coach", roles: ["MASTER_ADMIN"] },
   { key: "qr_checkin_console", label_zh: "QR 簽到中心", href: "/admin/attendance/qr-console", roles: ["MASTER_ADMIN"] },

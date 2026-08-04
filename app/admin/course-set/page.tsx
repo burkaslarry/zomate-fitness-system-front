@@ -291,7 +291,7 @@ export default function AdminCourseSetPage() {
           <p className="mt-1 text-xs text-ink/50">
             課程種類請先到{" "}
             <Link href="/admin/branches" className="underline underline-offset-4">
-              分店/課堂類嘅別管理 → 課堂種類
+              分店/課堂類別管理 → 課堂種類
             </Link>{" "}
             設定。
           </p>
@@ -303,7 +303,7 @@ export default function AdminCourseSetPage() {
           <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-950">
             目前沒有啟用的課程種類。請至{" "}
             <Link href="/admin/branches" className="font-medium underline">
-              分店/課堂類嘅別管理
+              分店/課堂類別管理
             </Link>{" "}
             啟用至少一種。
           </p>
