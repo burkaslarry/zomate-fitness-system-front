@@ -9,11 +9,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Loader2, X } from "lucide-react";
 import { alertApiError, api } from "../lib/api";
 import {
   type CoachAttendanceIncomeRow,
   type StudentAttendanceDetail,
+  collectAttendedDatesInPeriod,
+  collectBranchesInPeriod,
   defaultCoachIncomeDateRange,
   downloadCoachAttendanceIncomeCsv,
   fetchCoachAttendanceIncomeRows,
@@ -32,8 +34,11 @@ type StudentDetailModalState = {
   detail: StudentAttendanceDetail;
 };
 
+type SortKey = "coachName" | "courseName" | "branchName" | "students" | "attendanceDates";
+type SortDir = "asc" | "desc";
+
 function groupLabel(name: string): string {
-  if (name.includes("泰拳")) return "泰拳";
+  if (name.includes("泰拳") || name.toLowerCase().includes("boxing")) return "泰拳";
   if (name.includes("一對二") || name.includes("1-2") || name.includes("1:2")) return "1-2";
   if (name.includes("一對一") || name.includes("1-1") || name.includes("1:1")) return "1-1";
   return "其他";
@@ -72,6 +77,42 @@ function StudentNamesCell({
   );
 }
 
+function SortHeader({
+  label,
+  column,
+  sortKey,
+  sortDir,
+  onSort
+}: {
+  label: string;
+  column: SortKey;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onSort: (key: SortKey) => void;
+}) {
+  const active = sortKey === column;
+  return (
+    <th className="px-3 py-2.5 font-semibold">
+      <button
+        type="button"
+        className="inline-flex items-center gap-1 text-left hover:text-ink"
+        onClick={() => onSort(column)}
+      >
+        {label}
+        {active ? (
+          sortDir === "asc" ? (
+            <ArrowUp className="h-3.5 w-3.5" aria-hidden />
+          ) : (
+            <ArrowDown className="h-3.5 w-3.5" aria-hidden />
+          )
+        ) : (
+          <ArrowUpDown className="h-3.5 w-3.5 opacity-40" aria-hidden />
+        )}
+      </button>
+    </th>
+  );
+}
+
 export default function CoachAttendanceIncomeExport() {
   const defaults = useMemo(() => defaultCoachIncomeDateRange(), []);
   const [fromDate, setFromDate] = useState(defaults.fromDate);
@@ -87,6 +128,8 @@ export default function CoachAttendanceIncomeExport() {
   const [rangeError, setRangeError] = useState("");
   const [studentModal, setStudentModal] = useState<StudentDetailModalState | null>(null);
   const [portalReady, setPortalReady] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("coachName");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   useEffect(() => {
     setPortalReady(true);
@@ -118,6 +161,48 @@ export default function CoachAttendanceIncomeExport() {
     }
     return m;
   }, [categories]);
+
+  const sortedRows = useMemo(() => {
+    const decorated = rows.map((r) => ({
+      row: r,
+      branchName: collectBranchesInPeriod(r.studentDetails, fromDate, toDate),
+      attendanceDates: collectAttendedDatesInPeriod(r.studentDetails, fromDate, toDate) || r.attendanceDates
+    }));
+    const mul = sortDir === "asc" ? 1 : -1;
+    decorated.sort((a, b) => {
+      const av =
+        sortKey === "coachName"
+          ? a.row.coachName
+          : sortKey === "courseName"
+            ? a.row.courseName
+            : sortKey === "branchName"
+              ? a.branchName
+              : sortKey === "students"
+                ? a.row.students
+                : a.attendanceDates;
+      const bv =
+        sortKey === "coachName"
+          ? b.row.coachName
+          : sortKey === "courseName"
+            ? b.row.courseName
+            : sortKey === "branchName"
+              ? b.branchName
+              : sortKey === "students"
+                ? b.row.students
+                : b.attendanceDates;
+      return mul * String(av).localeCompare(String(bv), "zh-Hant");
+    });
+    return decorated;
+  }, [rows, fromDate, toDate, sortKey, sortDir]);
+
+  function toggleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortKey(key);
+    setSortDir("asc");
+  }
 
   const loadPreview = useCallback(async () => {
     if (fromDate > toDate) {
@@ -199,7 +284,7 @@ export default function CoachAttendanceIncomeExport() {
           <h1 className="text-lg font-bold tracking-tight text-ink sm:text-xl">教練出勤收入匯出</h1>
           <p className="mt-1 text-sm text-ink/55">
             Coach Attendance Income Export — 依教練與課程匯出出勤與學員名單，供 Excel 手動計算佣金。
-            點擊學員姓名可查看 package 堂數與上堂時間。CSV 每堂一行（同一學生可有多行），「學員」欄顯示姓名與堂數（例如 Jessie Yeung (第2堂)），「總堂數」為 1。「金額 (HKD)」欄位留空。
+            點擊學員姓名可查看 package 堂數與上堂時間。CSV 每堂一行（同一學生可有多行），含「分店」欄；「學員」欄顯示姓名與堂數（例如 Jessie Yeung (第2堂)），「總堂數」為 1。「金額 (HKD)」欄位留空。
           </p>
         </div>
         <button
@@ -304,33 +389,65 @@ export default function CoachAttendanceIncomeExport() {
           <>
             <p className="border-b border-ink/10 px-4 py-2.5 text-xs text-ink/55">
               預覽 {rows.length} 列（每列 = 一位教練 × 一種課程）。點學員姓名查看堂數與上堂時間。匯出 CSV
-              的「學員」欄每堂一行附堂數、「總堂數」=1，同空白「金額 (HKD)」欄。
+              每堂一行含「分店」、「學員」附堂數、「總堂數」=1，同空白「金額 (HKD)」欄。
             </p>
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
                 <thead className="border-b border-ink/10 bg-canvas/80 text-xs text-ink/55">
                   <tr>
-                    <th className="px-3 py-2.5 font-semibold">教練</th>
-                    <th className="px-3 py-2.5 font-semibold">課程</th>
-                    <th className="px-3 py-2.5 font-semibold">學員</th>
-                    <th className="px-3 py-2.5 font-semibold">出勤記錄</th>
+                    <SortHeader
+                      label="教練"
+                      column="coachName"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortHeader
+                      label="課程"
+                      column="courseName"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortHeader
+                      label="分店"
+                      column="branchName"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortHeader
+                      label="學員"
+                      column="students"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={toggleSort}
+                    />
+                    <SortHeader
+                      label="出勤記錄"
+                      column="attendanceDates"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={toggleSort}
+                    />
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r) => (
+                  {sortedRows.map(({ row: r, branchName, attendanceDates }) => (
                     <tr
-                      key={`${r.coachName}-${r.courseName}`}
+                      key={`${r.coachName}-${r.courseName}-${r.students}`}
                       className="border-t border-ink/[0.06] align-top"
                     >
                       <td className="px-3 py-2.5 font-medium text-ink">{r.coachName}</td>
                       <td className="px-3 py-2.5 text-ink/85">{r.courseName}</td>
+                      <td className="px-3 py-2.5 text-ink/85">{branchName || "—"}</td>
                       <td className="px-3 py-2.5 text-ink/85">
                         <StudentNamesCell
                           row={r}
                           onSelect={(detail) => openStudentModal(r, detail)}
                         />
                       </td>
-                      <td className="px-3 py-2.5 text-ink/85">{r.attendanceDates || "—"}</td>
+                      <td className="px-3 py-2.5 text-ink/85">{attendanceDates || "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -387,6 +504,7 @@ export default function CoachAttendanceIncomeExport() {
                         <tr className="border-b border-ink/10 text-ink/55">
                           <th className="py-2 pr-2 font-semibold">Package 堂數</th>
                           <th className="py-2 pr-2 font-semibold">上堂時間</th>
+                          <th className="py-2 pr-2 font-semibold">分店</th>
                           <th className="py-2 font-semibold">狀態</th>
                         </tr>
                       </thead>
@@ -415,6 +533,7 @@ export default function CoachAttendanceIncomeExport() {
                               <td className="py-2 pr-2 text-ink/85">
                                 {formatStudentSessionDateTime(session)}
                               </td>
+                              <td className="py-2 pr-2 text-ink/85">{session.branchName || "—"}</td>
                               <td className="py-2">
                                 <span
                                   className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${

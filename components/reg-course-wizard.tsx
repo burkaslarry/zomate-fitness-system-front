@@ -10,6 +10,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { alertApiError, api } from "../lib/api";
+import { preferDefaultBranchId } from "../lib/branches";
 import { buildPinWhatsAppMessage, waMeLink } from "../lib/whatsapp-utils";
 import type { BranchDto, CoachDto, CourseCategoryDto, InstallmentSegmentPinDto, MemberProfile } from "../types/api";
 import FileUpload from "./forms/file-upload";
@@ -182,7 +183,8 @@ export default function RegCourseWizard({
       setBranchId((prev) => {
         if (typeof prev === "number" && list.some((b) => b.id === prev)) return prev;
         if (lockedBranchId != null && list.some((b) => b.id === lockedBranchId)) return lockedBranchId;
-        return list[0]?.id ?? "";
+        /** [F007][S002] Default student course branch → 尖沙咀分店 (TST). */
+        return preferDefaultBranchId(list);
       });
     });
   }, [lockedBranchId]);

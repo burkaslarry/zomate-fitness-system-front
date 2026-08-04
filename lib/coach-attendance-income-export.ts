@@ -14,6 +14,7 @@ export type StudentAttendanceSession = {
   sessionDate: string;
   startTime: string;
   endTime: string;
+  branchName: string;
   lessonNo: number | null;
   totalLessons: number | null;
   isAttended: boolean;
@@ -38,6 +39,7 @@ export type CoachAttendanceIncomeRow = {
 export const COACH_INCOME_CSV_HEADERS = [
   "教練",
   "課程",
+  "分店",
   "學員",
   "出勤時間",
   "總堂數",
@@ -146,6 +148,7 @@ export function flattenCoachAttendanceIncomeCsvRows(
     (a, b) =>
       a.coachName.localeCompare(b.coachName, "zh-Hant") ||
       a.courseName.localeCompare(b.courseName, "zh-Hant") ||
+      a.session.branchName.localeCompare(b.session.branchName, "zh-Hant") ||
       a.studentName.localeCompare(b.studentName, "zh-Hant") ||
       a.session.sessionDate.localeCompare(b.session.sessionDate) ||
       a.session.startTime.localeCompare(b.session.startTime) ||
@@ -168,6 +171,27 @@ export function collectAttendedDatesInPeriod(
     }
   }
   return [...dates].sort().join(",");
+}
+
+/** Distinct branch names for checked-in sessions within the selected export range. */
+export function collectBranchesInPeriod(
+  details: StudentAttendanceDetail[],
+  fromDate: string,
+  toDate: string
+): string {
+  const branches = new Set<string>();
+  for (const detail of details) {
+    for (const session of detail.sessions) {
+      if (
+        session.isAttended &&
+        sessionInRange(session.sessionDate, fromDate, toDate) &&
+        session.branchName
+      ) {
+        branches.add(session.branchName);
+      }
+    }
+  }
+  return [...branches].sort((a, b) => a.localeCompare(b, "zh-Hant")).join(", ");
 }
 
 /** Total completed sessions for the row within the selected export range. */
@@ -243,6 +267,7 @@ function toStudentSession(session: CoachSessionRow): StudentAttendanceSession {
     sessionDate: session.session_date.trim().slice(0, 10),
     startTime: String(session.start_time ?? "").slice(0, 5),
     endTime: String(session.end_time ?? "").slice(0, 5),
+    branchName: String(session.branch_name ?? "").trim(),
     lessonNo: session.lesson_no ?? null,
     totalLessons: session.total_lessons ?? null,
     isAttended: attended,
@@ -461,6 +486,7 @@ export function coachAttendanceIncomeRowsToCsv(
     lessonRows.map(({ coachName, courseName, studentName, session }) => [
       coachName,
       courseName,
+      session.branchName || "—",
       formatStudentLessonCsvLabel(studentName, session),
       formatStudentSessionDateTime(session),
       "1",

@@ -11,6 +11,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import BackendShell from "../../../components/backend-shell";
 import { alertApiError, api } from "../../../lib/api";
+import { preferDefaultBranchId } from "../../../lib/branches";
 import type {
   BranchDto,
   CoachDto,
@@ -112,7 +113,10 @@ export default function AdminCourseSetPage() {
         ]);
         if (cancelled) return;
         setKinds(Array.isArray(k) ? (k as CourseCategoryDto[]) : []);
-        setBranches(Array.isArray(b) ? (b as BranchDto[]) : []);
+        const branchList = Array.isArray(b) ? (b as BranchDto[]) : [];
+        setBranches(branchList);
+        /** [F007][S002] Default student course branch → 尖沙咀分店 (TST). */
+        setBranchId((prev) => (prev !== "" ? prev : preferDefaultBranchId(branchList)));
         setCoaches(Array.isArray(c) ? (c as CoachDto[]) : []);
         setStudents(Array.isArray(s) ? (s as MemberProfile[]) : []);
       } catch (e) {
