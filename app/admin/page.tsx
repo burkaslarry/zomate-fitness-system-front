@@ -220,8 +220,8 @@ export default function AdminPage() {
               href="/admin/branches"
               className="rounded-xl border border-amber-200/70 bg-amber-50/90 px-3 py-2.5 text-xs font-semibold text-ink shadow-sm ring-1 ring-ink/[0.04] hover:bg-amber-100/90 sm:px-4 sm:py-3 sm:text-sm"
             >
-              課堂和分店管理
-              <span className="mt-1 block text-[10px] font-normal leading-4 text-ink/65 sm:text-xs">分店、Course 種類</span>
+              分店/課堂類嘅別管理
+              <span className="mt-1 block text-[10px] font-normal leading-4 text-ink/65 sm:text-xs">分店、課堂種類</span>
             </Link>
             <Link
               href="/admin/course-set"

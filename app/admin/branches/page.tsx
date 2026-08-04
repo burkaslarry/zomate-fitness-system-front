@@ -170,17 +170,17 @@ export default function AdminBranchesPage() {
 
   if (!isAdmin) {
     return (
-      <BackendShell title="分店管理">
+      <BackendShell title="分店/課堂類嘅別管理">
         <p className="text-sm text-ink/60">僅 ADMIN 可管理分店。</p>
       </BackendShell>
     );
   }
 
   return (
-    <BackendShell title="分店管理">
+    <BackendShell title="分店/課堂類嘅別管理">
       <div className="mx-auto max-w-5xl space-y-10">
         <div>
-          <h2 className="text-2xl font-semibold text-ink">分店管理</h2>
+          <h2 className="text-2xl font-semibold text-ink">分店/課堂類嘅別管理</h2>
           <p className="mt-1 text-sm text-ink/65">
             顯示名稱 · 代碼 · 地址（預設：尖沙咀 <code className="text-xs">TST</code>、上環{" "}
             <code className="text-xs">SW</code>）。教練報 Course 時須揀分店。
@@ -327,7 +327,7 @@ export default function AdminBranchesPage() {
 
         <section className="space-y-3 border-t border-ink/10 pt-8">
           <div>
-            <h3 className="text-lg font-semibold text-ink">Course 種類（試堂／開課共用）</h3>
+            <h3 className="text-lg font-semibold text-ink">課堂種類（新增／修改）</h3>
             <p className="mt-1 text-xs text-ink/55">編輯「啟用」會影響試堂下拉與報 Course 的課程名稱選項。</p>
           </div>
 
