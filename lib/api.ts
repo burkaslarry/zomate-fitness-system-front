@@ -892,6 +892,27 @@ export const api = {
     if (query?.categoryIds?.length) sp.set("category_ids", query.categoryIds.join(","));
     return request(`/api/coach/attendance-report?${sp.toString()}`);
   },
+  /** [F008][S005] Session ledger with branch, check-in/out, status badges. */
+  coachAttendanceLedger: (
+    coachId: number,
+    query?: {
+      month?: string;
+      branch?: string;
+      branchIds?: number[];
+      categoryIds?: number[];
+      sortBy?: string;
+      order?: "asc" | "desc";
+    }
+  ) => {
+    const sp = new URLSearchParams({ coach_id: String(coachId) });
+    if (query?.month) sp.set("month", query.month);
+    if (query?.branch) sp.set("branch", query.branch);
+    if (query?.branchIds?.length) sp.set("branch_id", query.branchIds.join(","));
+    if (query?.categoryIds?.length) sp.set("category_ids", query.categoryIds.join(","));
+    if (query?.sortBy) sp.set("sort_by", query.sortBy);
+    if (query?.order) sp.set("order", query.order);
+    return request(`/api/coach/attendance-ledger?${sp.toString()}`);
+  },
   reportsCoachAttendance: (query?: { month?: string }) => {
     const sp = new URLSearchParams();
     if (query?.month) sp.set("month", query.month);
