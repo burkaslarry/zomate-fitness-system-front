@@ -43,6 +43,10 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
+    env:
+      # [F015][S006] Vercel project macros (zomate-fitness-system-front)
+      VERCEL_ORG_ID: team_e1pKe3eoQeeRYDzivUOsnvxM
+      VERCEL_PROJECT_ID: prj_OHvcmEnmXNeaEZfrnS8rORCpDU50
     steps:
       - uses: actions/checkout@v4
 
@@ -51,18 +55,10 @@ jobs:
           node-version: "20"
           cache: npm
 
-      - name: Load Vercel project link
+      - name: Validate Vercel project macros
         run: |
-          if [[ -f .vercel/project.json ]]; then
-            echo "VERCEL_ORG_ID=$(jq -r .orgId .vercel/project.json)" >> "$GITHUB_ENV"
-            echo "VERCEL_PROJECT_ID=$(jq -r .projectId .vercel/project.json)" >> "$GITHUB_ENV"
-          elif [[ -n "${{ secrets.VERCEL_ORG_ID }}" && -n "${{ secrets.VERCEL_PROJECT_ID }}" ]]; then
-            echo "VERCEL_ORG_ID=${{ secrets.VERCEL_ORG_ID }}" >> "$GITHUB_ENV"
-            echo "VERCEL_PROJECT_ID=${{ secrets.VERCEL_PROJECT_ID }}" >> "$GITHUB_ENV"
-          else
-            echo "::error::Missing Vercel project link. Commit .vercel/project.json (after vercel link) or set VERCEL_ORG_ID and VERCEL_PROJECT_ID secrets."
-            exit 1
-          fi
+          [[ -n "${VERCEL_ORG_ID}" ]] || { echo "::error::Missing VERCEL_ORG_ID"; exit 1; }
+          [[ -n "${VERCEL_PROJECT_ID}" ]] || { echo "::error::Missing VERCEL_PROJECT_ID"; exit 1; }
 
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
