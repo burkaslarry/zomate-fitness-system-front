@@ -9,15 +9,18 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import CoachScheduleCalendarNav, { type CalendarMode } from "../../components/coach-schedule-calendar-nav";
-import CoachSchedulePanel from "../../components/coach-schedule-panel";
+import CoachScheduleBottomSheet from "../../components/coach-schedule-bottom-sheet";
+import CoachScheduleDayAgenda from "../../components/coach-schedule-day-agenda";
+import CoachScheduleFab from "../../components/coach-schedule-fab";
+import CoachScheduleStudentPickerSheet from "../../components/coach-schedule-student-picker-sheet";
 import CoachScheduleSuccessDialog from "../../components/coach-schedule-success-dialog";
 import CoachDateStepper from "../../components/coach-date-stepper";
 import CoachSlotDurationChips from "../../components/coach-slot-duration-chips";
 import CoachStartEndSummary from "../../components/coach-start-end-summary";
 import CoachStartTimeSelect from "../../components/coach-start-time-select";
-import { monthRange, weekRange, isPastDay, isTodayOrFutureDay, todayDateKey } from "../../lib/coach-schedule-dates";
+import { monthRange, weekRange, isPastDay, todayDateKey } from "../../lib/coach-schedule-dates";
 import {
   type CoachSlotDuration,
   type CoachStartMinute,
@@ -27,8 +30,6 @@ import {
 } from "../../lib/coach-schedule-duration";
 import {
   type CoachSessionRow,
-  formatSessionLine,
-  sessionCountsByDate,
   sessionsToDayCourses
 } from "../../lib/coach-sessions";
 import { alertApiError, api } from "../../lib/api";
@@ -138,6 +139,7 @@ export default function CoachDashboardPage() {
   const [calendarMode, setCalendarMode] = useState<CalendarMode>("month");
   const [rangeSessions, setRangeSessions] = useState<CoachSessionRow[]>([]);
   const [scheduleSheetOpen, setScheduleSheetOpen] = useState(false);
+  const [studentPickerOpen, setStudentPickerOpen] = useState(false);
   const [pending, setPending] = useState<PendingRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [daySessions, setDaySessions] = useState<CoachSessionRow[]>([]);
@@ -171,7 +173,6 @@ export default function CoachDashboardPage() {
     startMinute: CoachStartMinute;
     durationHours: CoachSlotDuration;
   } | null>(null);
-  const scheduleAnchorRef = useRef<HTMLDivElement>(null);
 
   const pendingCourseIds = useMemo(() => new Set(pending.map((p) => p.course_id)), [pending]);
   const excludeCourseIds = useMemo(() => {
@@ -277,11 +278,6 @@ export default function CoachDashboardPage() {
       .catch(() => setRangeSessions([]));
   }, [coach, calendarMode, selectedDay]);
 
-  const sessionCountsByDay = useMemo(
-    () => sessionCountsByDate(rangeSessions, { confirmedOnly: true }),
-    [rangeSessions]
-  );
-
   const pickStudentForSchedule = useCallback(
     async (studentId: number) => {
       if (!coach) return;
@@ -310,7 +306,7 @@ export default function CoachDashboardPage() {
           setStartHour(d.getHours());
           setStartMinute((Math.round(d.getMinutes() / 15) * 15) as CoachStartMinute);
         } else {
-          setSelectedDay(todayKey());
+          setSelectedDay(isPastDay(selectedDay) ? todayKey() : selectedDay);
           setStartHour(9);
           setStartMinute(0);
           setDurationHours(1);
@@ -324,7 +320,7 @@ export default function CoachDashboardPage() {
         setPickBusy(false);
       }
     },
-    [coach]
+    [coach, selectedDay]
   );
 
   useEffect(() => {
@@ -338,17 +334,48 @@ export default function CoachDashboardPage() {
   const handleCalendarDaySelect = useCallback((dayKey: string) => {
     setSelectedDay(dayKey);
     setScheduleSheetOpen(false);
+    setStudentPickerOpen(false);
   }, []);
 
   const handleSelectPendingRow = useCallback((row: PendingRow) => {
     setSelectedPending(row);
     setScheduleStudentId(row.student_id);
     setScheduleSheetOpen(false);
-    setSelectedDay(todayKey());
     setStartHour(9);
     setStartMinute(0);
     setDurationHours(1);
   }, []);
+
+  const handleFabClick = useCallback(() => {
+    if (isPastDay(selectedDay)) {
+      setStatus("不能排期到過去日期，請選今日或未來。");
+      return;
+    }
+    if (selectedPending) {
+      setScheduleSheetOpen(true);
+      return;
+    }
+    setStudentPickerOpen(true);
+  }, [selectedDay, selectedPending]);
+
+  const handlePickerPending = useCallback(
+    (row: PendingRow) => {
+      handleSelectPendingRow(row);
+      setStudentPickerOpen(false);
+      setScheduleSheetOpen(true);
+    },
+    [handleSelectPendingRow]
+  );
+
+  const handlePickerStudent = useCallback(
+    (studentId: number) => {
+      setStudentPickerOpen(false);
+      void pickStudentForSchedule(studentId).then(() => {
+        setScheduleSheetOpen(true);
+      });
+    },
+    [pickStudentForSchedule]
+  );
 
   async function confirmSchedule() {
     if (!coach || !selectedPending) return;
@@ -543,134 +570,97 @@ export default function CoachDashboardPage() {
   }
 
   const schedulePanel = (
-    <div className="space-y-4">
-      <section className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
-        <h2 className="text-sm font-semibold text-ink">學員排期上堂</h2>
-        <p className="mt-1 text-xs text-ink/55">
-          {pending.length > 0
-            ? `你有 ${pending.length} 位學員待排期上堂（未付款亦可排程）。揀學員後按「揀時段排程」。`
-            : "暫無待排期學員；可從下方學員名單揀人排期或改期。"}
-        </p>
-        {pickBusy ? <p className="mt-2 text-xs text-primary">載入學員課程…</p> : null}
-        {pending.length === 0 ? (
-          students.length === 0 ? (
-            <p className="mt-3 text-sm text-ink/50">目前沒有指派學員。</p>
-          ) : (
-            <ul className="mt-3 space-y-2">
-              {students.map((s) => (
-                <li key={s.student_id}>
-                  <button
-                    type="button"
-                    onClick={() => void pickStudentForSchedule(s.student_id)}
-                    className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm transition ${
-                      scheduleStudentId === s.student_id || selectedPending?.student_id === s.student_id
-                        ? "border-primary bg-primary/10 ring-2 ring-primary/35"
-                        : "border-ink/10 bg-canvas hover:border-primary/40 active:scale-[0.99]"
-                    }`}
-                  >
-                    <div className="font-medium text-ink">{s.full_name}</div>
-                    <div className="mt-0.5 text-xs text-ink/60">
-                      餘 {s.lesson_balance} 堂 · {s.enrollment_count} 課程
-                      {s.pending_schedule ? " · 待排程" : " · 可改期"}
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )
-        ) : (
-          <ul className="mt-3 space-y-2">
+    <div className="relative space-y-4 pb-8">
+      {pending.length > 0 ? (
+        <section className="rounded-xl border border-primary/20 bg-primary/5 p-3 shadow-sm">
+          <p className="text-xs font-semibold text-ink">
+            待排期 · {pending.length} 位學員
+          </p>
+          <ul className="mt-2 flex gap-2 overflow-x-auto pb-1">
             {pending.map((p) => (
-              <li key={p.enrollment_id}>
+              <li key={p.enrollment_id} className="shrink-0">
                 <button
                   type="button"
-                  onClick={() => handleSelectPendingRow(p)}
-                  className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm transition ${
+                  onClick={() => handlePickerPending(p)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
                     selectedPending?.enrollment_id === p.enrollment_id
-                      ? "border-primary bg-primary/10 ring-1 ring-primary/30"
-                      : "border-ink/10 bg-canvas hover:border-primary/40"
+                      ? "border-primary bg-primary/20 text-black"
+                      : "border-ink/15 bg-surface text-ink hover:border-primary/35"
                   }`}
                 >
-                  <div className="font-medium text-ink">{p.student_name}</div>
-                  <div className="mt-0.5 text-xs text-ink/60">
-                    {p.course_title} · {p.branch_name} · {p.total_lessons} 堂
-                  </div>
+                  {p.student_name}
                 </button>
               </li>
             ))}
           </ul>
-        )}
-      </section>
+        </section>
+      ) : null}
 
       <section className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
-        <h2 className="text-sm font-semibold text-ink">日曆 · 9:00–19:00</h2>
+        <h2 className="text-sm font-semibold text-ink">日曆 · 學員上堂</h2>
+        <p className="mt-1 text-xs text-ink/55">Google Calendar 模式：月／週檢視 · 點日期 · 下方列出當日全部課堂</p>
         <CoachScheduleCalendarNav
           selectedDay={selectedDay}
           mode={calendarMode}
-          sessionCountsByDay={sessionCountsByDay}
+          rangeSessions={rangeSessions}
           onSelectDay={handleCalendarDaySelect}
           onModeChange={setCalendarMode}
           onNavigate={handleCalendarDaySelect}
-          scrollAnchorRef={scheduleAnchorRef}
         />
-        <div ref={scheduleAnchorRef} className="scroll-mt-4">
-        {selectedPending && isTodayOrFutureDay(selectedDay) ? (
-          <CoachSchedulePanel
-            studentName={selectedPending.student_name}
-            courseTitle={selectedPending.course_title}
-            selectedDay={selectedDay}
-            dayCourses={dayCoursesForPanel}
-            occupiedRanges={occupiedRanges}
-            startHour={startHour}
-            startMinute={startMinute}
-            durationHours={durationHours}
-            sheetOpen={scheduleSheetOpen}
-            scheduling={scheduling}
-            onOpenSheet={() => setScheduleSheetOpen(true)}
-            onDayChange={setSelectedDay}
-            onStartTimeChange={(h, m) => {
-              setStartHour(h);
-              setStartMinute(m);
-            }}
-            onCloseSheet={() => setScheduleSheetOpen(false)}
-            onDurationChange={setDurationHours}
-            onConfirm={() => void confirmSchedule()}
-          />
-        ) : selectedPending && isPastDay(selectedDay) ? (
-          <p className="mt-2 rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-xs text-amber-950">
-            此日已過，不能新排期。請查閱下方上堂學員；改期請到「學員」分頁按「改期」。
-          </p>
-        ) : (
-          <p className="mt-2 text-xs text-ink/50">先揀學員，再按「揀時段排程」或點日曆日期。</p>
-        )}
-        </div>
-        {confirmedDaySessions.length > 0 ? (
-          <ul className="mt-4 space-y-2 border-t border-ink/10 pt-3 text-xs text-ink/65">
-            <li className="font-medium text-ink/50">
-              {selectedDay} 已排課程
-              {isPastDay(selectedDay) ? " · 可改期" : ""}
-            </li>
-            {confirmedDaySessions.map((s) => (
-                <li
-                  key={`${s.enrollment_id}-${s.session_date}`}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ink/10 bg-canvas/60 px-3 py-2"
-                >
-                  <span>{formatSessionLine(s)}</span>
-                  <button
-                    type="button"
-                    onClick={() => void openStudentReschedule(s.student_id, s.enrollment_id)}
-                    className="shrink-0 rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-[11px] font-semibold text-black"
-                  >
-                    改期
-                  </button>
-                </li>
-              ))}
-          </ul>
-        ) : isPastDay(selectedDay) ? (
-          <p className="mt-3 border-t border-ink/10 pt-3 text-xs text-ink/45">此日沒有已排課程。</p>
-        ) : null}
+        <CoachScheduleDayAgenda
+          selectedDay={selectedDay}
+          sessions={confirmedDaySessions}
+          isPastDay={isPastDay(selectedDay)}
+          onReschedule={(studentId, enrollmentId) => void openStudentReschedule(studentId, enrollmentId)}
+        />
       </section>
 
+      {selectedPending ? (
+        <CoachScheduleBottomSheet
+          open={scheduleSheetOpen}
+          studentName={selectedPending.student_name}
+          courseTitle={selectedPending.course_title}
+          selectedDay={selectedDay}
+          dayCourses={dayCoursesForPanel}
+          occupiedRanges={occupiedRanges}
+          startHour={startHour}
+          startMinute={startMinute}
+          durationHours={durationHours}
+          scheduling={scheduling}
+          onClose={() => setScheduleSheetOpen(false)}
+          onDayChange={setSelectedDay}
+          onStartTimeChange={(h, m) => {
+            setStartHour(h);
+            setStartMinute(m);
+          }}
+          onDurationChange={setDurationHours}
+          onConfirm={() => void confirmSchedule()}
+        />
+      ) : null}
+
+      <CoachScheduleStudentPickerSheet
+        open={studentPickerOpen}
+        pending={pending}
+        students={students}
+        busy={pickBusy}
+        onClose={() => setStudentPickerOpen(false)}
+        onPickPending={(row) =>
+          handlePickerPending({
+            enrollment_id: row.enrollment_id,
+            course_id: row.course_id ?? row.enrollment_id,
+            student_id: row.student_id,
+            student_name: row.student_name,
+            student_phone: row.student_phone ?? "",
+            course_title: row.course_title,
+            branch_name: row.branch_name,
+            total_lessons: row.total_lessons,
+            placeholder_start: row.placeholder_start ?? ""
+          })
+        }
+        onPickStudent={handlePickerStudent}
+      />
+
+      <CoachScheduleFab onClick={handleFabClick} disabled={isPastDay(selectedDay)} />
     </div>
   );
 

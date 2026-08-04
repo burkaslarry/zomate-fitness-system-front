@@ -3,11 +3,9 @@
 /**
  * [F003][S002]
  * Feature: Coach Dashboard
- * Step: Collapsible week / month calendar — collapse after date pick to reveal slots
- * Logic: isCalendarExpanded; grid-row animation; auto-scroll to schedule anchor.
+ * Step: Google Calendar–style week / month grid — up to 5 session chips per day + overflow
  */
 
-import { useCallback, useState, type RefObject } from "react";
 import {
   formatDateKey,
   formatDateLabel,
@@ -21,51 +19,83 @@ import {
   weekTitle,
   weekdayLabel
 } from "../lib/coach-schedule-dates";
+import {
+  calendarCellPreview,
+  calendarChipClass,
+  calendarChipLabel,
+  type CoachSessionRow
+} from "../lib/coach-sessions";
 
 export type CalendarMode = "week" | "month";
+
+const MAX_VISIBLE = 5;
+const WEEKDAY_HEADERS = ["一", "二", "三", "四", "五", "六", "日"];
 
 type Props = {
   selectedDay: string;
   mode: CalendarMode;
-  sessionCountsByDay: Record<string, number>;
+  rangeSessions: CoachSessionRow[];
   onSelectDay: (dateKey: string) => void;
   onModeChange: (mode: CalendarMode) => void;
   onNavigate: (nextAnchorDay: string) => void;
-  /** Scroll target below calendar (time-slot CTA) after collapse */
-  scrollAnchorRef?: RefObject<HTMLElement | null>;
 };
 
-const WEEKDAY_HEADERS = ["一", "二", "三", "四", "五", "六", "日"];
-const COLLAPSE_MS = 320;
+function DaySessionChips({ sessions, dayKey }: { sessions: CoachSessionRow[]; dayKey: string }) {
+  const { visible, overflow } = calendarCellPreview(sessions, dayKey, MAX_VISIBLE, { confirmedOnly: true });
+  if (visible.length === 0) return null;
+
+  return (
+    <div className="mt-1 w-full space-y-0.5 px-0.5">
+      {visible.map((s) => (
+        <div
+          key={`${s.enrollment_id}-${s.session_date}`}
+          className={`truncate rounded border px-1 py-px text-left text-[9px] font-semibold leading-tight md:text-[10px] ${calendarChipClass(s.student_id)}`}
+          title={calendarChipLabel(s)}
+        >
+          {calendarChipLabel(s)}
+        </div>
+      ))}
+      {overflow > 0 ? (
+        <p className="px-0.5 text-left text-[9px] font-semibold text-ink/55 md:text-[10px]">+{overflow} 更多</p>
+      ) : null}
+    </div>
+  );
+}
+
+function DayNumber({
+  dayKey,
+  selectedDay,
+  today
+}: {
+  dayKey: string;
+  selectedDay: string;
+  today: string;
+}) {
+  const d = parseDateKey(dayKey);
+  const isToday = dayKey === today;
+  const active = dayKey === selectedDay;
+
+  if (isToday && !active) {
+    return (
+      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-bold text-black">
+        {d.getDate()}
+      </span>
+    );
+  }
+
+  return <span className={`text-xs font-semibold ${active ? "text-black" : "text-black/85"}`}>{d.getDate()}</span>;
+}
 
 export default function CoachScheduleCalendarNav({
   selectedDay,
   mode,
-  sessionCountsByDay,
+  rangeSessions,
   onSelectDay,
   onModeChange,
-  onNavigate,
-  scrollAnchorRef
+  onNavigate
 }: Props) {
-  const [isCalendarExpanded, setIsCalendarExpanded] = useState(true);
-
   const today = formatDateKey(new Date());
   const periodTitle = mode === "week" ? weekTitle(selectedDay) : monthTitle(selectedDay);
-
-  const scrollToScheduleAnchor = useCallback(() => {
-    window.setTimeout(() => {
-      scrollAnchorRef?.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, COLLAPSE_MS);
-  }, [scrollAnchorRef]);
-
-  const pickDay = useCallback(
-    (dayKey: string) => {
-      onSelectDay(dayKey);
-      setIsCalendarExpanded(false);
-      scrollToScheduleAnchor();
-    },
-    [onSelectDay, scrollToScheduleAnchor]
-  );
 
   const goPrev = () => {
     onNavigate(mode === "week" ? shiftWeek(selectedDay, -1) : shiftMonth(selectedDay, -1));
@@ -74,169 +104,129 @@ export default function CoachScheduleCalendarNav({
     onNavigate(mode === "week" ? shiftWeek(selectedDay, 1) : shiftMonth(selectedDay, 1));
   };
 
+  const dayButtonClass = (dayKey: string, inMonth = true) => {
+    const active = dayKey === selectedDay;
+    const past = isPastDay(dayKey, today);
+    const base =
+      "flex min-h-[5.5rem] w-full flex-col items-stretch rounded-lg border px-0.5 py-1 text-left transition md:min-h-[6.25rem]";
+    if (active) {
+      return `${base} border-primary bg-primary/10 ring-2 ring-primary/35 shadow-sm`;
+    }
+    if (past) {
+      return `${base} border-ink/10 bg-ink/[0.03] text-black/45 hover:border-ink/20 ${inMonth ? "" : "opacity-35"}`;
+    }
+    return `${base} border-ink/10 bg-canvas hover:border-primary/25 hover:bg-surface ${inMonth ? "" : "opacity-40"}`;
+  };
+
   return (
-    <div className="mt-2 space-y-2">
-      {!isCalendarExpanded ? (
-        <button
-          type="button"
-          onClick={() => setIsCalendarExpanded(true)}
-          className="flex w-full items-center gap-2 rounded-xl border border-primary/30 bg-primary/10 px-3 py-2.5 text-left text-sm font-medium text-black shadow-sm transition hover:bg-primary/20 active:scale-[0.99]"
-        >
-          <span aria-hidden>🗓️</span>
-          <span className="min-w-0 flex-1 truncate">
-            已選：{formatDateLabel(selectedDay)}
-            <span className="ml-1 text-xs font-normal text-black/55">（點擊展開日曆）</span>
-          </span>
-        </button>
-      ) : null}
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex rounded-lg border border-ink/15 bg-canvas p-0.5 text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => onModeChange("week")}
+            className={`rounded-md border-0 px-3 py-1.5 shadow-none transition ${
+              mode === "week" ? "bg-primary text-black" : "bg-transparent text-black/70 hover:text-black"
+            }`}
+          >
+            週
+          </button>
+          <button
+            type="button"
+            onClick={() => onModeChange("month")}
+            className={`rounded-md border-0 px-3 py-1.5 shadow-none transition ${
+              mode === "month" ? "bg-primary text-black" : "bg-transparent text-black/70 hover:text-black"
+            }`}
+          >
+            月
+          </button>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={goPrev}
+            className="rounded-lg border border-ink/15 bg-canvas px-2 py-1 text-sm text-black shadow-none hover:bg-surface"
+            aria-label="上一段"
+          >
+            ‹
+          </button>
+          <span className="min-w-[8rem] text-center text-xs font-medium text-black/80">{periodTitle}</span>
+          <button
+            type="button"
+            onClick={goNext}
+            className="rounded-lg border border-ink/15 bg-canvas px-2 py-1 text-sm text-black shadow-none hover:bg-surface"
+            aria-label="下一段"
+          >
+            ›
+          </button>
+        </div>
+      </div>
 
-      <div
-        className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
-          isCalendarExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-        }`}
-      >
-        <div className="min-h-0 overflow-hidden">
-          <div className="space-y-2 pb-1">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex rounded-lg border border-ink/15 bg-canvas p-0.5 text-xs font-semibold">
-                <button
-                  type="button"
-                  onClick={() => onModeChange("week")}
-                  className={`rounded-md border-0 px-3 py-1.5 shadow-none transition ${
-                    mode === "week" ? "bg-primary text-black" : "bg-transparent text-black/70 hover:text-black"
-                  }`}
-                >
-                  週
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onModeChange("month")}
-                  className={`rounded-md border-0 px-3 py-1.5 shadow-none transition ${
-                    mode === "month" ? "bg-primary text-black" : "bg-transparent text-black/70 hover:text-black"
-                  }`}
-                >
-                  月
-                </button>
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={goPrev}
-                  className="rounded-lg border border-ink/15 bg-canvas px-2 py-1 text-sm text-black shadow-none hover:bg-surface"
-                  aria-label="上一段"
-                >
-                  ‹
-                </button>
-                <span className="min-w-[8rem] text-center text-xs font-medium text-black/80">{periodTitle}</span>
-                <button
-                  type="button"
-                  onClick={goNext}
-                  className="rounded-lg border border-ink/15 bg-canvas px-2 py-1 text-sm text-black shadow-none hover:bg-surface"
-                  aria-label="下一段"
-                >
-                  ›
-                </button>
-              </div>
-            </div>
+      <p className="text-[11px] text-ink/50">
+        已選：<span className="font-medium text-ink/70">{formatDateLabel(selectedDay)}</span>
+        {" · "}
+        點日期查看當日學員；最多顯示 {MAX_VISIBLE} 堂，其餘以「+N 更多」表示
+      </p>
 
-            {mode === "week" ? (
-              <div className="grid grid-cols-7 gap-1">
-                {weekDaysContaining(selectedDay).map((dayKey) => {
-                  const d = parseDateKey(dayKey);
-                  const active = dayKey === selectedDay;
-                  const isToday = dayKey === today;
-            const count = sessionCountsByDay[dayKey] ?? 0;
-            const past = isPastDay(dayKey, today);
-            return (
+      {mode === "week" ? (
+        <div>
+          <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-ink/45">
+            {weekDaysContaining(selectedDay).map((dayKey) => (
+              <span key={`wh-${dayKey}`}>{weekdayLabel(dayKey)}</span>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {weekDaysContaining(selectedDay).map((dayKey) => (
               <button
                 key={dayKey}
                 type="button"
-                onClick={() => pickDay(dayKey)}
-                className={`flex flex-col items-center rounded-lg border py-2 text-center transition ${
-                  active
-                    ? past
-                      ? "border-ink/25 bg-ink/10 ring-1 ring-ink/20 text-black"
-                      : "border-primary bg-primary/15 ring-1 ring-primary/35 text-black"
-                    : past
-                      ? "border-ink/10 bg-ink/[0.04] text-black/45 hover:border-ink/25"
-                      : "border-ink/10 bg-canvas text-black hover:border-primary/30"
-                }`}
+                onClick={() => onSelectDay(dayKey)}
+                className={dayButtonClass(dayKey)}
               >
-                      <span className="text-[10px] text-black/50">{weekdayLabel(dayKey)}</span>
-                      <span
-                        className={`mt-0.5 text-sm font-semibold ${isToday && !active ? "text-black/80" : "text-black"}`}
-                      >
-                        {d.getDate()}
-                      </span>
-                      {count > 0 ? (
-                        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-primary" aria-label={`${count} 堂`} />
-                      ) : (
-                        <span className="mt-1 h-1.5 w-1.5" aria-hidden />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <div>
-                <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-ink/45">
-                  {WEEKDAY_HEADERS.map((h) => (
-                    <span key={h}>{h}</span>
-                  ))}
+                <div className="flex justify-center">
+                  <DayNumber dayKey={dayKey} selectedDay={selectedDay} today={today} />
                 </div>
-                <div className="space-y-1">
-                  {monthGrid(selectedDay).map((row, ri) => (
-                    <div key={`row-${ri}`} className="grid grid-cols-7 gap-1">
-                      {row.map((dayKey, ci) => {
-                        if (!dayKey) {
-                          return <div key={`pad-${ri}-${ci}`} className="aspect-square" />;
-                        }
-                        const d = parseDateKey(dayKey);
-                        const active = dayKey === selectedDay;
-                        const isToday = dayKey === today;
-                        const count = sessionCountsByDay[dayKey] ?? 0;
-                  const inMonth = d.getMonth() === parseDateKey(selectedDay).getMonth();
-                  const past = isPastDay(dayKey, today);
+                <DaySessionChips sessions={rangeSessions} dayKey={dayKey} />
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div className="mb-1 grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-ink/45">
+            {WEEKDAY_HEADERS.map((h) => (
+              <span key={h}>{h}</span>
+            ))}
+          </div>
+          <div className="space-y-1">
+            {monthGrid(selectedDay).map((row, ri) => (
+              <div key={`row-${ri}`} className="grid grid-cols-7 gap-1">
+                {row.map((dayKey, ci) => {
+                  if (!dayKey) {
+                    return <div key={`pad-${ri}-${ci}`} className="min-h-[5.5rem] md:min-h-[6.25rem]" />;
+                  }
+                  const inMonth = parseDateKey(dayKey).getMonth() === parseDateKey(selectedDay).getMonth();
                   return (
                     <button
                       key={dayKey}
                       type="button"
-                      onClick={() => pickDay(dayKey)}
-                      className={`flex aspect-square flex-col items-center justify-center rounded-lg border text-center transition ${
-                        active
-                          ? past
-                            ? "border-ink/25 bg-ink/10 ring-1 ring-ink/20 text-black"
-                            : "border-primary bg-primary/15 ring-1 ring-primary/35 text-black"
-                          : past
-                            ? "border-ink/10 bg-ink/[0.04] text-black/45 hover:border-ink/25"
-                            : "border-ink/10 bg-canvas text-black hover:border-primary/30"
-                      } ${inMonth ? "" : "opacity-40"}`}
+                      onClick={() => onSelectDay(dayKey)}
+                      className={dayButtonClass(dayKey, inMonth)}
                     >
-                            <span
-                              className={`text-xs font-semibold ${isToday && !active ? "text-black/80" : "text-black"}`}
-                            >
-                              {d.getDate()}
-                            </span>
-                            {count > 0 ? (
-                              <span className="mt-0.5 h-1 w-1 rounded-full bg-primary" />
-                            ) : null}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
+                      <div className="flex justify-center">
+                        <DayNumber dayKey={dayKey} selectedDay={selectedDay} today={today} />
+                      </div>
+                      <DaySessionChips sessions={rangeSessions} dayKey={dayKey} />
+                    </button>
+                  );
+                })}
               </div>
-            )}
-
-            {isCalendarExpanded ? (
-              <p className="text-[11px] text-ink/50">
-                灰色日期＝已過 · 只可查閱上堂；今日起可排新期
-              </p>
-            ) : null}
+            ))}
           </div>
         </div>
-      </div>
+      )}
+
+      <p className="text-[11px] text-ink/45">灰色日期＝已過 · 只可查閱；今日起可按 + 新增排程</p>
     </div>
   );
 }

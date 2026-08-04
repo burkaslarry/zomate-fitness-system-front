@@ -11,7 +11,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { alertApiError, api } from "../lib/api";
 import { buildPinWhatsAppMessage, waMeLink } from "../lib/whatsapp-utils";
-import type { CoachDto, CourseCategoryDto, InstallmentSegmentPinDto, MemberProfile } from "../types/api";
+import type { BranchDto, CoachDto, CourseCategoryDto, InstallmentSegmentPinDto, MemberProfile } from "../types/api";
 import FileUpload from "./forms/file-upload";
 import MobileRadioList from "./mobile-radio-list";
 import PaymentMethodRadio from "./forms/payment-method-radio";
@@ -142,6 +142,8 @@ export default function RegCourseWizard({
   const [step, setStep] = useState<WizardStep>(0);
   const [coaches, setCoaches] = useState<CoachDto[]>([]);
   const [coachId, setCoachId] = useState<number | "">(lockedCoachId ?? "");
+  const [branches, setBranches] = useState<BranchDto[]>([]);
+  const [branchId, setBranchId] = useState<number | "">(lockedBranchId ?? "");
   const [categories, setCategories] = useState<CourseCategoryDto[]>([]);
   const [categoryId, setCategoryId] = useState<number | "">("");
   const [lessonsText, setLessonsText] = useState("10");
@@ -149,7 +151,6 @@ export default function RegCourseWizard({
   const [lookupHint, setLookupHint] = useState("");
   const [renewalSubmitting, setRenewalSubmitting] = useState(false);
   const [purchaseSummary, setPurchaseSummary] = useState<PurchaseSummary | null>(null);
-  const [defaultBranchId, setDefaultBranchId] = useState<number | null>(lockedBranchId ?? null);
   const [fullPay, setFullPay] = useState(true);
   const [installmentPay, setInstallmentPay] = useState(false);
   const [installmentCount, setInstallmentCount] = useState<2 | 3>(2);
@@ -175,12 +176,21 @@ export default function RegCourseWizard({
   }, [mode, lockedCoachId]);
 
   useEffect(() => {
-    if (defaultBranchId != null) return;
     void api.publicBranches().then((rows) => {
-      const list = Array.isArray(rows) ? (rows as { id: number }[]) : [];
-      if (list[0]?.id) setDefaultBranchId(list[0].id);
+      const list = Array.isArray(rows) ? (rows as BranchDto[]) : [];
+      setBranches(list);
+      setBranchId((prev) => {
+        if (typeof prev === "number" && list.some((b) => b.id === prev)) return prev;
+        if (lockedBranchId != null && list.some((b) => b.id === lockedBranchId)) return lockedBranchId;
+        return list[0]?.id ?? "";
+      });
     });
-  }, [defaultBranchId]);
+  }, [lockedBranchId]);
+
+  const selectedBranch = useMemo(
+    () => branches.find((b) => b.id === branchId) ?? null,
+    [branches, branchId]
+  );
 
   const selectedCoach = useMemo(() => {
     if (mode === "coach" && lockedCoachId) {
@@ -261,6 +271,7 @@ export default function RegCourseWizard({
       setCategoryId("");
       setLessonsText("10");
       setAmount("");
+      if (lockedBranchId != null) setBranchId(lockedBranchId);
       selectFullPay();
       setInstallmentCount(2);
       setInstallmentAmounts(["", ""]);
@@ -297,11 +308,19 @@ export default function RegCourseWizard({
       alertApiError(new Error("請選擇負責教練"));
       return;
     }
+    const coach = coaches.find((c) => c.id === coachId);
+    if (coach?.branch_id && branches.some((b) => b.id === coach.branch_id)) {
+      setBranchId(coach.branch_id);
+    }
     setStep(2);
   }
 
   function goCategoryNext() {
     const lessons = Number(lessonsText);
+    if (!branchId) {
+      alertApiError(new Error("請選擇上課分店"));
+      return;
+    }
     if (!categoryId) {
       alertApiError(new Error("請選擇課堂種類"));
       return;
@@ -333,9 +352,9 @@ export default function RegCourseWizard({
       return;
     }
     const lessons = Number(lessonsText);
-    const branchId = selectedCoach?.branch_id ?? defaultBranchId;
-    if (!branchId) {
-      alertApiError(new Error("找不到分店，請先在後台設定教練分店。"));
+    const resolvedBranchId = typeof branchId === "number" ? branchId : null;
+    if (!resolvedBranchId) {
+      alertApiError(new Error("請選擇上課分店"));
       return;
     }
     const receipt = form.get("receipt");
@@ -357,7 +376,7 @@ export default function RegCourseWizard({
         student_id: member.id,
         total_lessons: lessons,
         coach_id: Number(coachId),
-        branch_id: branchId,
+        branch_id: resolvedBranchId,
         amount: firstInstallmentAmount,
         payment_method: method,
         transaction_type: selectedKind.name.startsWith(NEW_STUDENT_CATEGORY_PREFIX) ? "new_package" : "renewal",
@@ -369,7 +388,7 @@ export default function RegCourseWizard({
       });
       const coursePayload = buildAutoCoursePayload({
         title: selectedKind.name,
-        branchId,
+        branchId: resolvedBranchId,
         coachId: Number(coachId),
         studentId: member.id,
         totalLessons: lessons,
@@ -400,7 +419,7 @@ export default function RegCourseWizard({
         remainingBalance: balanceRes.lesson_balance,
         paymentMethod: method,
         coachName: selectedCoach?.full_name ?? "—",
-        branchName: selectedCoach?.branch_name ?? "Zomate Fitness",
+        branchName: selectedBranch?.name ?? "—",
         totalInstallments,
         checkinPin: enr?.checkin_pin ?? "—",
         installmentSegments: enr?.installment_segments ?? [],
@@ -506,8 +525,16 @@ export default function RegCourseWizard({
             {mode === "coach" ? "Step 1" : "Step 2"} · 課堂種類 · 堂數
           </h2>
           <MobileRadioList
+            name="reg-course-branch"
+            legend="上課分店"
+            value={branchId}
+            options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }))}
+            onChange={setBranchId}
+            emptyLabel="暫無分店 — 請 ADMIN 於分店管理新增"
+          />
+          <MobileRadioList
             name="reg-course-category"
-            legend="課堂種類"
+            legend="所屬教練可授的課堂種類"
             value={categoryId}
             options={filteredCategories.map((k) => ({ value: k.id, label: k.name }))}
             onChange={setCategoryId}

@@ -1,0 +1,16 @@
+{
+  "coach_id": 1,
+  "coach_username": "funglo",
+  "coach_password": "12347890",
+  "gary": {
+    "full_name": "Gary Man",
+    "phone": "98764301",
+    "hkid": "G8764301"
+  },
+  "jessie": {
+    "full_name": "Jessie Yeung",
+    "phone": "98764302",
+    "hkid": "J8764302"
+  },
+  "receipt_fixture": "/Users/larrylo/SourceProject/zomate-fitness/docs/memberform/IMG_2788-receipt-demo.png"
+}

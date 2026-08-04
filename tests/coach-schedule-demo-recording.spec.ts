@@ -27,12 +27,12 @@ test("record Mary Ma schedule demo with 12:15 start", async ({ page }) => {
   await page.waitForTimeout(1500);
 
   await page.goto("/coach-portal?tab=schedule");
-  await expect(page.getByRole("heading", { name: "學員排期上堂" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /日曆 · 學員上堂/ })).toBeVisible();
   await page.waitForTimeout(1200);
 
-  await page.getByRole("button", { name: /Mary Ma/ }).click();
+  await page.getByRole("button", { name: /Mary Ma/ }).first().click();
   await page.waitForTimeout(800);
-  await page.getByRole("button", { name: /揀時段排程/ }).click();
+  await page.getByRole("button", { name: "新增學員上堂時間" }).click();
   await expect(page.getByRole("heading", { name: "揀時段排程" })).toBeVisible();
   await page.waitForTimeout(1000);
 

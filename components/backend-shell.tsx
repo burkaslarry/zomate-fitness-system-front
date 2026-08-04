@@ -39,7 +39,7 @@ const MENU_SECTIONS: { frameClass: string; items: NavItem[] }[] = [
   {
     frameClass: "rounded-xl border-2 border-primary/25 bg-canvas p-2.5",
     items: [
-      { href: "/admin/branches", label: "課堂和分店管理" },
+      { href: "/admin/branches", label: "分店管理" },
       { href: "/coach/calendar", label: "學生上堂" },
       { href: "/coach", label: "教練上堂" },
       { href: "/admin/attendance/qr-console", label: "QR 簽到中心" },
