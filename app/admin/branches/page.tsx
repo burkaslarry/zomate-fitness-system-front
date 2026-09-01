@@ -9,7 +9,7 @@
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import BackendShell from "../../../components/backend-shell";
-import { alertApiError, api } from "../../../lib/api";
+import { alertApiError, api, downloadCsv } from "../../../lib/api";
 import { getAuthSession } from "../../../lib/auth";
 import type { BranchDto, CourseCategoryDto } from "../../../types/api";
 
@@ -326,9 +326,27 @@ export default function AdminBranchesPage() {
         </section>
 
         <section className="space-y-3 border-t border-ink/10 pt-8">
-          <div>
-            <h3 className="text-lg font-semibold text-ink">課堂種類（新增／修改）</h3>
-            <p className="mt-1 text-xs text-ink/55">編輯「啟用」會影響試堂下拉與報 Course 的課程名稱選項。</p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-ink">課堂種類（新增／修改）</h3>
+              <p className="mt-1 text-xs text-ink/55">編輯「啟用」會影響試堂下拉與報 Course 的課程名稱選項。</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                void (async () => {
+                  try {
+                    await downloadCsv("/api/admin/course-categories/export.csv", "course-categories.csv");
+                    setStatus("已匯出課堂種類 CSV（僅名稱）。");
+                  } catch (e) {
+                    alertApiError(e);
+                  }
+                })();
+              }}
+              className="shrink-0 rounded-lg border border-ink/15 bg-canvas px-3 py-2 text-sm font-medium text-ink hover:border-primary/40"
+            >
+              匯出 CSV（名稱）
+            </button>
           </div>
 
           <form

@@ -260,7 +260,12 @@ export async function uploadCsv(path: string, file: File) {
     redirectOnStaleAuth(path, res.status, text);
     throw errorFromApiBody(text, "Upload failed");
   }
-  return res.json() as Promise<{ imported?: number; skipped?: number }>;
+  return res.json() as Promise<{
+    imported?: number;
+    updated?: number;
+    skipped?: number;
+    receipts_saved?: number;
+  }>;
 }
 
 async function requestBlob(path: string) {
@@ -278,6 +283,20 @@ async function requestBlob(path: string) {
 
 /** Authenticated CSV download — routes live in `zomate-fitness-system-back` (FastAPI), data in `zomate_fs_*` tables. */
 export async function downloadCsv(path: string, filename: string) {
+  const blob = await requestBlob(path);
+  const url = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/** Authenticated binary download (ZIP etc.). */
+export async function downloadBlobFile(path: string, filename: string) {
   const blob = await requestBlob(path);
   const url = URL.createObjectURL(blob);
   try {
