@@ -96,9 +96,9 @@ export default function AdminPaymentsPage() {
     <BackendShell title="付款紀錄">
       <div className="mx-auto max-w-6xl space-y-5">
         <div>
-          <h2 className="text-xl font-semibold text-ink sm:text-2xl">付款紀錄 Payment Records</h2>
+          <h2 className="text-xl font-semibold text-ink sm:text-2xl">付款紀錄</h2>
           <p className="mt-1 text-sm text-ink/65">
-            全館學員交易、續會、收據與分期紀錄。可篩選缺收據／待付／已付。
+            全館學員交易、續會、收據與分期紀錄。預設顯示學員／項目／金額／方式／日期；可按「顯示欄位」打開狀態、教練、收據。按「詳情」睇齊全部資料。
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
