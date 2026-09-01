@@ -532,13 +532,20 @@ export const api = {
       { method: "DELETE" }
     ),
   missingReceiptRegistrations: () => request("/api/admin/missing-receipt-registrations"),
-  whatsappLogs: () => request("/api/admin/whatsapp-logs"),
+  whatsappLogs: (limit?: number) =>
+    request(
+      limit != null
+        ? `/api/admin/whatsapp-logs?limit=${encodeURIComponent(String(limit))}`
+        : "/api/admin/whatsapp-logs"
+    ),
   whatsappTemplates: () => request("/api/admin/whatsapp-templates"),
   updateWhatsappTemplate: (key: string, body: string) =>
     request(`/api/admin/whatsapp-templates/${encodeURIComponent(key)}`, {
       method: "PUT",
       body: JSON.stringify({ body })
     }),
+  whatsappStatus: () => request("/api/admin/whatsapp/status"),
+  whatsappAnalytics: () => request("/api/admin/whatsapp/analytics"),
   sendPaymentReminder: (
     studentId: number,
     payload: {

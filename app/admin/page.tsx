@@ -22,7 +22,7 @@ function summaryValue(summary: Summary, keys: string[]) {
 }
 
 type DashboardCard =
-  | { kind: "number"; label: string; value: number; href?: string }
+  | { kind: "number"; label: string; value: number; href?: string; linkLabel?: string }
   | {
       kind: "ratio";
       label: string;
@@ -95,13 +95,22 @@ export default function AdminPage() {
       kind: "number",
       label: "PAR-Q 候補（待醫生證明）",
       value: medicalPending,
-      href: "/admin/students?medical_pending=1"
+      href: "/admin/students?medical_pending=1",
+      linkLabel: "查看候補名單"
     },
     {
       kind: "number",
       label: "缺收據報名",
       value: missingReceipts,
-      href: "/admin/payments?status=missing_receipt"
+      href: "/admin/payments?status=missing_receipt",
+      linkLabel: "查看缺收據"
+    },
+    {
+      kind: "number",
+      label: "WhatsApp 訊息（7 日）",
+      value: summaryValue(summary, ["whatsapp_messages_7d", "whatsapp_messages"]),
+      href: "/admin/settings/whatsapp",
+      linkLabel: "WhatsApp 設定"
     }
   ];
 
@@ -185,8 +194,8 @@ export default function AdminPage() {
                   {shell}
                   <p className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary sm:mt-2 sm:text-[11px]">
                     <span aria-hidden>→</span>
-                    <span className="sm:hidden">候補</span>
-                    <span className="hidden sm:inline">查看候補名單</span>
+                    <span className="sm:hidden">{card.linkLabel?.slice(0, 4) ?? "詳情"}</span>
+                    <span className="hidden sm:inline">{card.linkLabel ?? "查看詳情"}</span>
                   </p>
                 </Link>
               );
