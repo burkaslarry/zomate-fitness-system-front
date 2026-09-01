@@ -229,6 +229,8 @@ export type PaymentRecordRow = {
   category_name?: string | null;
   receipt_id?: number | null;
   receipt_url?: string | null;
+  /** Authenticated download path for portal / admin (Content-Disposition attachment). */
+  download_url?: string | null;
   installment_no?: number;
   installment_plan_id?: number;
   category_enrollment_id?: number;

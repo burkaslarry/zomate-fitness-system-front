@@ -290,6 +290,20 @@ export async function downloadCsv(path: string, filename: string) {
   }
 }
 
+/** Authenticated receipt download — Bearer required (admin / coach portal). */
+export async function downloadReceiptFile(receiptId: number, filename?: string) {
+  const blob = await requestBlob(`/api/receipts/${receiptId}/download`);
+  const url = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename || `receipt-${receiptId}`;
+    a.click();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 /** @deprecated Prefer `downloadCsv()` — plain links cannot send Bearer token. */
 export const csvUrl = {
   studentsExport: () => `${API_BASE_URL}/api/admin/students/export.csv`,
@@ -421,6 +435,7 @@ export const api = {
       full_payment?: boolean;
       send_whatsapp?: boolean;
       notify_coach?: boolean;
+      renewal_id?: number;
     }
   ) => {
     const form = new FormData();
@@ -437,6 +452,7 @@ export const api = {
     if (payload.installment_plan_id != null) {
       form.append("installment_plan_id", String(payload.installment_plan_id));
     }
+    if (payload.renewal_id != null) form.append("renewal_id", String(payload.renewal_id));
     form.append("full_payment", payload.full_payment ? "true" : "false");
     form.append("send_whatsapp", payload.send_whatsapp === false ? "false" : "true");
     form.append("notify_coach", payload.notify_coach === false ? "false" : "true");

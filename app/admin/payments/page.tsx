@@ -135,6 +135,7 @@ export default function AdminPaymentsPage() {
           emptyText="沒有符合條件的付款紀錄。"
           onDelete={handleDelete}
           onRequestReceiptUpload={handleRequestReceiptUpload}
+          onReceiptUploaded={reload}
           receiptUploadBusyId={receiptUploadBusyId}
         />
       </div>

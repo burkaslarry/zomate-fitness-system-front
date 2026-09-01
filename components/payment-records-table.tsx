@@ -8,11 +8,11 @@
  */
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Eye, X } from "lucide-react";
+import { Eye, Upload, X } from "lucide-react";
 import type { PaymentRecordRow } from "../types/api";
-import { apiAssetUrl } from "../lib/api";
+import { alertApiError, api, apiAssetUrl, downloadReceiptFile } from "../lib/api";
 import { formatHktDateTime } from "../lib/format-hkt";
 import WhatsAppButton from "./whatsapp-button";
 
@@ -102,6 +102,7 @@ export default function PaymentRecordsTable({
   emptyText = "暫無付款紀錄。",
   onDelete,
   onRequestReceiptUpload,
+  onReceiptUploaded,
   receiptUploadBusyId
 }: {
   rows: PaymentRecordRow[];
@@ -110,6 +111,8 @@ export default function PaymentRecordsTable({
   onDelete?: (row: PaymentRecordRow) => void | Promise<void>;
   /** [F005][S003] Opens wa.me with receipt-upload template for missing-receipt rows. */
   onRequestReceiptUpload?: (row: PaymentRecordRow) => void | Promise<void>;
+  /** Called after admin uploads a receipt document from 詳情 modal. */
+  onReceiptUploaded?: () => void | Promise<void>;
   receiptUploadBusyId?: string | null;
 }) {
   /** Optional columns hidden by default — toggle to show in grid. */
@@ -120,10 +123,124 @@ export default function PaymentRecordsTable({
   });
   const [detailRow, setDetailRow] = useState<PaymentRecordRow | null>(null);
   const [portalReady, setPortalReady] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState("");
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setPortalReady(true);
   }, []);
+
+  useEffect(() => {
+    setUploadStatus("");
+    setUploading(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }, [detailRow?.id]);
+
+  /** Keep open 詳情 in sync after list reload (e.g. post-upload). */
+  useEffect(() => {
+    if (!detailRow) return;
+    const next = rows.find((r) => r.id === detailRow.id);
+    if (!next) return;
+    if (
+      next.receipt_id !== detailRow.receipt_id ||
+      next.receipt_url !== detailRow.receipt_url ||
+      next.status !== detailRow.status
+    ) {
+      setDetailRow(next);
+    }
+  }, [rows, detailRow]);
+
+  async function handleDownload(row: PaymentRecordRow) {
+    if (!row.receipt_id) return;
+    setDownloadingId(row.receipt_id);
+    try {
+      await downloadReceiptFile(row.receipt_id, `receipt-${row.receipt_id}`);
+    } catch (e) {
+      // Fallback to public uploads URL when auth download fails.
+      const href = apiAssetUrl(row.receipt_url) ?? row.receipt_url;
+      if (href) window.open(href, "_blank", "noopener,noreferrer");
+      else alertApiError(e);
+    } finally {
+      setDownloadingId(null);
+    }
+  }
+
+  async function handleUploadFile(file: File) {
+    if (!detailRow) return;
+    const lower = file.name.toLowerCase();
+    const okExt = [".pdf", ".png", ".jpg", ".jpeg", ".webp"].some((ext) => lower.endsWith(ext));
+    if (!okExt) {
+      setUploadStatus("只接受 PDF 或圖片（jpg / png / webp）。");
+      return;
+    }
+    setUploading(true);
+    setUploadStatus("");
+    try {
+      const res = (await api.uploadMemberReceiptById(detailRow.student_id, {
+        file,
+        amount: detailRow.amount != null ? String(detailRow.amount) : undefined,
+        payment_method: detailRow.payment_method ?? undefined,
+        source: "RENEWAL",
+        context: "付款紀錄詳情上傳",
+        renewal_id: detailRow.record_type === "renewal" ? detailRow.ref_id : undefined,
+        send_whatsapp: false,
+        notify_coach: false
+      })) as { id?: number; file_url?: string; download_url?: string };
+      console.log("[F004][S002] Success: Receipt uploaded from payment detail", {
+        receiptId: res.id,
+        renewalId: detailRow.record_type === "renewal" ? detailRow.ref_id : null
+      });
+      setUploadStatus("上傳成功，已寫入資料庫。");
+      if (onReceiptUploaded) await onReceiptUploaded();
+      // Optimistically update modal so link appears immediately.
+      if (res.id) {
+        setDetailRow({
+          ...detailRow,
+          status: "paid",
+          receipt_id: res.id,
+          receipt_url: res.file_url ?? detailRow.receipt_url,
+          download_url: res.download_url ?? `/api/receipts/${res.id}/download`
+        });
+      }
+    } catch (e) {
+      alertApiError(e);
+      setUploadStatus(String(e));
+      console.error("[F004][S002] Error: Receipt upload from payment detail failed.");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  function ReceiptLinks({ row }: { row: PaymentRecordRow }) {
+    if (!row.receipt_id && !row.receipt_url) return <span className="text-ink/55">未上傳</span>;
+    return (
+      <span className="inline-flex flex-wrap items-center gap-2">
+        {row.receipt_id ? (
+          <button
+            type="button"
+            onClick={() => void handleDownload(row)}
+            disabled={downloadingId === row.receipt_id}
+            className="font-medium text-primary underline disabled:opacity-50"
+          >
+            {downloadingId === row.receipt_id ? "下載中…" : "下載文件"}
+          </button>
+        ) : null}
+        {row.receipt_url ? (
+          <a
+            href={apiAssetUrl(row.receipt_url) ?? row.receipt_url}
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium text-primary underline"
+          >
+            開啟
+          </a>
+        ) : null}
+      </span>
+    );
+  }
 
   const showStatus = visibleOptional.status;
   const showCoach = visibleOptional.coach;
@@ -213,21 +330,36 @@ export default function PaymentRecordsTable({
                 <DetailRow label="狀態">{statusBadge(detailRow.status)}</DetailRow>
                 <DetailRow label="教練">{detailRow.coach_name ?? "—"}</DetailRow>
                 <DetailRow label="收據">
-                  {detailRow.receipt_url ? (
-                    <a
-                      href={apiAssetUrl(detailRow.receipt_url) ?? detailRow.receipt_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-medium text-primary underline"
-                    >
-                      查看收據
-                    </a>
-                  ) : detailRow.status === "missing_receipt" ? (
-                    "未上傳"
-                  ) : (
-                    "—"
-                  )}
+                  <ReceiptLinks row={detailRow} />
                 </DetailRow>
+                {!detailRow.receipt_id &&
+                (detailRow.status === "missing_receipt" || detailRow.record_type === "renewal") ? (
+                  <DetailRow label="上傳文件">
+                    <div className="space-y-2">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*,.pdf,application/pdf"
+                        disabled={uploading}
+                        className="block w-full text-xs text-ink file:mr-2 file:rounded-md file:border-0 file:bg-primary/20 file:px-2 file:py-1 file:text-xs file:font-medium file:text-black"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) void handleUploadFile(file);
+                        }}
+                      />
+                      <p className="text-[11px] text-ink/50">
+                        支援 PDF / JPG / PNG / WEBP（最大 5MB）。上傳後會寫入收據紀錄並連結此續會。
+                      </p>
+                      {uploading ? (
+                        <p className="inline-flex items-center gap-1 text-xs text-ink/60">
+                          <Upload className="h-3.5 w-3.5 animate-pulse" aria-hidden />
+                          上傳中…
+                        </p>
+                      ) : null}
+                      {uploadStatus ? <p className="text-xs text-ink/70">{uploadStatus}</p> : null}
+                    </div>
+                  </DetailRow>
+                ) : null}
                 <DetailRow label="日期">{fmtDate(detailRow.created_at)}</DetailRow>
                 {detailRow.due_date ? <DetailRow label="到期">{detailRow.due_date}</DetailRow> : null}
                 {detailRow.paid_at ? <DetailRow label="已付於">{fmtDate(detailRow.paid_at)}</DetailRow> : null}
@@ -311,15 +443,10 @@ export default function PaymentRecordsTable({
                 <dd>{fmtDate(row.created_at)}</dd>
               </div>
             </dl>
-            {showReceipt && row.receipt_url ? (
-              <a
-                href={apiAssetUrl(row.receipt_url) ?? row.receipt_url}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 inline-block text-xs font-medium text-primary underline"
-              >
-                查看收據
-              </a>
+            {showReceipt && (row.receipt_id || row.receipt_url) ? (
+              <div className="mt-2 text-xs">
+                <ReceiptLinks row={row} />
+              </div>
             ) : null}
             {showReceipt && row.status === "missing_receipt" && onRequestReceiptUpload ? (
               <div className="mt-2">
@@ -388,15 +515,8 @@ export default function PaymentRecordsTable({
                 {showCoach ? <td className="px-3 py-2">{row.coach_name ?? "—"}</td> : null}
                 {showReceipt ? (
                   <td className="px-3 py-2">
-                    {row.receipt_url ? (
-                      <a
-                        href={apiAssetUrl(row.receipt_url) ?? row.receipt_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs text-primary underline"
-                      >
-                        查看
-                      </a>
+                    {row.receipt_id || row.receipt_url ? (
+                      <ReceiptLinks row={row} />
                     ) : row.status === "missing_receipt" && onRequestReceiptUpload ? (
                       <WhatsAppButton
                         label={receiptUploadBusyId === row.id ? "…" : "請上傳收據"}
