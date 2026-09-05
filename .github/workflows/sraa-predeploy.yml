@@ -11,6 +11,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  deployments: read
+
 jobs:
   security-and-build:
     runs-on: ubuntu-latest
@@ -37,41 +41,67 @@ jobs:
       - name: Production build
         run: npm run build
 
-  deploy-vercel:
-    name: Deploy to Vercel (production)
+  # Production deploys are owned by the Vercel Git integration (vercel[bot]).
+  # The previous CLI deploy used secrets.VERCEL_TOKEN, which was empty and
+  # failed every main push even when Vercel itself had already deployed.
+  verify-vercel-production:
+    name: Verify Vercel production deploy
     needs: security-and-build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: production
-    env:
-      # [F015][S006] Vercel project macros (zomate-fitness-system-front)
-      VERCEL_ORG_ID: team_e1pKe3eoQeeRYDzivUOsnvxM
-      VERCEL_PROJECT_ID: prj_OHvcmEnmXNeaEZfrnS8rORCpDU50
+    environment: Production
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-
-      - name: Validate Vercel project macros
+      - name: Wait for vercel[bot] Production deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
         run: |
-          [[ -n "${VERCEL_ORG_ID}" ]] || { echo "::error::Missing VERCEL_ORG_ID"; exit 1; }
-          [[ -n "${VERCEL_PROJECT_ID}" ]] || { echo "::error::Missing VERCEL_PROJECT_ID"; exit 1; }
+          set -euo pipefail
+          echo "Waiting for Vercel Git Integration production deploy of ${SHA}"
 
-      - name: Install Vercel CLI
-        run: npm install --global vercel@latest
+          deadline=$((SECONDS + 600))
+          while (( SECONDS < deadline )); do
+            dep_id="$(
+              gh api "repos/${REPO}/deployments?environment=Production&per_page=30" \
+                --jq "[.[] | select(.sha == \"${SHA}\")][0].id // empty"
+            )"
 
-      - name: Pull Vercel environment
-        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+            if [[ -z "${dep_id}" ]]; then
+              echo "No Production deployment yet for this SHA; retrying…"
+              sleep 15
+              continue
+            fi
 
-      - name: Build Vercel artifacts
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+            state="$(
+              gh api "repos/${REPO}/deployments/${dep_id}/statuses" \
+                --jq '.[0].state // "pending"'
+            )"
+            url="$(
+              gh api "repos/${REPO}/deployments/${dep_id}/statuses" \
+                --jq '.[0].environment_url // .[0].target_url // empty'
+            )"
+            creator="$(
+              gh api "repos/${REPO}/deployments/${dep_id}" \
+                --jq '.creator.login // empty'
+            )"
 
-      - name: Deploy to Vercel production
-        id: deploy
-        run: |
-          url="$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})"
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "Deployed to $url"
+            echo "deployment=${dep_id} creator=${creator} state=${state} url=${url:-n/a}"
+
+            case "${state}" in
+              success)
+                echo "Vercel production deploy succeeded: ${url:-ok}"
+                exit 0
+                ;;
+              failure|error)
+                echo "::error::Vercel production deploy failed (state=${state})"
+                exit 1
+                ;;
+              *)
+                sleep 15
+                ;;
+            esac
+          done
+
+          echo "::error::Timed out waiting for Vercel Production deployment of ${SHA}"
+          exit 1

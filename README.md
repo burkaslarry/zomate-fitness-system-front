@@ -78,35 +78,22 @@ npm run deploy:vercel      # gate + vercel --prod (requires Vercel CLI)
 
 Do **not** use `npm audit fix --force` — it can downgrade Next.js and break the app.
 
-GitHub Actions workflow `.github/workflows/sraa-predeploy.yml` runs the same gate on `main` PRs and pushes. **When a PR is merged to `main`, the workflow also deploys to Vercel production** (after the SRAA gate passes).
+GitHub Actions workflow `.github/workflows/sraa-predeploy.yml` runs the same gate on `main` PRs and pushes. **Production deploys are handled by the Vercel Git integration** (`vercel[bot]`). After the SRAA gate passes on `main`, the workflow **verifies** that the Vercel Production deployment for that commit succeeded (no `VERCEL_TOKEN` secret required).
 
 ### GitHub Actions → Vercel (auto-deploy on merge)
 
-**Option A — commit `.vercel/project.json` (recommended)**
+1. Keep the Vercel GitHub app connected to this repo (Production deploys on push to `main`).
+2. Commit `.vercel/project.json` (tracked; contains `orgId` + `projectId` from `vercel link`).
+3. Every push to `main` runs SRAA → build → verify Vercel Production. Production URL: `https://zomate-fitness-system-front.vercel.app`.
 
-1. Locally run `vercel link` (if not already linked).
-2. Commit `.vercel/project.json` (now tracked in git; contains `orgId` + `projectId`).
-3. Add one GitHub secret: `VERCEL_TOKEN` from [Vercel account tokens](https://vercel.com/account/tokens).
-
-**Option B — GitHub secrets only**
-
-Run locally (reads your `.vercel/project.json` and sets all three secrets):
+Optional CLI deploy (local / manual only — needs a personal Vercel token):
 
 ```bash
-./scripts/setup-vercel-github-secrets.sh
+./scripts/setup-vercel-github-secrets.sh   # only if you restore a CLI-based Actions deploy
+npm run deploy:vercel                      # gate + vercel --prod
 ```
 
-Or set manually in GitHub (**Settings → Secrets and variables → Actions**):
-
-| Secret | Source |
-|--------|--------|
-| `VERCEL_TOKEN` | [Vercel account tokens](https://vercel.com/account/tokens) |
-| `VERCEL_ORG_ID` | `.vercel/project.json` → `orgId` |
-| `VERCEL_PROJECT_ID` | `.vercel/project.json` → `projectId` |
-
-After setup, every push to `main` (including merged PRs) runs SRAA → build → `vercel deploy --prod`. Production URL: `https://zomate-fitness-system-front.vercel.app`.
-
-Manual deploy (optional):
+Manual project settings:
 
 1. Keep `vercel.json` in this folder.
 2. In Vercel project settings, set:
