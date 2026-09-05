@@ -13,7 +13,7 @@ concurrency:
 
 permissions:
   contents: read
-  deployments: read
+  statuses: read
 
 jobs:
   security-and-build:
@@ -41,56 +41,45 @@ jobs:
       - name: Production build
         run: npm run build
 
-  # Production deploys are owned by the Vercel Git integration (vercel[bot]).
-  # The previous CLI deploy used secrets.VERCEL_TOKEN, which was empty and
-  # failed every main push even when Vercel itself had already deployed.
+  # Production deploys are owned by the Vercel Git integration.
+  # The previous CLI deploy failed because secrets.VERCEL_TOKEN was empty.
+  # Do NOT attach `environment: Production` here — that creates a GitHub
+  # Deployment which would falsely satisfy a deployments-API poll.
   verify-vercel-production:
     name: Verify Vercel production deploy
     needs: security-and-build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: Production
     steps:
-      - name: Wait for vercel[bot] Production deployment
+      - name: Wait for Vercel commit status success
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          echo "Waiting for Vercel Git Integration production deploy of ${SHA}"
+          echo "Waiting for Vercel Git Integration status on ${SHA}"
 
           deadline=$((SECONDS + 600))
           while (( SECONDS < deadline )); do
-            dep_id="$(
-              gh api "repos/${REPO}/deployments?environment=Production&per_page=30" \
-                --jq "[.[] | select(.sha == \"${SHA}\")][0].id // empty"
-            )"
+            mapfile -t row < <(
+              gh api "repos/${REPO}/commits/${SHA}/status" \
+                --jq '
+                  [.statuses[] | select(.context == "Vercel")][0] as $v
+                  | if $v == null then ["missing", ""]
+                    else [$v.state, ($v.target_url // "")]
+                    end
+                  | .[]
+                '
+            )
+            state="${row[0]:-missing}"
+            target_url="${row[1]:-}"
 
-            if [[ -z "${dep_id}" ]]; then
-              echo "No Production deployment yet for this SHA; retrying…"
-              sleep 15
-              continue
-            fi
-
-            state="$(
-              gh api "repos/${REPO}/deployments/${dep_id}/statuses" \
-                --jq '.[0].state // "pending"'
-            )"
-            url="$(
-              gh api "repos/${REPO}/deployments/${dep_id}/statuses" \
-                --jq '.[0].environment_url // .[0].target_url // empty'
-            )"
-            creator="$(
-              gh api "repos/${REPO}/deployments/${dep_id}" \
-                --jq '.creator.login // empty'
-            )"
-
-            echo "deployment=${dep_id} creator=${creator} state=${state} url=${url:-n/a}"
+            echo "vercel_status=${state} url=${target_url:-n/a}"
 
             case "${state}" in
               success)
-                echo "Vercel production deploy succeeded: ${url:-ok}"
+                echo "Vercel production deploy succeeded: ${target_url:-ok}"
                 exit 0
                 ;;
               failure|error)
@@ -103,5 +92,5 @@ jobs:
             esac
           done
 
-          echo "::error::Timed out waiting for Vercel Production deployment of ${SHA}"
+          echo "::error::Timed out waiting for Vercel status on ${SHA}"
           exit 1
