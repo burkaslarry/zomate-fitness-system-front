@@ -12,8 +12,10 @@ export type MemberProfile = {
   phone: string;
   used_mobile_number?: string | null;
   email: string | null;
+  gender?: string | null;
   date_of_birth?: string | null;
   emergency_contact_name: string | null;
+  emergency_contact_relationship?: string | null;
   emergency_contact_phone: string | null;
   lesson_balance: number;
   coach_trial_quota_remaining?: number;

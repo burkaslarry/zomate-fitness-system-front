@@ -77,6 +77,21 @@ export default function AdminPaymentsPage() {
     }
   }
 
+  async function onExportFungCsv() {
+    setIoStatus("匯出 Fung CSV…");
+    try {
+      await downloadCsv(
+        `/api/admin/payment-records/export.fung.csv${exportQuery()}`,
+        "payment-records-fung.csv"
+      );
+      setIoStatus("已匯出 Fung 收錢格式 CSV（可直接再匯入）。");
+      console.log("[F004][S002] Success: Fung payment CSV exported");
+    } catch (e) {
+      alertApiError(e);
+      setIoStatus("");
+    }
+  }
+
   async function onExportZip() {
     setIoStatus("匯出 ZIP（CSV + 收據資料夾）…");
     try {
@@ -154,7 +169,7 @@ export default function AdminPaymentsPage() {
         <div>
           <h2 className="text-xl font-semibold text-ink sm:text-2xl">付款紀錄</h2>
           <p className="mt-1 text-sm text-ink/65">
-            全館學員交易、續會、收據與分期紀錄。預設顯示學員／項目／金額／方式／日期；可按「顯示欄位」打開狀態、教練、收據。按「詳情」睇齊全部資料。支援 CSV／ZIP（含收據資料夾）匯出匯入。
+            全館學員交易、續會、收據與分期紀錄。預設顯示學員／項目／金額／方式／日期；可按「顯示欄位」打開狀態、教練、收據。按「詳情」睇齊全部資料。支援 CSV／Excel（.xlsx／.xls 只讀第一個 sheet）／ZIP 匯出匯入。
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -194,17 +209,24 @@ export default function AdminPaymentsPage() {
           </button>
           <button
             type="button"
+            onClick={() => void onExportFungCsv()}
+            className="rounded-lg border border-ink/15 bg-canvas px-3 py-2 text-sm font-medium text-ink hover:border-primary/40"
+          >
+            匯出 Fung CSV（收錢格式）
+          </button>
+          <button
+            type="button"
             onClick={() => void onExportZip()}
             className="rounded-lg border border-ink/15 bg-canvas px-3 py-2 text-sm font-medium text-ink hover:border-primary/40"
           >
             匯出 ZIP（CSV + 收據）
           </button>
           <label className="cursor-pointer rounded-lg border border-ink/15 bg-canvas px-3 py-2 text-sm font-medium text-ink hover:border-primary/40">
-            匯入 CSV／ZIP
+            匯入 CSV／Excel／ZIP
             <input
               ref={importRef}
               type="file"
-              accept=".csv,.zip,text/csv,application/zip"
+              accept=".csv,.xlsx,.xls,.xlsm,.zip,text/csv,application/zip,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               className="hidden"
               onChange={(e) => void onImportFile(e.target.files?.[0] ?? null)}
             />

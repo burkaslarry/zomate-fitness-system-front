@@ -17,15 +17,29 @@ const STUDENT_CSV_HEADERS = [
   "full_name",
   "phone",
   "hkid",
+  "gender",
   "date_of_birth",
   "email",
   "health_notes",
   "disclaimer_accepted",
   "lesson_balance",
-  "current_course_package_status",
-  "last_checkin_at",
+  "emergency_contact_name",
+  "emergency_contact_relationship",
+  "emergency_contact_phone",
   "face_id_external",
   "created_at"
+] as const;
+
+const FUNG_STUDENT_CSV_HEADERS = [
+  "MemberCode",
+  "PT",
+  "Name",
+  "Gender",
+  "phone number",
+  "Date of Birth",
+  "ID Number",
+  "Emergency Contact",
+  "Emergency Contact Number"
 ] as const;
 
 function formatCreatedAt(iso: string | undefined): string {
@@ -67,13 +81,15 @@ function downloadImportTemplateSample(students: MemberProfile[]) {
         csvEscape(s.full_name),
         csvEscape(s.phone),
         csvEscape(s.hkid ?? ""),
+        csvEscape(s.gender ?? ""),
         csvEscape(s.date_of_birth ?? ""),
         csvEscape(s.email ?? ""),
         csvEscape(""),
         csvEscape(1),
         csvEscape(s.lesson_balance),
-        csvEscape(s.current_course_package_status ?? ""),
-        csvEscape(s.last_checkin_at ?? ""),
+        csvEscape(s.emergency_contact_name ?? ""),
+        csvEscape(s.emergency_contact_relationship ?? ""),
+        csvEscape(s.emergency_contact_phone ?? ""),
         csvEscape(""),
         csvEscape(s.created_at)
       ].join(",")
@@ -85,6 +101,39 @@ function downloadImportTemplateSample(students: MemberProfile[]) {
   const a = document.createElement("a");
   a.href = href;
   a.download = `students-import-template-${sample.length}-rows.csv`;
+  a.click();
+  URL.revokeObjectURL(href);
+}
+
+function downloadFungTemplateSample(students: MemberProfile[]) {
+  const sample = students.slice(0, 5);
+  const lines: string[] = [FUNG_STUDENT_CSV_HEADERS.join(",")];
+  for (const s of sample) {
+    const genderZh = s.gender === "male" ? "男" : s.gender === "female" ? "女" : s.gender ?? "";
+    const emerg =
+      s.emergency_contact_name && s.emergency_contact_relationship
+        ? `${s.emergency_contact_name} (${s.emergency_contact_relationship})`
+        : s.emergency_contact_name ?? "";
+    lines.push(
+      [
+        csvEscape(s.phone),
+        csvEscape(""),
+        csvEscape(s.full_name),
+        csvEscape(genderZh),
+        csvEscape(s.phone),
+        csvEscape(s.date_of_birth ?? ""),
+        csvEscape(s.hkid ?? ""),
+        csvEscape(emerg),
+        csvEscape(s.emergency_contact_phone ?? "")
+      ].join(",")
+    );
+  }
+  const body = `\ufeff${lines.join("\n")}`;
+  const blob = new Blob([body], { type: "text/csv;charset=utf-8" });
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = `students-fung-template-${sample.length}-rows.csv`;
   a.click();
   URL.revokeObjectURL(href);
 }
@@ -151,6 +200,15 @@ export default function AdminStudentsPage() {
     }
   }
 
+  async function onExportFung() {
+    try {
+      await downloadCsv("/api/admin/students/export.fung.csv", "students-fung.csv");
+      setStatus("已匯出 Fung Excel 格式學生 CSV（可直接再匯入）。");
+    } catch (e) {
+      alertApiError(e);
+    }
+  }
+
   function onExportTemplateSample() {
     downloadImportTemplateSample(students);
     if (!students.length) {
@@ -158,6 +216,15 @@ export default function AdminStudentsPage() {
     } else {
       setStatus(`已下載範本（最多 5 筆，本次 ${Math.min(5, students.length)} 筆）。`);
     }
+  }
+
+  function onExportFungTemplateSample() {
+    downloadFungTemplateSample(students);
+    setStatus(
+      students.length
+        ? `已下載 Fung 格式範本（最多 5 筆，本次 ${Math.min(5, students.length)} 筆）。`
+        : "Fung 範本只有表頭（暫無學員）。"
+    );
   }
 
   async function onImportFile(f: File | null) {
@@ -202,11 +269,19 @@ export default function AdminStudentsPage() {
             <div className="mt-3 rounded-lg border border-ink/12 bg-canvas/80 p-3 text-xs leading-relaxed text-ink/75">
               <p className="font-semibold text-ink">CSV 批次匯入</p>
               <ul className="mt-1 list-inside list-disc space-y-0.5">
-                <li>欄位須與範本／後台匯出一致：{STUDENT_CSV_HEADERS.join("、")}。</li>
+                <li>
+                  系統欄位：{STUDENT_CSV_HEADERS.join("、")}。性別填 male/female 或 男/女。
+                </li>
+                <li>
+                  亦支援館方 Excel：{FUNG_STUDENT_CSV_HEADERS.join("、")}；Emergency Contact 可寫 Name
+                  (Relation)。可直接上傳 <strong>.xlsx / .xls</strong>（只讀<strong>第一個 sheet</strong>）或 CSV。
+                </li>
                 <li>
                   僅當<strong className="text-ink">姓名與電話皆與現有學員吻合</strong>時才更新該筆；電話相同但姓名不同會略過。
                 </li>
-                <li>新增列須有姓名 + 有效香港電話；可調整 lesson_balance（以 ledger 差額寫入）。</li>
+                <li>
+                  disclaimer_accepted＝免責聲明已確認；Excel 無此欄時新增學員預設為已接受。
+                </li>
               </ul>
             </div>
           </div>
@@ -220,17 +295,31 @@ export default function AdminStudentsPage() {
             </button>
             <button
               type="button"
+              onClick={() => void onExportFung()}
+              className="rounded-lg border border-ink/15 bg-canvas px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-canvas/80"
+            >
+              匯出 Fung CSV
+            </button>
+            <button
+              type="button"
               onClick={() => onExportTemplateSample()}
               className="rounded-lg border border-ink/15 bg-canvas px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-canvas/80"
             >
               匯出 CSV 範本（首 5 筆）
             </button>
+            <button
+              type="button"
+              onClick={() => onExportFungTemplateSample()}
+              className="rounded-lg border border-ink/15 bg-canvas px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-canvas/80"
+            >
+              Fung 範本（首 5 筆）
+            </button>
             <label className="cursor-pointer rounded-lg border border-ink/15 bg-primary/90 px-4 py-2 text-sm font-semibold text-black shadow-sm hover:bg-primary">
-              匯入 CSV
+              匯入 CSV／Excel
               <input
                 ref={fileRef}
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,.xlsx,.xls,.xlsm,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 className="hidden"
                 onChange={(e) => void onImportFile(e.target.files?.[0] ?? null)}
               />
