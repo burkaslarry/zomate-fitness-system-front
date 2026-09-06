@@ -99,6 +99,7 @@ const defaults: Partial<StudentRegistrationPayload> = {
   pdpo_acknowledged: false,
   cooling_off_acknowledged: false,
   disclaimer_accepted: false,
+  whatsapp_reminder_opt_in: false,
   digital_signature: "",
   coach_username: "",
   coach_id: 0,
@@ -446,6 +447,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         pdpo_acknowledged: values.pdpo_acknowledged,
         cooling_off_acknowledged: values.cooling_off_acknowledged,
         disclaimer_accepted: values.disclaimer_accepted,
+        whatsapp_reminder_opt_in: values.whatsapp_reminder_opt_in,
         digital_signature: signatureData,
         coach_username: values.coach_username.trim(),
         coach_id: values.coach_id,
@@ -854,6 +856,24 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
             
             {form.formState.errors.disclaimer_accepted && (
               <p className="text-xs text-rose-400">{String(form.formState.errors.disclaimer_accepted.message)}</p>
+            )}
+            <label
+              data-whatsapp-opt-in
+              className="relative flex items-start touch-manipulation gap-3 rounded-lg border border-ink/[0.08] bg-canvas p-3 text-sm text-ink cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-primary"
+                {...form.register("whatsapp_reminder_opt_in")}
+              />
+              <p className="text-xs leading-relaxed text-ink/85">
+                我同意接收 Zomate Fitness 經 WhatsApp 發出嘅預約確認及上課提醒
+              </p>
+            </label>
+            {form.formState.errors.whatsapp_reminder_opt_in && (
+              <p className="text-xs text-rose-400">
+                {String(form.formState.errors.whatsapp_reminder_opt_in.message)}
+              </p>
             )}
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">

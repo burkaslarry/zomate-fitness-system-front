@@ -67,6 +67,9 @@ export const onboardingStep3Schema = z.object({
   pdpo_acknowledged: z.boolean().refine((v) => v === true, { message: "請確認已閱讀收集個人資料聲明" }),
   cooling_off_acknowledged: z.boolean().refine((v) => v === true, { message: "請確認已閱讀 7 天冷靜期條款" }),
   disclaimer_accepted: z.boolean().refine((v) => v === true, { message: "請同意免責聲明" }),
+  whatsapp_reminder_opt_in: z
+    .boolean()
+    .refine((v) => v === true, { message: "請同意接收 WhatsApp 預約確認及上課提醒" }),
   digital_signature: z.string()
 });
 
@@ -89,6 +92,7 @@ export const studentRegistrationPayloadSchema = z
     pdpo_acknowledged: z.boolean(),
     cooling_off_acknowledged: z.boolean(),
     disclaimer_accepted: z.boolean(),
+    whatsapp_reminder_opt_in: z.boolean(),
     digital_signature: z.string().min(1, "請在簽名框手寫簽署"),
     coach_username: z.string().min(1, "請先選擇教練"),
     coach_id: z.number().int().min(0),
@@ -109,6 +113,10 @@ export const studentRegistrationPayloadSchema = z
   .refine((d) => d.disclaimer_accepted, {
     message: "請同意免責聲明",
     path: ["disclaimer_accepted"]
+  })
+  .refine((d) => d.whatsapp_reminder_opt_in, {
+    message: "請同意接收 WhatsApp 預約確認及上課提醒",
+    path: ["whatsapp_reminder_opt_in"]
   });
 
 export type StudentRegistrationPayload = z.infer<typeof studentRegistrationPayloadSchema>;

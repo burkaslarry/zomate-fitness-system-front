@@ -151,6 +151,7 @@ export default function RegCourseWizard({
   const [amount, setAmount] = useState("");
   const [lookupHint, setLookupHint] = useState("");
   const [renewalSubmitting, setRenewalSubmitting] = useState(false);
+  const [whatsappOptIn, setWhatsappOptIn] = useState(false);
   const [purchaseSummary, setPurchaseSummary] = useState<PurchaseSummary | null>(null);
   const [fullPay, setFullPay] = useState(true);
   const [installmentPay, setInstallmentPay] = useState(false);
@@ -347,6 +348,10 @@ export default function RegCourseWizard({
       alertApiError(new Error("各期金額加總須等於應付總金額"));
       return;
     }
+    if (!whatsappOptIn) {
+      alertApiError(new Error("請同意接收 WhatsApp 預約確認及上課提醒"));
+      return;
+    }
     const form = new FormData(event.currentTarget);
     const method = String(form.get("payment_method") ?? "").trim();
     if (!method) {
@@ -386,7 +391,8 @@ export default function RegCourseWizard({
         course_package_type_label: selectedKind.name,
         note: noteParts.join(" · "),
         receipt: receipt instanceof File && receipt.name ? receipt : null,
-        skip_lesson_ledger: true
+        skip_lesson_ledger: true,
+        whatsapp_reminder_opt_in: true
       });
       const coursePayload = buildAutoCoursePayload({
         title: selectedKind.name,
@@ -688,13 +694,28 @@ export default function RegCourseWizard({
             <FileUpload name="receipt" label="收據上傳（選填，可候補）" />
           )}
 
+          <label className="flex items-start gap-3 rounded-lg border border-ink/12 bg-canvas p-3 text-sm text-ink">
+            <input
+              type="checkbox"
+              checked={whatsappOptIn}
+              onChange={(e) => setWhatsappOptIn(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-emerald-600"
+            />
+            <span>我同意接收 Zomate Fitness 經 WhatsApp 發出嘅預約確認及上課提醒</span>
+          </label>
+
           <div className="flex flex-col gap-2 sm:flex-row">
             <button type="button" onClick={() => setStep(2)} className="flex-1 rounded-md border border-ink/15 px-4 py-2.5 text-sm">
               上一步
             </button>
             <button
               type="submit"
-              disabled={renewalSubmitting || !isValidRenewalAmount(amount) || !installmentAmountsValid}
+              disabled={
+                renewalSubmitting ||
+                !isValidRenewalAmount(amount) ||
+                !installmentAmountsValid ||
+                !whatsappOptIn
+              }
               className="flex-1 rounded-md bg-emerald-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
             >
               {renewalSubmitting ? "提交中…" : "確認報名"}

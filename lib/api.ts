@@ -361,6 +361,7 @@ export const api = {
     pdpo_acknowledged: boolean;
     cooling_off_acknowledged: boolean;
     disclaimer_accepted: boolean;
+    whatsapp_reminder_opt_in: boolean;
     digital_signature: string;
     coach_username: string;
     coach_id: number;
@@ -382,6 +383,7 @@ export const api = {
     form.append("pdpo_acknowledged", payload.pdpo_acknowledged ? "true" : "false");
     form.append("cooling_off_acknowledged", payload.cooling_off_acknowledged ? "true" : "false");
     form.append("disclaimer_accepted", payload.disclaimer_accepted ? "true" : "false");
+    form.append("whatsapp_reminder_opt_in", payload.whatsapp_reminder_opt_in ? "true" : "false");
     form.append("digital_signature", payload.digital_signature);
     form.append("coach_username", payload.coach_username);
     form.append("coach_id", String(payload.coach_id));
@@ -507,6 +509,7 @@ export const api = {
     note?: string;
     /** When true, lesson credit is deferred to course enrollment (avoids double ledger). */
     skip_lesson_ledger?: boolean;
+    whatsapp_reminder_opt_in?: boolean;
     receipt?: File | null;
   }) => {
     const form = new FormData();
@@ -523,6 +526,10 @@ export const api = {
     if (payload.course_package_type_label) form.append("course_package_type_label", payload.course_package_type_label);
     if (payload.note) form.append("note", payload.note);
     if (payload.skip_lesson_ledger) form.append("skip_lesson_ledger", "true");
+    form.append(
+      "whatsapp_reminder_opt_in",
+      payload.whatsapp_reminder_opt_in ? "true" : "false"
+    );
     if (payload.receipt) form.append("receipt", payload.receipt);
     return request("/api/renewals", { method: "POST", body: form });
   },

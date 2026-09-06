@@ -235,8 +235,19 @@ export default function AdminStudentsPage() {
         imported?: number;
         updated?: number;
         skipped?: number;
+        skip_reasons?: Array<{ row?: number; reason?: string; name?: string | null; phone?: string | null }>;
       };
-      setStatus(`匯入完成：新增 ${res.imported ?? 0}，更新 ${res.updated ?? 0}，略過 ${res.skipped ?? 0}`);
+      const reasonLines =
+        Array.isArray(res.skip_reasons) && res.skip_reasons.length
+          ? "｜略過原因：" +
+            res.skip_reasons
+              .slice(0, 5)
+              .map((r) => `R${r.row ?? "?"} ${r.reason ?? ""}${r.name ? ` (${r.name})` : ""}`)
+              .join("；")
+          : "";
+      setStatus(
+        `匯入完成：新增 ${res.imported ?? 0}，更新 ${res.updated ?? 0}，略過 ${res.skipped ?? 0}${reasonLines}`
+      );
       reload();
     } catch (e) {
       setStatus("");
@@ -274,7 +285,7 @@ export default function AdminStudentsPage() {
                 </li>
                 <li>
                   亦支援館方 Excel：{FUNG_STUDENT_CSV_HEADERS.join("、")}；Emergency Contact 可寫 Name
-                  (Relation)。可直接上傳 <strong>.xlsx / .xls</strong>（只讀<strong>第一個 sheet</strong>）或 CSV。
+                  (Relation)。可直接上傳 <strong>.xlsx / .xls</strong>（優先讀「學生資料」sheet；若第一頁係收錢表會報錯而非全部略過）。
                 </li>
                 <li>
                   僅當<strong className="text-ink">姓名與電話皆與現有學員吻合</strong>時才更新該筆；電話相同但姓名不同會略過。

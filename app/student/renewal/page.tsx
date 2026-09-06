@@ -78,6 +78,10 @@ export default function StudentRenewalPage() {
       setStatus("請先輸入姓名或電話搜尋資料庫，並揀選正確嘅學員。");
       return;
     }
+    if (!form.get("whatsapp_reminder_opt_in")) {
+      setStatus("請勾選同意接收 WhatsApp 預約確認及上課提醒。");
+      return;
+    }
 
     setSubmitting(true);
     setStatus("正在提交續會表…");
@@ -94,7 +98,8 @@ export default function StudentRenewalPage() {
         remarks: String(form.get("remarks") ?? "").trim() || null,
         applicant_name: String(form.get("applicant_name") ?? "").trim(),
         signature: String(form.get("signature") ?? "").trim(),
-        renewal_date: String(form.get("renewal_date") ?? todayIsoDate())
+        renewal_date: String(form.get("renewal_date") ?? todayIsoDate()),
+        whatsapp_reminder_opt_in: true
       })) as RenewalResponse;
 
       const balance = result.student?.lesson_balance;
@@ -316,6 +321,17 @@ export default function StudentRenewalPage() {
             />
           </label>
         </section>
+
+        <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800">
+          <input
+            type="checkbox"
+            name="whatsapp_reminder_opt_in"
+            value="1"
+            required
+            className="mt-0.5 h-4 w-4 shrink-0 accent-slate-900"
+          />
+          <span>我同意接收 Zomate Fitness 經 WhatsApp 發出嘅預約確認及上課提醒</span>
+        </label>
 
         <button
           type="submit"
