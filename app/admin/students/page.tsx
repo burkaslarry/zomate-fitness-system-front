@@ -235,14 +235,22 @@ export default function AdminStudentsPage() {
         imported?: number;
         updated?: number;
         skipped?: number;
-        skip_reasons?: Array<{ row?: number; reason?: string; name?: string | null; phone?: string | null }>;
+        skip_reasons?: Array<{
+          row?: number;
+          code?: string;
+          field?: string | null;
+          reason?: string;
+          message?: string;
+          name?: string | null;
+          phone?: string | null;
+        }>;
       };
       const reasonLines =
         Array.isArray(res.skip_reasons) && res.skip_reasons.length
-          ? "｜略過原因：" +
+          ? "｜略過詳情：" +
             res.skip_reasons
-              .slice(0, 5)
-              .map((r) => `R${r.row ?? "?"} ${r.reason ?? ""}${r.name ? ` (${r.name})` : ""}`)
+              .slice(0, 8)
+              .map((r) => r.message ?? `第${r.row ?? "?"}行 ${r.reason ?? ""}`)
               .join("；")
           : "";
       setStatus(
@@ -286,6 +294,12 @@ export default function AdminStudentsPage() {
                 <li>
                   亦支援館方 Excel：{FUNG_STUDENT_CSV_HEADERS.join("、")}；Emergency Contact 可寫 Name
                   (Relation)。可直接上傳 <strong>.xlsx / .xls</strong>（優先讀「學生資料」sheet；若第一頁係收錢表會報錯而非全部略過）。
+                  <strong className="text-ink">Apple Numbers 請先「輸出至 Excel 或 CSV」</strong>，唔好直接上傳
+                  .numbers。
+                </li>
+                <li>
+                  <strong className="text-ink">phone number</strong> 必須係有效香港 8 位數字；MemberCode 只係後備（例如
+                  「9266 35」唔算電話）。PT 欄目前<strong className="text-ink">唔會</strong>自動分配教練。
                 </li>
                 <li>
                   僅當<strong className="text-ink">姓名與電話皆與現有學員吻合</strong>時才更新該筆；電話相同但姓名不同會略過。
