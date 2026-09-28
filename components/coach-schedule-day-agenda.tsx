@@ -13,14 +13,16 @@ type Props = {
   selectedDay: string;
   sessions: CoachSessionRow[];
   isPastDay: boolean;
-  onReschedule?: (studentId: number, enrollmentId: number) => void;
+  onReschedule?: (session: CoachSessionRow) => void;
+  onCancel?: (session: CoachSessionRow) => void;
 };
 
 export default function CoachScheduleDayAgenda({
   selectedDay,
   sessions,
   isPastDay,
-  onReschedule
+  onReschedule,
+  onCancel
 }: Props) {
   const sorted = [...sessions].sort(
     (a, b) => a.start_time.localeCompare(b.start_time) || a.student_name.localeCompare(b.student_name)
@@ -69,26 +71,36 @@ export default function CoachScheduleDayAgenda({
                       已簽到
                     </span>
                   ) : null}
+                  {s.session_override === "rescheduled" ? (
+                    <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-medium text-sky-800">
+                      已改期
+                    </span>
+                  ) : null}
                 </div>
                 <p className="mt-1 text-xs text-ink/70">{formatSessionLine(s)}</p>
                 <p className="mt-0.5 text-[11px] text-ink/45">{s.course_title}</p>
               </div>
-              {onReschedule && !isPastDay ? (
-                <button
-                  type="button"
-                  onClick={() => onReschedule(s.student_id, s.enrollment_id)}
-                  className="shrink-0 rounded-lg border border-primary/35 bg-primary/10 px-2.5 py-1.5 text-[11px] font-semibold text-black"
-                >
-                  改期
-                </button>
-              ) : onReschedule && isPastDay ? (
-                <button
-                  type="button"
-                  onClick={() => onReschedule(s.student_id, s.enrollment_id)}
-                  className="shrink-0 rounded-lg border border-ink/15 bg-canvas px-2.5 py-1.5 text-[11px] font-medium text-ink/70"
-                >
-                  改期
-                </button>
+              {!isPastDay && (onReschedule || onCancel) ? (
+                <div className="flex w-full gap-2 sm:w-auto">
+                  {onReschedule ? (
+                    <button
+                      type="button"
+                      onClick={() => onReschedule(s)}
+                      className="min-h-11 flex-1 shrink-0 rounded-lg border border-primary/35 bg-primary/10 px-3 py-2 text-xs font-semibold text-black sm:flex-none"
+                    >
+                      改期
+                    </button>
+                  ) : null}
+                  {onCancel ? (
+                    <button
+                      type="button"
+                      onClick={() => onCancel(s)}
+                      className="min-h-11 flex-1 shrink-0 rounded-lg border border-red-300/70 bg-red-50 px-3 py-2 text-xs font-semibold text-red-900 sm:flex-none"
+                    >
+                      取消今堂
+                    </button>
+                  ) : null}
+                </div>
               ) : null}
             </li>
           ))}

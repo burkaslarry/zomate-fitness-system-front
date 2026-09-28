@@ -33,6 +33,7 @@ type Props = {
   studentName: string;
   courseTitle: string;
   selectedDay: string;
+  minDate?: string;
   dayCourses: DayCourse[];
   occupiedRanges: HourRange[];
   startHour: number;
@@ -64,6 +65,7 @@ export default function CoachScheduleBottomSheet({
   studentName,
   courseTitle,
   selectedDay,
+  minDate = todayDateKey(),
   dayCourses,
   occupiedRanges,
   startHour,
@@ -99,8 +101,9 @@ export default function CoachScheduleBottomSheet({
             <CoachDateStepper
               value={selectedDay}
               onChange={onDayChange}
-              minDate={todayDateKey()}
+              minDate={minDate}
             />
+            <p className="mt-1.5 text-[11px] text-ink/55">新預約須最少提前 72 小時。</p>
           </div>
 
           <CoachStartTimeSelect
@@ -161,7 +164,7 @@ export default function CoachScheduleBottomSheet({
         <div className="shrink-0 border-t border-ink/10 bg-surface px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <button
             type="button"
-            disabled={scheduling || conflict || isPastDay(selectedDay)}
+            disabled={scheduling || conflict || isPastDay(selectedDay) || selectedDay < minDate}
             onClick={onConfirm}
             className="w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-black disabled:opacity-50"
           >

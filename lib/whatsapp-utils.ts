@@ -38,6 +38,12 @@ export function buildPinWhatsAppMessage(payload: {
       lines.push(`第 ${seg.installment_no} 期：${seg.pin}${seg.paid ? "（可簽到）" : "（待付款）"}`);
     }
   }
-  lines.push("", "上堂日請用 PIN 簽到。如有疑問請聯絡我們，謝謝！", "— Zomate Fitness");
+  lines.push(
+    "",
+    "預約須最少提前 72 小時；改期或取消須最少於課堂開始前 24 小時通知，否則照計一堂及不設補堂。",
+    "",
+    "上堂日請用 PIN 簽到。如有疑問請聯絡我們，謝謝！",
+    "— Zomate Fitness"
+  );
   return lines.join("\n");
 }

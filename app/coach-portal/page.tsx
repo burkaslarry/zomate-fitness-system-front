@@ -16,6 +16,7 @@ import CoachScheduleDayAgenda from "../../components/coach-schedule-day-agenda";
 import CoachScheduleFab from "../../components/coach-schedule-fab";
 import CoachScheduleStudentPickerSheet from "../../components/coach-schedule-student-picker-sheet";
 import CoachScheduleSuccessDialog from "../../components/coach-schedule-success-dialog";
+import CoachCancelConfirmDialog from "../../components/coach-cancel-confirm-dialog";
 import CoachDateStepper from "../../components/coach-date-stepper";
 import CoachSlotDurationChips from "../../components/coach-slot-duration-chips";
 import CoachStartEndSummary from "../../components/coach-start-end-summary";
@@ -73,6 +74,17 @@ function localDateKey(iso: string): string {
 
 function todayKey(): string {
   return todayDateKey();
+}
+
+/** [F003][S004] Earliest calendar date allowed by the 72-hour booking policy. */
+function bookingMinDateKey(): string {
+  const d = new Date(Date.now() + 72 * 60 * 60 * 1000);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
+/** [F003][S009] Build a local wall-clock datetime accepted by the booking API. */
+function localSlotIso(day: string, hour: number, minute: number): string {
+  return `${day}T${pad2(hour)}:${pad2(minute)}:00`;
 }
 
 /** [F003][S003] Build wa.me link with polite payment reminder. */
@@ -155,13 +167,23 @@ export default function CoachDashboardPage() {
   const [studentRecords, setStudentRecords] = useState<CoachStudentRecordDto | null>(null);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [bookingEnrollmentId, setBookingEnrollmentId] = useState<number | null>(null);
+  const [bookingOriginalDate, setBookingOriginalDate] = useState<string | null>(null);
   const [bookDay, setBookDay] = useState(todayKey);
   const [bookDaySessions, setBookDaySessions] = useState<CoachSessionRow[]>([]);
   const [bookStartHour, setBookStartHour] = useState(9);
   const [bookStartMinute, setBookStartMinute] = useState<CoachStartMinute>(0);
   const [bookDuration, setBookDuration] = useState<CoachSlotDuration>(1);
   const [bookBusy, setBookBusy] = useState(false);
-  const [cancelBusy, setCancelBusy] = useState<number | null>(null);
+  const [cancelBusy, setCancelBusy] = useState<string | null>(null);
+  const [cancelDialog, setCancelDialog] = useState<{
+    scope: "session" | "course";
+    enrollmentId: number;
+    studentId: number;
+    studentName: string;
+    courseTitle: string;
+    originalDate?: string;
+    sessionLabel?: string;
+  } | null>(null);
   const [remindBusy, setRemindBusy] = useState<number | null>(null);
   const [scheduleStudentId, setScheduleStudentId] = useState<number | null>(null);
   const [pickBusy, setPickBusy] = useState(false);
@@ -341,6 +363,7 @@ export default function CoachDashboardPage() {
     setSelectedPending(row);
     setScheduleStudentId(row.student_id);
     setScheduleSheetOpen(false);
+    setSelectedDay(bookingMinDateKey());
     setStartHour(9);
     setStartMinute(0);
     setDurationHours(1);
@@ -352,6 +375,7 @@ export default function CoachDashboardPage() {
       return;
     }
     if (selectedPending) {
+      if (selectedDay < bookingMinDateKey()) setSelectedDay(bookingMinDateKey());
       setScheduleSheetOpen(true);
       return;
     }
@@ -381,6 +405,10 @@ export default function CoachDashboardPage() {
     if (!coach || !selectedPending) return;
     if (isPastDay(selectedDay)) {
       setStatus("不能排期到過去日期，請選今日或未來。");
+      return;
+    }
+    if (selectedDay < bookingMinDateKey()) {
+      setStatus("新預約須最少提前 72 小時，請選較後日期。");
       return;
     }
     if (
@@ -439,6 +467,7 @@ export default function CoachDashboardPage() {
     setRecordsLoading(true);
     setStudentRecords(null);
     setBookingEnrollmentId(null);
+    setBookingOriginalDate(null);
     try {
       const rec = (await api.coachStudentRecords(studentId, coach.id)) as CoachStudentRecordDto;
       setStudentRecords(rec);
@@ -450,14 +479,18 @@ export default function CoachDashboardPage() {
     }
   }
 
-  async function openStudentReschedule(studentId: number, enrollmentId: number) {
+  async function openStudentReschedule(session: CoachSessionRow) {
     router.push("/coach-portal?tab=students");
-    await loadStudentRecords(studentId);
-    setBookingEnrollmentId(enrollmentId);
-    setBookDay(todayKey());
-    setBookStartHour(9);
-    setBookStartMinute(0);
-    setBookDuration(1);
+    await loadStudentRecords(session.student_id);
+    setBookingEnrollmentId(session.enrollment_id);
+    setBookingOriginalDate(session.original_session_date ?? session.session_date);
+    setBookDay(session.session_date);
+    const [startHourValue, startMinuteValue] = session.start_time.split(":").map(Number);
+    const [endHourValue, endMinuteValue] = session.end_time.split(":").map(Number);
+    const duration = ((endHourValue * 60 + endMinuteValue - startHourValue * 60 - startMinuteValue) / 60) as CoachSlotDuration;
+    setBookStartHour(startHourValue);
+    setBookStartMinute(startMinuteValue as CoachStartMinute);
+    setBookDuration(duration);
   }
 
   async function bookEnrollment(enrollmentId: number, confirmed: boolean) {
@@ -483,18 +516,33 @@ export default function CoachDashboardPage() {
     setBookBusy(true);
     setStatus("");
     try {
-      await api.coachBookSession({
-        enrollment_id: enrollmentId,
-        day: bookDay,
-        start_hour: bookStartHour,
-        start_minute: bookStartMinute,
-        duration_hours: bookDuration,
-        coach_id: coach.id
-      });
+      if (bookingOriginalDate) {
+        const start = new Date(localSlotIso(bookDay, bookStartHour, bookStartMinute));
+        const end = new Date(start.getTime() + bookDuration * 60 * 60 * 1000);
+        await api.coachRescheduleSession(enrollmentId, bookingOriginalDate, {
+          coach_id: coach.id,
+          scheduled_start: localSlotIso(bookDay, bookStartHour, bookStartMinute),
+          scheduled_end: localSlotIso(
+            `${end.getFullYear()}-${pad2(end.getMonth() + 1)}-${pad2(end.getDate())}`,
+            end.getHours(),
+            end.getMinutes()
+          )
+        });
+      } else {
+        await api.coachBookSession({
+          enrollment_id: enrollmentId,
+          day: bookDay,
+          start_hour: bookStartHour,
+          start_minute: bookStartMinute,
+          duration_hours: bookDuration,
+          coach_id: coach.id
+        });
+      }
       await reloadAll(coach.id);
       if (selectedStudentId) await loadStudentRecords(selectedStudentId);
       setBookingEnrollmentId(null);
-      setStatus(confirmed ? "已改期。" : "已排程。");
+      setBookingOriginalDate(null);
+      setStatus(confirmed ? "已改這一堂；其餘課堂不變。" : "已排程。");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (/conflict|409|佔用/i.test(msg)) {
@@ -508,18 +556,29 @@ export default function CoachDashboardPage() {
     }
   }
 
-  async function cancelEnrollment(studentId: number, enrollmentId: number, courseTitle: string) {
-    if (!coach) return;
-    const ok = window.confirm(`確定要取消「${courseTitle}」？此課程將從日曆移除。`);
-    if (!ok) return;
-    setCancelBusy(enrollmentId);
+  async function confirmCancellation() {
+    if (!coach || !cancelDialog) return;
+    const busyKey = cancelDialog.scope === "session"
+      ? `${cancelDialog.enrollmentId}:${cancelDialog.originalDate}`
+      : `course:${cancelDialog.enrollmentId}`;
+    setCancelBusy(busyKey);
     setStatus("");
     try {
-      await api.coachCancelEnrollment(enrollmentId, { coach_id: coach.id });
-      if (bookingEnrollmentId === enrollmentId) setBookingEnrollmentId(null);
+      if (cancelDialog.scope === "session" && cancelDialog.originalDate) {
+        await api.coachCancelSession(cancelDialog.enrollmentId, cancelDialog.originalDate, {
+          coach_id: coach.id
+        });
+      } else {
+        await api.coachCancelEnrollment(cancelDialog.enrollmentId, { coach_id: coach.id });
+      }
+      if (bookingEnrollmentId === cancelDialog.enrollmentId) {
+        setBookingEnrollmentId(null);
+        setBookingOriginalDate(null);
+      }
       await reloadAll(coach.id);
-      await loadStudentRecords(studentId);
-      setStatus("已取消課程。");
+      if (selectedStudentId === cancelDialog.studentId) await loadStudentRecords(cancelDialog.studentId);
+      setStatus(cancelDialog.scope === "session" ? "已取消這一堂；其餘課堂不變。" : "已取消整個課程。所有未來課堂已移除。");
+      setCancelDialog(null);
     } catch (e) {
       alertApiError(e);
       setStatus(String(e));
@@ -611,7 +670,18 @@ export default function CoachDashboardPage() {
           selectedDay={selectedDay}
           sessions={confirmedDaySessions}
           isPastDay={isPastDay(selectedDay)}
-          onReschedule={(studentId, enrollmentId) => void openStudentReschedule(studentId, enrollmentId)}
+          onReschedule={(session) => void openStudentReschedule(session)}
+          onCancel={(session) =>
+            setCancelDialog({
+              scope: "session",
+              enrollmentId: session.enrollment_id,
+              studentId: session.student_id,
+              studentName: session.student_name,
+              courseTitle: session.course_title,
+              originalDate: session.original_session_date ?? session.session_date,
+              sessionLabel: `${session.session_date} · ${session.start_time}–${session.end_time}`
+            })
+          }
         />
       </section>
 
@@ -621,6 +691,7 @@ export default function CoachDashboardPage() {
           studentName={selectedPending.student_name}
           courseTitle={selectedPending.course_title}
           selectedDay={selectedDay}
+          minDate={bookingMinDateKey()}
           dayCourses={dayCoursesForPanel}
           occupiedRanges={occupiedRanges}
           startHour={startHour}
@@ -873,36 +944,44 @@ export default function CoachDashboardPage() {
                     <button
                       type="button"
                       onClick={() => {
+                        if (enr.coach_time_confirmed) {
+                          router.push("/coach-portal?tab=schedule");
+                          setStatus("請喺日曆揀指定一堂，再按「改期」。");
+                          return;
+                        }
                         setBookingEnrollmentId(enr.enrollment_id);
-                        setBookDay(todayKey());
+                        setBookingOriginalDate(null);
+                        setBookDay(bookingMinDateKey());
                         setBookStartHour(9);
                         setBookStartMinute(0);
                         setBookDuration(1);
                       }}
-                      className="rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-xs font-medium text-black"
+                      className="min-h-11 rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-medium text-black"
                     >
-                      {enr.coach_time_confirmed ? "改期" : "排程"} 0.5–2h
+                      {enr.coach_time_confirmed ? "到日曆揀一堂改期" : "排程 0.5–2h"}
                     </button>
                     <button
                       type="button"
-                      disabled={cancelBusy === enr.enrollment_id}
+                      disabled={cancelBusy === `course:${enr.enrollment_id}`}
                       onClick={() =>
-                        void cancelEnrollment(
-                          studentRecords.student_id,
-                          enr.enrollment_id,
-                          enr.course_title
-                        )
+                        setCancelDialog({
+                          scope: "course",
+                          enrollmentId: enr.enrollment_id,
+                          studentId: studentRecords.student_id,
+                          studentName: studentRecords.full_name,
+                          courseTitle: enr.course_title
+                        })
                       }
-                      className="rounded-md border border-red-300/70 bg-red-50 px-2 py-1 text-xs font-medium text-red-900 disabled:opacity-50"
+                      className="min-h-11 rounded-md border border-red-300/70 bg-red-50 px-3 py-2 text-xs font-medium text-red-900 disabled:opacity-50"
                     >
-                      {cancelBusy === enr.enrollment_id ? "…" : "取消課程"}
+                      {cancelBusy === `course:${enr.enrollment_id}` ? "…" : "取消整個課程"}
                     </button>
                   </div>
                   {bookingEnrollmentId === enr.enrollment_id ? (
                     <div className="mt-3 space-y-3 border-t border-ink/10 pt-3">
                       <div>
                         <p className="mb-1 text-xs text-ink/70">日期</p>
-                        <CoachDateStepper value={bookDay} onChange={setBookDay} minDate={todayKey()} />
+                        <CoachDateStepper value={bookDay} onChange={setBookDay} minDate={bookingMinDateKey()} />
                       </div>
                       <CoachStartTimeSelect
                         startHour={bookStartHour}
@@ -1024,6 +1103,16 @@ export default function CoachDashboardPage() {
         startHour={scheduleSuccess?.startHour ?? 9}
         durationHours={scheduleSuccess?.durationHours ?? 1}
         onGoStudents={handleScheduleSuccessGoStudents}
+      />
+      <CoachCancelConfirmDialog
+        open={cancelDialog != null}
+        scope={cancelDialog?.scope ?? "session"}
+        studentName={cancelDialog?.studentName ?? ""}
+        courseTitle={cancelDialog?.courseTitle ?? ""}
+        sessionLabel={cancelDialog?.sessionLabel}
+        busy={cancelBusy != null}
+        onClose={() => setCancelDialog(null)}
+        onConfirm={() => void confirmCancellation()}
       />
     </>
   );

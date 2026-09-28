@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Zomate Fitness">
+  <rect width="512" height="512" rx="112" fill="#e8a598"/>
+  <circle cx="256" cy="256" r="164" fill="#fdfaf9"/>
+  <path d="M154 162h208v54L232 350h130v54H150v-54l130-134H154z" fill="#2d2422"/>
+</svg>

@@ -351,7 +351,7 @@ export default function BackendShell({
 
   const mobileNavDrawer =
     showAdminSidebar && mobileNavOpen ? (
-      <div className="fixed inset-0 z-[180] md:hidden" role="dialog" aria-modal="true" aria-label="後台選單">
+      <div className="fixed inset-0 z-[180] lg:hidden" role="dialog" aria-modal="true" aria-label="後台選單">
         <button
           type="button"
           className="absolute inset-0 bg-ink/40 backdrop-blur-[1px]"
@@ -386,7 +386,7 @@ export default function BackendShell({
       {showAdminSidebar ? (
       <aside
         data-admin-sidebar
-        className="sticky top-0 hidden h-screen w-[260px] shrink-0 overflow-y-auto border-r border-ink/10 bg-surface md:block"
+        className="sticky top-0 hidden h-screen w-[260px] shrink-0 overflow-y-auto border-r border-ink/10 bg-surface lg:block"
       >
         <div className="flex min-h-full w-[260px] flex-col px-4 pb-5 pt-5">
           <div className="mb-5">
@@ -457,7 +457,7 @@ export default function BackendShell({
               <button
                 type="button"
                 onClick={() => setMobileNavOpen(true)}
-                className="inline-flex shrink-0 items-center justify-center rounded-lg border border-ink/15 bg-surface px-2.5 py-2 text-xs font-medium text-ink md:hidden"
+                className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg border border-ink/15 bg-surface px-3 py-2 text-xs font-medium text-ink lg:hidden"
                 aria-label="開啟選單"
               >
                 選單
@@ -497,8 +497,8 @@ export default function BackendShell({
             layout === "coach"
               ? "p-3 sm:p-4"
               : showAdminMobileBottomNav
-                ? "p-3 pb-24 md:p-6 md:pb-6"
-                : "p-3 pb-6 md:p-6"
+                ? "p-3 pb-24 lg:p-6 lg:pb-6"
+                : "p-3 pb-6 lg:p-6"
           }`}
         >
           {verifying ? (
@@ -517,7 +517,7 @@ export default function BackendShell({
         {showAdminMobileCoachTabs ? (
           <nav
             data-admin-bottom-nav
-            className="fixed bottom-0 left-0 right-0 z-40 border-t border-ink/10 bg-surface/95 backdrop-blur-md md:hidden"
+            className="fixed bottom-0 left-0 right-0 z-40 border-t border-ink/10 bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
           >
             <div className="mx-auto flex max-w-lg">
               {filteredMobileCoachTabs.map((tab) => {
@@ -543,7 +543,7 @@ export default function BackendShell({
         ) : showAdminMobileMainTabs && filteredMobileMainTabs.length > 0 ? (
           <nav
             data-admin-bottom-nav
-            className="fixed bottom-0 left-0 right-0 z-40 border-t border-ink/10 bg-surface/95 backdrop-blur-md md:hidden"
+            className="fixed bottom-0 left-0 right-0 z-40 border-t border-ink/10 bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
           >
             <div className="mx-auto flex max-w-lg">
               {filteredMobileMainTabs.map((tab) => {

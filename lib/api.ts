@@ -845,6 +845,34 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload ?? {})
     }),
+  /** [F003][S009] Cancel one lesson date only; enrollment and remaining lessons stay active. */
+  coachCancelSession: (
+    enrollmentId: number,
+    originalDate: string,
+    payload?: { coach_id?: number; reason?: string }
+  ) =>
+    request(
+      `/api/coach/enrollments/${enrollmentId}/sessions/${encodeURIComponent(originalDate)}/cancel`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload ?? {})
+      }
+    ),
+  /** [F003][S009] Reschedule one lesson date only. */
+  coachRescheduleSession: (
+    enrollmentId: number,
+    originalDate: string,
+    payload: {
+      coach_id?: number;
+      scheduled_start: string;
+      scheduled_end: string;
+      reason?: string;
+    }
+  ) =>
+    request(
+      `/api/coach/enrollments/${enrollmentId}/sessions/${encodeURIComponent(originalDate)}/reschedule`,
+      { method: "PATCH", body: JSON.stringify(payload) }
+    ),
   confirmCoachSchedule: (
     enrollmentId: number,
     payload: {

@@ -24,6 +24,9 @@ export type CoachSessionRow = {
   lesson_no?: number | null;
   /** Total lessons in the enrollment package */
   total_lessons?: number | null;
+  /** Immutable generated lesson date used by one-session cancel/reschedule APIs. */
+  original_session_date?: string | null;
+  session_override?: "rescheduled" | null;
 };
 
 export type CoachDayCourse = {
