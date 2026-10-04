@@ -101,3 +101,8 @@ Manual project settings:
    - Preview: `NEXT_PUBLIC_API_BASE_URL=https://<your-render-preview-or-shared-url>.onrender.com`
 3. Use this folder (`zomate-fitness-system-front`) as the project root.
 4. Refer to `.env.preview.example` and `.env.production.example` for value format.
+
+<!--
+Repository maintenance: GitHub remotes use the burkaslarry-GitHub SSH alias,
+which selects this account's SSH key and connects over port 443.
+-->
