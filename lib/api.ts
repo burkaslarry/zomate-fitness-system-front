@@ -509,6 +509,7 @@ export const api = {
     note?: string;
     /** When true, lesson credit is deferred to course enrollment (avoids double ledger). */
     skip_lesson_ledger?: boolean;
+    send_whatsapp?: boolean;
     whatsapp_reminder_opt_in?: boolean;
     receipt?: File | null;
   }) => {
@@ -526,6 +527,8 @@ export const api = {
     if (payload.course_package_type_label) form.append("course_package_type_label", payload.course_package_type_label);
     if (payload.note) form.append("note", payload.note);
     if (payload.skip_lesson_ledger) form.append("skip_lesson_ledger", "true");
+    // [F002][S001] Defer checkout notifications until course creation supplies the correct PIN.
+    form.append("send_whatsapp", payload.send_whatsapp === false ? "false" : "true");
     form.append(
       "whatsapp_reminder_opt_in",
       payload.whatsapp_reminder_opt_in ? "true" : "false"

@@ -41,6 +41,8 @@ export default function StudentRenewalPage() {
   usePeriodicHealthPing();
   const [status, setStatus] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  // [F001][S003] Renewal cannot submit without the customer's explicit WhatsApp consent.
+  const [whatsappOptIn, setWhatsappOptIn] = useState(false);
   const [searchQ, setSearchQ] = useState("");
   const [searchResults, setSearchResults] = useState<SearchRow[]>([]);
   const [searchBusy, setSearchBusy] = useState(false);
@@ -327,6 +329,8 @@ export default function StudentRenewalPage() {
             type="checkbox"
             name="whatsapp_reminder_opt_in"
             value="1"
+            checked={whatsappOptIn}
+            onChange={(event) => setWhatsappOptIn(event.target.checked)}
             required
             className="mt-0.5 h-4 w-4 shrink-0 accent-slate-900"
           />
@@ -335,7 +339,7 @@ export default function StudentRenewalPage() {
 
         <button
           type="submit"
-          disabled={submitting || !selected}
+          disabled={submitting || !selected || !whatsappOptIn}
           className="w-full rounded-lg bg-slate-900 px-4 py-3 text-sm font-semibold text-ink shadow-sm disabled:cursor-not-allowed disabled:bg-slate-400"
         >
           {submitting ? "提交中…" : selected ? "提交續會表並更新堂數" : "請先搜尋並揀選學員"}

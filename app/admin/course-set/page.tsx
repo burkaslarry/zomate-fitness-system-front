@@ -98,6 +98,8 @@ export default function AdminCourseSetPage() {
   /** Course id returned by POST — used to PATCH installment-paid from success modal */
   const [successCourseId, setSuccessCourseId] = useState<number | null>(null);
   const [submitBusy, setSubmitBusy] = useState(false);
+  // [F002][S001] Course registration requires explicit student WhatsApp consent.
+  const [whatsappOptIn, setWhatsappOptIn] = useState(false);
   const [reminderBusy, setReminderBusy] = useState<string | null>(null);
 
   useEffect(() => {
@@ -204,6 +206,7 @@ export default function AdminCourseSetPage() {
     setSubmitBusy(true);
     try {
       const created = (await api.createCourse({
+        whatsapp_reminder_opt_in: whatsappOptIn,
         title: titleKind.name,
         branch_id: branchId,
         coach_id: coachId,
@@ -570,9 +573,16 @@ export default function AdminCourseSetPage() {
 
             {status ? <p className="text-sm text-rose-800">{status}</p> : null}
 
+            {/* [F002][S001] Keep consent unchecked until the student explicitly agrees. */}
+            <label className="flex items-start gap-3 text-sm text-ink">
+              <input type="checkbox" checked={whatsappOptIn}
+                onChange={(event) => setWhatsappOptIn(event.target.checked)} required />
+              <span>同意接收 WhatsApp 提醒</span>
+            </label>
+
             <button
               type="submit"
-              disabled={submitBusy}
+              disabled={submitBusy || !whatsappOptIn}
               className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-black shadow-sm hover:opacity-95 disabled:opacity-50 sm:w-auto"
             >
               {submitBusy ? "建立中…" : "建立課程"}

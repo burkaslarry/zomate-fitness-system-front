@@ -117,6 +117,6 @@ which selects this account's SSH key and connects over port 443.
 
 ### [F003][S003] 簽到通知範本選擇（2026-10-13 更新）
 
-依使用者指定，沿用 `zomate_payment_pending`、`zomate_payment_installment`、`zomate_payment_full`、`zomate_payment_coach` 四款已批准原文；只注入動態資料，不更改固定字眼。額外 `zomate_checkin_student`／`zomate_checkin_coach` 已從正式 Render 映射移除，簽到暫不透過這兩款發送。簽到是否沿用付款四款，待使用者確認；確認前不得聲稱兩款額外簽到通知正在發送。香港電話預設 +852 的處理保留。原有預約確認是獨立既有功能。
+開課、教練排課、成功簽到及補分期／全額收據均沿用四款原文。`[F001][S001]` 新人／續會／報 Course 的 WhatsApp 同意未勾時不能提交；`[F002][S001] components/reg-course-wizard.tsx` 把續會付款與新課程／PIN 關聯，成功畫面使用後端批准原文；`[F004][S002] components/payment-records-table.tsx` 在 Admin 付款詳情直接預覽 JPG／PNG 收據，保留開啟／下載。手機及手動 WhatsApp 連結预設 +852。
 
-The four approved payment wordings remain unchanged. Additional check-in mappings are disabled. Reusing the payment wording on check-in requires the user's choice because those bodies describe receipt/payment status rather than a check-in acknowledgement.
+English: agreed template text stays fixed; course title, financial state and PIN are injected by the API. Typecheck and the final production Webpack build passed; the receipt preview also passed browser image-load verification with the user's sample. Production release awaits the Tailwind 3 build-dependency High vulnerability decision; it is not yet deployed.

@@ -148,6 +148,8 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   const pdpoWatch = form.watch("pdpo_acknowledged");
   const coolingOffWatch = form.watch("cooling_off_acknowledged");
   const disclaimerWatch = form.watch("disclaimer_accepted");
+  // [F001][S001] Explicit consent gates submission, rather than relying only on schema errors.
+  const whatsappOptInWatch = form.watch("whatsapp_reminder_opt_in");
   const digitalSignatureWatch = form.watch("digital_signature");
   const courseCategoryWatch = form.watch("course_category_id");
   const step1Watch = form.watch([
@@ -200,6 +202,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   }, [step1Watch]);
 
   const step3SubmitEnabled =
+    Boolean(whatsappOptInWatch) &&
     Boolean(pdpoWatch) &&
     Boolean(coolingOffWatch) &&
     Boolean(disclaimerWatch) &&

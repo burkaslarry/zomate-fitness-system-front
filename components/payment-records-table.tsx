@@ -331,6 +331,16 @@ export default function PaymentRecordsTable({
                 <DetailRow label="教練">{detailRow.coach_name ?? "—"}</DetailRow>
                 <DetailRow label="收據">
                   <ReceiptLinks row={detailRow} />
+                  {detailRow.receipt_url && /\.(jpe?g|png|gif|webp)(?:\?|$)/i.test(detailRow.receipt_url) ? (
+                    // [F004][S002] Show the uploaded receipt itself in Admin payment details.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={apiAssetUrl(detailRow.receipt_url) ?? detailRow.receipt_url}
+                      alt={`${detailRow.student_name} 收據圖片`}
+                      className="mt-3 max-h-80 w-full rounded border border-ink/15 bg-white object-contain"
+                      loading="lazy"
+                    />
+                  ) : null}
                 </DetailRow>
                 {!detailRow.receipt_id &&
                 (detailRow.status === "missing_receipt" || detailRow.record_type === "renewal") ? (

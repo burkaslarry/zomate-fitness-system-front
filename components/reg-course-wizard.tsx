@@ -11,7 +11,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { alertApiError, api } from "../lib/api";
 import { preferDefaultBranchId } from "../lib/branches";
-import { buildPinWhatsAppMessage, waMeLink } from "../lib/whatsapp-utils";
+import { waMeLink } from "../lib/whatsapp-utils";
 import type { BranchDto, CoachDto, CourseCategoryDto, InstallmentSegmentPinDto, MemberProfile } from "../types/api";
 import FileUpload from "./forms/file-upload";
 import MobileRadioList from "./mobile-radio-list";
@@ -110,6 +110,8 @@ type PurchaseSummary = {
   packageName: string;
   coursePackageType: string;
   amountPaid: string;
+  totalAmount: string;
+  approvedMessage: string;
   remainingBalance: number | null;
   paymentMethod: string;
   coachName: string;
@@ -379,7 +381,7 @@ export default function RegCourseWizard({
     }
     try {
       setRenewalSubmitting(true);
-      await api.createRenewal({
+      const checkout = (await api.createRenewal({
         student_id: member.id,
         total_lessons: lessons,
         coach_id: Number(coachId),
@@ -392,8 +394,9 @@ export default function RegCourseWizard({
         note: noteParts.join(" · "),
         receipt: receipt instanceof File && receipt.name ? receipt : null,
         skip_lesson_ledger: true,
+        send_whatsapp: false,
         whatsapp_reminder_opt_in: true
-      });
+      })) as { renewal_id: number };
       const coursePayload = buildAutoCoursePayload({
         title: selectedKind.name,
         branchId: resolvedBranchId,
@@ -406,10 +409,18 @@ export default function RegCourseWizard({
           : undefined,
         remarks
       });
+      // [F002][S001] Send once after the new course/PIN and its checkout are linked.
+      Object.assign(coursePayload, {
+        whatsapp_reminder_opt_in: whatsappOptIn,
+        payment_renewal_id: checkout.renewal_id,
+        payment_total_amount: parseAmount(totalAmount),
+        payment_received: true
+      });
       const courseRes = (await (mode === "coach"
         ? api.coachRegisterCourse(coursePayload)
         : api.createCourse(coursePayload))) as {
         id: number;
+        payment_whatsapp?: { student?: { message?: string } };
         enrollments?: Array<{
           checkin_pin?: string;
           installment_segments?: InstallmentSegmentPinDto[];
@@ -423,7 +434,9 @@ export default function RegCourseWizard({
         studentPhone: member.phone,
         packageName: `${lessons} 堂`,
         coursePackageType: selectedKind.name,
-        amountPaid: totalAmount,
+        amountPaid: firstInstallmentAmount,
+        totalAmount,
+        approvedMessage: courseRes.payment_whatsapp?.student?.message ?? "",
         remainingBalance: balanceRes.lesson_balance,
         paymentMethod: method,
         coachName: selectedCoach?.full_name ?? "—",
@@ -772,8 +785,12 @@ export default function RegCourseWizard({
               <dd>{purchaseSummary.coursePackageType}</dd>
             </div>
             <div className="flex justify-between gap-2">
-              <dt className="text-emerald-800/70">應付總金額</dt>
+              <dt className="text-emerald-800/70">今次付款</dt>
               <dd>HKD {purchaseSummary.amountPaid}</dd>
+            </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-emerald-800/70">課程總額</dt>
+              <dd>HKD {purchaseSummary.totalAmount}</dd>
             </div>
             <div className="flex justify-between gap-2">
               <dt className="text-emerald-800/70">餘額</dt>
@@ -781,20 +798,11 @@ export default function RegCourseWizard({
             </div>
           </dl>
 
-          {purchaseSummary.studentPhone && purchaseSummary.checkinPin !== "—" ? (
+          {purchaseSummary.studentPhone && purchaseSummary.approvedMessage ? (
             <WhatsAppButton
               href={waMeLink(
                 purchaseSummary.studentPhone,
-                buildPinWhatsAppMessage({
-                  studentName: purchaseSummary.studentName,
-                  courseTitle: purchaseSummary.coursePackageType,
-                  checkinPin: purchaseSummary.checkinPin,
-                  branchName: purchaseSummary.branchName,
-                  installmentSegments: purchaseSummary.installmentSegments.map((seg) => ({
-                    ...seg,
-                    paid: seg.paid ?? false
-                  }))
-                })
+                purchaseSummary.approvedMessage
               )}
               label="WhatsApp 發 PIN 俾學生"
               className="w-full py-3 text-sm"
