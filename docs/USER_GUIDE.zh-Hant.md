@@ -6,12 +6,12 @@
 
 ## 一、系統簡介
 
-本系統用於健身中心管理：**學員入會與文件**、**課程／簽到**、**WhatsApp 相關流程（介面與模擬）**，以及**財務與報表**。
+本系統用於健身中心管理：**學員入會與文件**、**課程／簽到**、**WhatsApp 付款通知與整合**，以及**財務與報表**。
 
 | 區塊 | 說明 |
 |------|------|
 | 前端 | Next.js（App Router）、TypeScript |
-| 後端 API | 可連線至 Kotlin Spring Boot；本機未設定 `NEXT_PUBLIC_API_BASE_URL` 時，會由 Next.js Route Handlers 模擬 API |
+| 後端 API | 正式連線至 FastAPI／PostgreSQL；本機依 `NEXT_PUBLIC_API_BASE_URL` 連線，只有啟用 Next mock API 設定時才使用模擬路由 |
 | 詳細技術與路線圖 | 請參考總庫或內部的 `docs/REQUIREMENTS.md`；模擬 API 行為見 `docs/MOCK_API_SIMULATION.md`（若本倉庫未附完整檔案，請向開發團隊索取） |
 
 ---
@@ -102,6 +102,29 @@
 ---
 
 ## 六、通知與整合（參考）
+
+### [F005][S003] 正式 WhatsApp 付款通知（2026-10-13）
+
+系統通知號碼為 **9756 8105**；人手查詢為 **6052 9291**。四款 `zh_HK` / `UTILITY` Meta 範本均已批准並接駁正式後端；四款後端測試已真實發送到指定測試電話，使用者確認全部收到。測試使用合成課程、PIN、堂數及金額，沒有建立真實付款；`dry_run: false` 只代表實際呼叫發送 API，並不代表內容是真實業務資料。
+
+| 通知 | 實際選用條件 | 收件人 |
+| --- | --- | --- |
+| 付款／收據待確認 `zomate_payment_pending` | 付款／續會提交時沒有附收據，或職員手動催款指定「收據未確認」 | 學生 |
+| 分期付款 `zomate_payment_installment` | 有收據，且後端識別為分期；例如上傳對應分期收據並開啟 WhatsApp 通知 | 學生 |
+| 全數付款 `zomate_payment_full` | 有收據，且後端沒有識別為分期；一次付清個案須核對後端付款／分期判定 | 學生 |
+| 教練開課／付款 `zomate_payment_coach` | 上述付款通知操作同時指定通知教練，並能找到對應課程教練及電話 | 該課程教練 |
+
+**職員操作：**到 [學生名單](https://zomate-fitness-system-front.vercel.app/admin/students)，開啟學生詳情，上傳收據時選好對應 Course／分期，勾選「上傳後產生 WhatsApp 提醒（學生）」；要教練收到，另勾「同時通知教練」。兩項預設勾選；取消學生通知會停止這次學生及教練付款通知。教練入口上傳收據只通知學生，不會另發教練版本。學生已拒絕 WhatsApp 通知時，正常學生通知會跳過。
+
+付款／報 Course 提交會經 `POST /api/renewals` 觸發；上傳收據會經會員／職員／教練 receipt API 觸發。後台開課成功畫面的分期 reminder 按鈕會使用「待確認」版本，並可同時通知教練。這四款不會因每日到點或每次簽到自動發出；分期備註內的「第幾堂付款」目前是訊息內容，不是自動排程。
+
+**目前流程限制：**收據上傳在程式中直接視為 `receipt_confirmed=true`，沒有另等財務人手核准；全數付款範本的選擇也不是獨立核實銀行已全額到帳。「報 Course」精靈先寫入付款、再建立新課程，因此首次付款通知可能沒有新課程 PIN，或仍取學生最近的舊課程／分期狀態。四款發送測試通過不等於此報名流程已完成驗收；正式使用前需核對課程關聯、PIN、分期、課程總額及尚欠金額。
+
+**動態資料：**課程名稱來自對應課程紀錄（`course_title`），Meta 使用 `{{1}}`，後台預覽使用 `{{course_title}}`；「測試課程（測試資料，並非實際付款）」只存在於測試呼叫參數，不是正式模板固定字眼。`next_lesson_date` 現時為課程開始日期，並非下一堂實際時間；`amount_paid` 顯示付款記錄金額，未必是累計已付金額。不要在後台改字後假設 Meta 核准範本也同步更改；Meta 固定文案修改需要另行提交審批。
+
+[WhatsApp 設定](https://zomate-fitness-system-front.vercel.app/admin/settings/whatsapp) 可核對已啟用、憑證及映射。其「已發送訊息」列表是應用程式紀錄，不能單靠此列表當作手機送達證明；專用測試 API 不會新增此列表紀錄。
+
+**測試權限：**`POST /api/admin/whatsapp/test-send` 只限 username `masterzoe`，且角色為 `ADMIN` 或 `MASTER_ADMIN`。其他登入者 403、未登入者 401。此限制只適用測試入口；正常付款／收據操作仍按原有職員權限執行。
 
 - 註冊與簽到流程中，部分環境會以 **主控台記錄（mock）** 模擬 WhatsApp 觸發，實際正式環境需完成 WhatsApp Business API 或其他訊息整合。
 - 側欄 **API／DB 狀態** 可用於快速判斷前後端是否連線正常。

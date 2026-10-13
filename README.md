@@ -2,7 +2,7 @@
 
 Feature code **F015** (`Features F015:AdminChromeFrontend -- …`) is documented in `components/backend-shell.tsx` for the bilingual admin chrome. Backend codes **F001–F014** and verifier **F016** are summarized in `../zomate-fitness-system-back/README.md`.
 
-繁體中文使用手冊：[`../docs/USER_GUIDE.zh-Hant.md`](../docs/USER_GUIDE.zh-Hant.md)。
+繁體中文使用手冊：[`docs/USER_GUIDE.zh-Hant.md`](docs/USER_GUIDE.zh-Hant.md)。
 
 Next.js + Tailwind UI for:
 
@@ -10,7 +10,15 @@ Next.js + Tailwind UI for:
 - Trial purchase, course creation, course categories, and lesson balance updates (F02)
 - QR + **course-specific PIN** check-in (F03)
 - Admin finance reports (sales) and Excel export surfaces (F04); expenses & payroll excluded from admin reports
-- Admin summary + WhatsApp/SMS simulation logs
+- Admin summary + Meta WhatsApp payment notifications and application logs
+
+## [F005][S003] WhatsApp payment notifications / 付款通知
+
+The production FastAPI backend uses sender **+852 9756 8105**. Four approved `zh_HK` templates cover pending receipt, installment, full-payment and coach notifications; the existing booking confirmation is preserved. The backend was committed, pushed and deployed as `c4368e2` on 2026-10-13; the user confirmed receipt of all four real test sends with synthetic data.
+
+付款／續會提交、收據上傳及後台手動 reminder 會按收據／分期狀態選範本；有對應教練及電話且開啟通知時加發教練版本。不是定時或每次簽到自動發送。上傳收據目前即視為有收據；`reg-course-wizard.tsx` 先建立付款再建立課程，首次通知的課程／PIN／分期及金額仍須流程驗收。後台測試 API 只限 masterzoe；正常付款操作沿用原權限。課程名稱等欄位是動態資料，測試字眼沒有寫死在模板。
+
+See the [user guide](docs/USER_GUIDE.zh-Hant.md#六通知與整合參考) for checkbox behavior, triggers, delivery evidence and current limitations. View [production WhatsApp settings](https://zomate-fitness-system-front.vercel.app/admin/settings/whatsapp) to check runtime mappings. Editing a database preview does not change the approved Meta fixed wording.
 
 ## Local run
 
