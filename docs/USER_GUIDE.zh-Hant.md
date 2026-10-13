@@ -129,20 +129,11 @@
 - Meta 已批准並設定映射的付款／簽到通知會真實發送；未有映射的其他通知及本機 mock 環境可能只記錄／提供手動 WhatsApp 連結。
 - 側欄 **API／DB 狀態** 可用於快速判斷前後端是否連線正常。
 
-### [F003][S003] 學生上堂簽到通知
+### [F003][S003] 簽到通知範本選擇（2026-10-13 更新）
 
-學生成功 QR／PIN 簽到，或現有 Face ID 簽到路徑成功處理後，後端先保存出勤並扣 1 堂，再用 **9756 8105** 發送：
+依使用者指定，沿用 `zomate_payment_pending`、`zomate_payment_installment`、`zomate_payment_full`、`zomate_payment_coach` 四款已批准原文；只注入動態資料，不更改固定字眼。額外 `zomate_checkin_student`／`zomate_checkin_coach` 已從正式 Render 映射移除，簽到暫不透過這兩款發送。簽到是否沿用付款四款，待使用者確認；確認前不得聲稱兩款額外簽到通知正在發送。香港電話預設 +852 的處理保留。原有預約確認是獨立既有功能。
 
-| 對象 | Meta 範本 | 動態資料 |
-| --- | --- | --- |
-| 學生 | `zomate_checkin_student` | 學生姓名、課程名稱、香港簽到時間、扣堂後帳戶剩餘總堂數 |
-| 該課程教練 | `zomate_checkin_coach` | 學生姓名及電話、課程名稱、香港簽到時間、學生扣堂後帳戶剩餘總堂數 |
-
-資料庫電話按香港 **+852** 處理：八位本地號碼會補 `852`，已有 `+852`／`852` 的號碼不會重複加國碼。訊息的姓名、課程、時間及堂數均由本次簽到資料取得，沒有寫死測試字眼。
-
-相同學生／課程／香港同日重複簽到會被拒絕，不再次扣堂或發通知（一般為 409；餘額不足亦可能先回覆 400）。簽到寫入失敗亦不發成功通知。學生未同意 WhatsApp 通知時跳過學生版本；沒有可用教練電話時跳過教練版本。顯示的堂數是學生帳戶總餘額，不是該課程餘額。現有 Face ID 接口仍屬模擬識別入口；這次接上通知不代表真實 Face ID 裝置已部署。職員手動扣堂不屬這兩款成功簽到通知。
-
-前面四款付款訊息與這兩款簽到訊息分開，合共 **6 款業務範本**，另保留原有預約確認。測試發送入口仍只限 masterzoe。
+The four approved payment wordings remain unchanged. Additional check-in mappings are disabled. Reusing the payment wording on check-in requires the user's choice because those bodies describe receipt/payment status rather than a check-in acknowledgement.
 
 
 ---

@@ -115,8 +115,8 @@ Repository maintenance: GitHub remotes use the burkaslarry-GitHub SSH alias,
 which selects this account's SSH key and connects over port 443.
 -->
 
-## [F003][S003] Check-in notifications / 簽到通知
+### [F003][S003] 簽到通知範本選擇（2026-10-13 更新）
 
-Successful check-in triggers student and course-coach Meta notifications through the production backend after attendance and the debit are committed. Fields include dynamic names/course, Hong Kong time and account balance after debit. Eight-digit database phones default to +852. Duplicate course/day check-ins do not resend; student opt-out and missing coach phones are respected.
+依使用者指定，沿用 `zomate_payment_pending`、`zomate_payment_installment`、`zomate_payment_full`、`zomate_payment_coach` 四款已批准原文；只注入動態資料，不更改固定字眼。額外 `zomate_checkin_student`／`zomate_checkin_coach` 已從正式 Render 映射移除，簽到暫不透過這兩款發送。簽到是否沿用付款四款，待使用者確認；確認前不得聲稱兩款額外簽到通知正在發送。香港電話預設 +852 的處理保留。原有預約確認是獨立既有功能。
 
-新增 `zomate_checkin_student`、`zomate_checkin_coach`；與付款四款分開，另保留預約確認。詳細條件見 [使用指南](docs/USER_GUIDE.zh-Hant.md#六通知與整合參考)。
+The four approved payment wordings remain unchanged. Additional check-in mappings are disabled. Reusing the payment wording on check-in requires the user's choice because those bodies describe receipt/payment status rather than a check-in acknowledgement.
