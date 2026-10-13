@@ -114,3 +114,9 @@ Manual project settings:
 Repository maintenance: GitHub remotes use the burkaslarry-GitHub SSH alias,
 which selects this account's SSH key and connects over port 443.
 -->
+
+## [F003][S003] Check-in notifications / 簽到通知
+
+Successful check-in triggers student and course-coach Meta notifications through the production backend after attendance and the debit are committed. Fields include dynamic names/course, Hong Kong time and account balance after debit. Eight-digit database phones default to +852. Duplicate course/day check-ins do not resend; student opt-out and missing coach phones are respected.
+
+新增 `zomate_checkin_student`、`zomate_checkin_coach`；與付款四款分開，另保留預約確認。詳細條件見 [使用指南](docs/USER_GUIDE.zh-Hant.md#六通知與整合參考)。
