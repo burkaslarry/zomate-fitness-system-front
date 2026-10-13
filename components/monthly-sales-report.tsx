@@ -568,7 +568,7 @@ function MonthlySalesReportImpl() {
               <input
                 ref={searchRef}
                 type="search"
-                className="w-full min-w-0 rounded-lg border border-ink/15 bg-canvas py-2 pr-3 pl-[2.25rem] text-sm text-ink shadow-sm ring-1 ring-ink/[0.04] placeholder:text-ink/45 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/35"
+                className="w-full min-w-0 rounded-lg border border-ink/15 bg-canvas py-2 pr-3 pl-[2.25rem] text-sm text-ink shadow-sm ring-1 ring-ink/[0.04] placeholder:text-ink/45 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary/35"
                 placeholder={
                   installmentEnrollmentOnlyActive ? "再配合搜尋：學員、課程、教練、分期⋯" : "搜尋學員、課程、教練⋯"
                 }

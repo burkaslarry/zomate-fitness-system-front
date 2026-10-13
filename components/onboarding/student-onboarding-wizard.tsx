@@ -75,7 +75,7 @@ const defaultParq: StudentRegistrationPayload["parq"] = {
  * Logic: Single token string to keep inputs visually consistent.
  */
 const fieldClass =
-  "w-full rounded-lg border border-ink/15 bg-canvas px-3 py-2 text-sm text-ink shadow-sm placeholder:text-ink/45 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40";
+  "w-full rounded-lg border border-ink/15 bg-canvas px-3 py-2 text-sm text-ink shadow-sm placeholder:text-ink/45 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary/40";
 
 /**
  * [F001][S001]
@@ -558,7 +558,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                     const digits = m?.[1] ?? "";
                     return (
                       <input
-                        className="min-w-0 flex-1 border-0 bg-transparent px-3 py-2 text-sm text-ink outline-none placeholder:text-ink/35"
+                        className="min-w-0 flex-1 border-0 bg-transparent px-3 py-2 text-sm text-ink outline-hidden placeholder:text-ink/35"
                         placeholder="12345678"
                         inputMode="numeric"
                         autoComplete="tel-national"
@@ -612,7 +612,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                     const digits = m?.[1] ?? "";
                     return (
                       <input
-                        className="min-w-0 flex-1 border-0 bg-transparent px-3 py-2 text-sm text-ink outline-none placeholder:text-ink/35"
+                        className="min-w-0 flex-1 border-0 bg-transparent px-3 py-2 text-sm text-ink outline-hidden placeholder:text-ink/35"
                         placeholder="87654321"
                         inputMode="numeric"
                         autoComplete="tel-national"

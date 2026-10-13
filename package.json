@@ -11,8 +11,8 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "verify": "npm run typecheck && npm run build",
-    "audit:fix": "npm audit fix || true",
-    "audit:gate": "npm run audit:fix && npm audit --audit-level=high",
+    "audit:fix": "npm audit fix",
+    "audit:gate": "npm run audit:fix && npm audit --audit-level=high && npm audit --omit=dev --audit-level=high",
     "predeploy": "npm run audit:gate && npm run build",
     "deploy:vercel": "npm run predeploy && vercel --prod",
     "simulate": "node simulationTest.js"
@@ -32,12 +32,12 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.54.2",
+    "@tailwindcss/postcss": "4.3.3",
     "@types/node": "22.14.1",
     "@types/react": "19.1.2",
     "@types/react-dom": "19.1.2",
-    "autoprefixer": "10.4.21",
     "postcss": "^8.5.10",
-    "tailwindcss": "3.4.17",
+    "tailwindcss": "4.3.3",
     "typescript": "5.8.3"
   },
   "overrides": {

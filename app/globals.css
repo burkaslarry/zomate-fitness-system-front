@@ -1,12 +1,30 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* [F006][S001] Tailwind 4 removes the vulnerable legacy glob/parser dependency chain. */
+@import "tailwindcss" source(none);
+@source "./";
+@source "../components";
+@source "../lib";
 
-:root {
+/* [F006][S001] Preserve existing small shadow/radius and focus-ring appearance. */
+@theme {
   --color-canvas: #fdfaf9;
   --color-surface: #f7f2f1;
   --color-primary: #e8a598;
   --color-ink: #2d2422;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --radius-sm: 0.125rem;
+  --blur-sm: 4px;
+  --default-ring-width: 3px;
+  --default-ring-color: var(--color-blue-500);
+}
+
+/* [F006][S001] Keep form defaults below utility classes, including checkbox width/height. */
+@layer base {
+*, ::before, ::after, ::backdrop, ::file-selector-button {
+  border-color: var(--color-gray-200, currentColor);
+}
+
+button:not(:disabled), [role="button"]:not(:disabled) {
+  cursor: pointer;
 }
 
 body {
@@ -16,7 +34,7 @@ body {
 input,
 textarea,
 select {
-  @apply w-full rounded-md border border-ink/15 bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink/45 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40;
+  @apply w-full rounded-md border border-ink/15 bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink/45 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary/40;
 }
 
 /** Default buttons: neutral surface + black label (not peach). */
@@ -25,8 +43,14 @@ button {
 }
 
 /** Peach primary actions — label always black #000000. */
-.btn-primary,
 form button[type="submit"] {
+  @apply border-ink/15 bg-primary/90 text-black hover:bg-primary;
+}
+}
+
+/* [F006][S001] Shared semantic classes remain available to product components. */
+@layer components {
+.btn-primary {
   @apply border-ink/15 bg-primary/90 text-black hover:bg-primary;
 }
 
@@ -36,6 +60,7 @@ form button[type="submit"] {
 
 .text-secondary-accessible {
   @apply text-ink/75;
+}
 }
 
 /** Peach backgrounds — force #000000 labels (contrast fix). */

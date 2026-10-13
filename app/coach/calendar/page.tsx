@@ -451,7 +451,7 @@ export default function CoachCalendarPage() {
               <label className="flex flex-wrap items-center gap-2 text-sm text-ink/80">
                 <span className="shrink-0">教練</span>
                 <select
-                  className="!w-auto min-w-[10rem] max-w-[min(100%,16rem)] rounded-lg border border-ink/15 bg-canvas px-2 py-1.5 text-sm text-ink shadow-sm outline-none focus:ring-2 focus:ring-primary/35 [&>option]:bg-surface [&>option]:text-ink"
+                  className="!w-auto min-w-[10rem] max-w-[min(100%,16rem)] rounded-lg border border-ink/15 bg-canvas px-2 py-1.5 text-sm text-ink shadow-sm outline-hidden focus:ring-2 focus:ring-primary/35 [&>option]:bg-surface [&>option]:text-ink"
                   value={coachId === "" ? "" : String(coachId)}
                   onChange={(ev) => setCoachId(ev.target.value ? Number(ev.target.value) : "")}
                 >
