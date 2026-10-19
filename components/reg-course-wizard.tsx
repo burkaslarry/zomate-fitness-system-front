@@ -414,7 +414,7 @@ export default function RegCourseWizard({
         whatsapp_reminder_opt_in: whatsappOptIn,
         payment_renewal_id: checkout.renewal_id,
         payment_total_amount: parseAmount(totalAmount),
-        payment_received: true
+        payment_received: false
       });
       const courseRes = (await (mode === "coach"
         ? api.coachRegisterCourse(coursePayload)
@@ -785,7 +785,7 @@ export default function RegCourseWizard({
               <dd>{purchaseSummary.coursePackageType}</dd>
             </div>
             <div className="flex justify-between gap-2">
-              <dt className="text-emerald-800/70">今次付款</dt>
+              <dt className="text-emerald-800/70">申報金額（待 Admin 確認）</dt>
               <dd>HKD {purchaseSummary.amountPaid}</dd>
             </div>
             <div className="flex justify-between gap-2">
