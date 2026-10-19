@@ -151,23 +151,12 @@ export default function AdminCourseSetPage() {
   async function markSegmentPaid(studentId: number, installmentNo: number) {
     if (successCourseId == null) return;
     try {
-      await api.markCourseInstallmentPaid(successCourseId, {
+      const confirmed = await api.markCourseInstallmentPaid(successCourseId, {
         student_id: studentId,
         installment_no: installmentNo
-      });
-      setSuccessEnrollments((prev) =>
-        prev.map((row) => {
-          if (row.student_id !== studentId || !row.installment_segments?.length) {
-            return row;
-          }
-          return {
-            ...row,
-            installment_segments: row.installment_segments.map((s) =>
-              s.installment_no === installmentNo ? { ...s, paid: true } : s
-            )
-          };
-        })
-      );
+      }) as { enrollments: CourseEnrollmentSummary[] };
+      // [F003][S002] Display the PIN issued by the server; never manufacture a local paid state.
+      setSuccessEnrollments(confirmed.enrollments);
     } catch (e) {
       alertApiError(e);
     }
@@ -658,12 +647,12 @@ export default function AdminCourseSetPage() {
                                       <span className="text-ink/70">
                                         第{s.installment_no}個分期：第{s.lesson_from}–{s.lesson_to} 堂 PIN：
                                       </span>{" "}
-                                      <span className="font-semibold">{s.pin}</span>
+                                      <span className="font-semibold">{s.pin || "待 Admin 確認付款後發出"}</span>
                                       {s.reminder_lesson ? (
                                         <span className="ml-1 text-sky-800">（第{s.reminder_lesson}堂 reminder）</span>
                                       ) : null}
                                       {unpaid ? (
-                                        <span className="ml-1 text-amber-900/90">（待付／未開通簽到）</span>
+                                        <span className="ml-1 text-amber-900/90">{s.installment_no === 1 ? "（首期可先上堂；付款待確認）" : "（待付／未開通簽到）"}</span>
                                       ) : (
                                         <span className="ml-1 text-emerald-800">（可簽到）</span>
                                       )}

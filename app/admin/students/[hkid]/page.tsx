@@ -145,9 +145,24 @@ export default function AdminStudentDetailPage() {
   const [receiptUploadPromptBusyId, setReceiptUploadPromptBusyId] = useState<string | null>(null);
   const [coaches, setCoaches] = useState<CoachDto[]>([]);
   const [transferBusy, setTransferBusy] = useState<number | null>(null);
+  const [paymentConfirmBusy, setPaymentConfirmBusy] = useState<string | null>(null);
   const [transferCoachPick, setTransferCoachPick] = useState<Record<number, number | "">>({});
   const isAdmin = getAuthSession()?.role === "ADMIN";
   const studentId = decodeURIComponent(params.hkid);
+
+  /** [F004][S002] Admin confirms actual payment; the server issues later PINs and notifies once. */
+  async function confirmCoursePayment(courseId: number, installmentNo: number) {
+    if (!data || !window.confirm(`已核對本課程第 ${installmentNo} 期付款？確認後會發出 WhatsApp 通知及相應 PIN。`)) return;
+    setPaymentConfirmBusy(`${courseId}:${installmentNo}`);
+    try {
+      await api.markCourseInstallmentPaid(courseId, { student_id: data.profile.id, installment_no: installmentNo });
+      reload();
+    } catch (error) {
+      alertApiError(error);
+    } finally {
+      setPaymentConfirmBusy(null);
+    }
+  }
 
   function openReceiptModal(ctx?: {
     installmentNo: number;
@@ -812,6 +827,17 @@ export default function AdminStudentDetailPage() {
                         <div className="mt-2 font-mono text-base font-semibold tracking-wide text-ink">
                           課堂 PIN：{p.checkin_pin}
                         </div>
+                        {/* [F003][S002] Persisted course confirmation remains accessible after closing checkout. */}
+                        <ul className="mt-2 space-y-2">
+                          {(p.installment_segments?.length ? p.installment_segments : [{ installment_no: 1, pin: p.checkin_pin, paid: false }]).map((segment) => (
+                            <li key={segment.installment_no} className="flex flex-wrap items-center gap-2 text-xs">
+                              <span>第 {segment.installment_no} 期 PIN：{segment.pin || "待確認付款後發出"} · {segment.paid ? "已確認付款" : segment.installment_no === 1 ? "付款待確認（首期可先上堂）" : "付款待確認"}</span>
+                              {isAdmin && !segment.paid ? <button type="button" disabled={paymentConfirmBusy !== null} onClick={() => void confirmCoursePayment(p.course_id, segment.installment_no)}>
+                                {paymentConfirmBusy === `${p.course_id}:${segment.installment_no}` ? "確認中…" : "Admin 確認付款"}
+                              </button> : null}
+                            </li>
+                          ))}
+                        </ul>
                         {isAdmin ? (
                           <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-ink/10 pt-3">
                             <label className="text-xs text-ink/55">

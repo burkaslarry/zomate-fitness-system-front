@@ -768,8 +768,8 @@ export default function RegCourseWizard({
                     第 {seg.installment_no} 期 · 第 {seg.lesson_from}–{seg.lesson_to} 堂
                     {seg.amount_hkd != null ? ` · HKD ${seg.amount_hkd.toLocaleString("en-HK")}` : ""}
                   </span>
-                  <span className="font-mono font-semibold text-ink">{seg.pin}</span>
-                  <span className="text-[10px]">{seg.paid ? "可簽到" : "待付款"}</span>
+                  <span className="font-mono font-semibold text-ink">{seg.pin || "待 Admin 確認付款後發出"}</span>
+                  <span className="text-[10px]">{seg.paid ? "已付／可簽到" : seg.installment_no === 1 ? "首期可先上堂；付款待確認" : "待付款"}</span>
                 </li>
               ))}
             </ul>

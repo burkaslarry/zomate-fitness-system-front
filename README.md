@@ -120,3 +120,10 @@ which selects this account's SSH key and connects over port 443.
 開課、教練排課、成功簽到及補分期／全額收據均沿用四款原文。`[F001][S001]` 新人／續會／報 Course 的 WhatsApp 同意未勾時不能提交；`[F002][S001] components/reg-course-wizard.tsx` 把續會付款與新課程／PIN 關聯，成功畫面使用後端批准原文；`[F004][S002] components/payment-records-table.tsx` 在 Admin 付款詳情直接預覽 JPG／PNG 收據，保留開啟／下載。手機及手動 WhatsApp 連結预設 +852。
 
 English: agreed template text stays fixed; course title, financial state and PIN are injected by the API. Typecheck and production build passed; receipt preview passed browser image-load verification with the user's sample. On 2026-10-13 the vulnerable Tailwind 3 dependency chain was removed by migrating to Tailwind/PostCSS 4.3.3. Both all-dependency and production audits report zero vulnerabilities, with no exception or scanner suppression. CSS source paths/theme now live in `app/globals.css`; focus outlines and the warm theme are preserved. Tailwind 4 supports Safari 16.4+, Chrome 111+, Firefox 128+. The user authorized deployment after the repair; verify hosting status against the commit rather than assuming a push is live.
+
+
+### [F003][S002] Latest SOP / 最新流程 - 2026-10-19
+
+首期未付款仍發五位 PIN，僅限首期堂數；第二／三期由 Admin 確認足額後發新 PIN，舊 PIN 不可跨期。學生／教練上傳收據不自行解鎖；Admin 確認會同步原有學生／教練通知，重複確認不換碼、不重發。學生詳情頁提供持續確認入口。
+
+English: first-term credit is distinct from paid status; later PIN issuance is gated by Admin confirmation and the current lesson tranche. Provider-stub regression tests cover these rules. No new live WhatsApp test is implied.
