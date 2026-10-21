@@ -3,7 +3,7 @@
 /**
  * [F003][S002]
  * Feature: Coach Dashboard
- * Step: Selected-day agenda — all sessions below calendar (Google Calendar day list)
+ * Step: Expandable selected-day agenda above the calendar
  */
 
 import { formatDateLabel } from "../lib/coach-schedule-dates";
@@ -29,8 +29,9 @@ export default function CoachScheduleDayAgenda({
   );
 
   return (
-    <section className="mt-4 border-t border-ink/10 pt-4">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+    <details open className="group mb-4 border-b border-ink/10 pb-4">
+      {/* [F003][S002] Native disclosure supports keyboard and touch without extra fetching. */}
+      <summary className="mb-3 flex cursor-pointer list-none flex-wrap items-baseline justify-between gap-2 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary [&::-webkit-details-marker]:hidden">
         <div>
           <h3 className="text-sm font-semibold text-ink">{formatDateLabel(selectedDay)}</h3>
           <p className="mt-0.5 text-xs text-ink/55">
@@ -41,16 +42,20 @@ export default function CoachScheduleDayAgenda({
                 : "此日暫無排程 — 按 + 新增上堂時間"}
           </p>
         </div>
-        {sorted.length > 0 ? (
-          <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-semibold text-black">
-            {sorted.length} 堂
-          </span>
-        ) : null}
-      </div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-primary group-open:hidden">展開 ▾</span>
+          <span className="hidden text-xs text-primary group-open:inline">收起 ▴</span>
+          {sorted.length > 0 ? (
+            <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-xs font-semibold text-black">
+              {sorted.length} 堂
+            </span>
+          ) : null}
+        </div>
+      </summary>
 
       {sorted.length === 0 ? (
         <p className="rounded-xl border border-dashed border-ink/15 bg-canvas/50 px-4 py-6 text-center text-sm text-ink/45">
-          {isPastDay ? "可於上方日曆查閱其他日期。" : "揀學員後按右下角 + 排程。"}
+          {isPastDay ? "可於下方日曆查閱其他日期。" : "揀學員後按右下角 + 排程。"}
         </p>
       ) : (
         <ul className="space-y-2">
@@ -106,6 +111,6 @@ export default function CoachScheduleDayAgenda({
           ))}
         </ul>
       )}
-    </section>
+    </details>
   );
 }

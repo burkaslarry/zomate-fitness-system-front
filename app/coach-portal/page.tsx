@@ -656,17 +656,9 @@ export default function CoachDashboardPage() {
       ) : null}
 
       <section className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
-        <h2 className="text-sm font-semibold text-ink">日曆 · 學員上堂</h2>
-        <p className="mt-1 text-xs text-ink/55">Google Calendar 模式：月／週檢視 · 點日期 · 下方列出當日全部課堂</p>
-        <CoachScheduleCalendarNav
-          selectedDay={selectedDay}
-          mode={calendarMode}
-          rangeSessions={rangeSessions}
-          onSelectDay={handleCalendarDaySelect}
-          onModeChange={setCalendarMode}
-          onNavigate={handleCalendarDaySelect}
-        />
+        {/* [F008][S005] Selected-day sessions precede the calendar; changing day expands its agenda. */}
         <CoachScheduleDayAgenda
+          key={selectedDay}
           selectedDay={selectedDay}
           sessions={confirmedDaySessions}
           isPastDay={isPastDay(selectedDay)}
@@ -683,6 +675,17 @@ export default function CoachDashboardPage() {
             })
           }
         />
+        <h2 className="text-sm font-semibold text-ink">日曆 · 學員上堂</h2>
+        <p className="mt-1 text-xs text-ink/55">月／週檢視 · 點日期後，上方顯示當日全部課堂，可展開或收起</p>
+        <CoachScheduleCalendarNav
+          selectedDay={selectedDay}
+          mode={calendarMode}
+          rangeSessions={rangeSessions}
+          onSelectDay={handleCalendarDaySelect}
+          onModeChange={setCalendarMode}
+          onNavigate={handleCalendarDaySelect}
+        />
+
       </section>
 
       {selectedPending ? (

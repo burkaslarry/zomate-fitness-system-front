@@ -7,10 +7,11 @@
  * Logic: Tabs without legacy 帳戶 PIN; receipt upload modal + post-upload success WhatsApp popup.
  */
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import BackendShell from "../../../../components/backend-shell";
+import { SignaturePad, type SignaturePadHandle } from "../../../../components/onboarding/signature-pad";
 import PaymentRecordsTable from "../../../../components/payment-records-table";
 import WhatsAppButton from "../../../../components/whatsapp-button";
 import { alertApiError, api, apiAssetUrl } from "../../../../lib/api";
@@ -44,6 +45,7 @@ function activityTypeLabel(type: string): string {
     member_create: "新會員登記",
     member_profile_update: "更新學生資料",
     member_photo_upload: "上傳學生相片",
+    coach_signature_update: "更新學生簽名",
     medical_clearance_upload: "上傳 PAR-Q 醫生證明",
     receipt_upload: "上傳收據／付款憑證",
     renewal_create: "報 Course／續會收費",
@@ -127,6 +129,12 @@ export default function AdminStudentDetailPage() {
   const [medicalUploading, setMedicalUploading] = useState(false);
   const [photoFailed, setPhotoFailed] = useState(false);
   const [signatureFailed, setSignatureFailed] = useState(false);
+  /** [F001][S004] Keep unsigned canvas changes local until the student submits. */
+  const signaturePadRef = useRef<SignaturePadHandle>(null);
+  const [signatureDraft, setSignatureDraft] = useState("");
+  const [signatureSaving, setSignatureSaving] = useState(false);
+  const [signatureError, setSignatureError] = useState("");
+  const [signatureRevision, setSignatureRevision] = useState(0);
   /** When staff picks an unpaid installment, pre-fill receipt modal (分期第 N 期). */
   const [receiptInstallmentCtx, setReceiptInstallmentCtx] = useState<{
     installmentNo: number;
@@ -149,6 +157,39 @@ export default function AdminStudentDetailPage() {
   const [transferCoachPick, setTransferCoachPick] = useState<Record<number, number | "">>({});
   const isAdmin = getAuthSession()?.role === "ADMIN";
   const studentId = decodeURIComponent(params.hkid);
+
+  /**
+   * [F001][S004]
+   * Feature: Student signature
+   * Step: Submit a missing or unavailable PNG signature
+   * Logic: Reuse the authorized staff endpoint; display the saved image only after persistence succeeds.
+   */
+  async function submitSignature() {
+    if (!data || signatureSaving || signaturePadRef.current?.isEmpty()) return;
+    const png = signaturePadRef.current?.getDataUrl();
+    if (!png) return;
+    setSignatureSaving(true);
+    setSignatureError("");
+    try {
+      const result = (await api.coachUpdateSignature(data.profile.id, png)) as {
+        signature_image_url: string;
+      };
+      setData((current) => current ? {
+        ...current,
+        profile: { ...current.profile, signature_image_url: result.signature_image_url }
+      } : current);
+      setSignatureRevision(Date.now());
+      setSignatureFailed(false);
+      setSignatureDraft("");
+      setToast("簽名已更新");
+    } catch (error) {
+      console.error("[F001][S004] Error: Signature update failed");
+      setSignatureError("簽名未能儲存，請重試。你嘅筆跡仍然保留。");
+      alertApiError(error);
+    } finally {
+      setSignatureSaving(false);
+    }
+  }
 
   /** [F004][S002] Admin confirms actual payment; the server issues later PINs and notifies once. */
   async function confirmCoursePayment(courseId: number, installmentNo: number) {
@@ -455,7 +496,11 @@ export default function AdminStudentDetailPage() {
   const ledgerMismatch =
     packageLessons > 0 && categoryLessons === 0 && ledgerBalance !== packageLessons;
   const photoSrc = apiAssetUrl(data?.profile.photo_url ?? undefined);
-  const signatureSrc = apiAssetUrl(data?.profile.signature_image_url ?? undefined);
+  /** [F001][S004] Refresh a repaired image even when its persisted URL is unchanged. */
+  const signatureAsset = apiAssetUrl(data?.profile.signature_image_url ?? undefined);
+  const signatureSrc = signatureAsset && signatureRevision
+    ? `${signatureAsset}${signatureAsset.includes("?") ? "&" : "?"}signature_updated=${signatureRevision}`
+    : signatureAsset;
   const hasPhoto = Boolean(photoSrc && !photoFailed);
   const receiptContexts = [
     ...pins.map((p) => `Course：${p.course_title}`),
@@ -649,13 +694,43 @@ export default function AdminStudentDetailPage() {
                       }}
                     />
                   ) : (
-                    <div className="flex min-h-[8rem] items-center justify-center px-4 py-8 text-center text-sm text-ink/45">
-                      {signatureFailed
-                        ? "簽名圖載入失敗（可能 Render 重啟後檔案遺失；可請學員重新簽名）"
-                        : "尚未上傳簽名"}
+                    <div className={signatureSaving ? "pointer-events-none opacity-60" : ""}>
+                      {/* [F001][S004] An absent or broken image opens a blank signing surface. */}
+                      <SignaturePad ref={signaturePadRef} onChange={setSignatureDraft} height={192} />
                     </div>
                   )}
                 </div>
+                {!signatureSrc || signatureFailed ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-ink/60">
+                      {signatureFailed ? "原簽名圖片未能載入。" : "尚未上傳簽名。"}
+                      請學員本人用手指或滑鼠喺上方空白位置簽名，再按「提交」儲存。
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        disabled={!signatureDraft || signatureSaving}
+                        onClick={() => {
+                          // [F001][S004] Clear only the local draft, never delete a saved signature.
+                          signaturePadRef.current?.clear();
+                          setSignatureError("");
+                        }}
+                        className="rounded-lg border border-ink/20 px-4 py-2 text-sm disabled:opacity-50"
+                      >
+                        清除
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!signatureDraft || signatureSaving}
+                        onClick={() => void submitSignature()}
+                        className="rounded-lg bg-primary px-4 py-2 text-sm text-white disabled:opacity-50"
+                      >
+                        {signatureSaving ? "提交中…" : "提交"}
+                      </button>
+                    </div>
+                    {signatureError ? <p role="alert" className="text-sm text-red-600">{signatureError}</p> : null}
+                  </div>
+                ) : null}
                 {signatureSrc && !signatureFailed ? (
                   <a
                     href={signatureSrc}

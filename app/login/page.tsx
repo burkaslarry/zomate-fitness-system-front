@@ -142,6 +142,10 @@ export default function LoginPage() {
               <li>
                 <strong>worker</strong> / 12347890（CLERK · 櫃台）
               </li>
+              {/* [F006][S002] User-requested Fung coach demo login help. */}
+              <li>
+                <strong>funglo</strong> / 60552936（COACH · Fung 教練）
+              </li>
               <li>
                 <strong>coachdemo</strong> / 12347890（COACH · 教練日程）
               </li>

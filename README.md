@@ -127,3 +127,16 @@ English: agreed template text stays fixed; course title, financial state and PIN
 首期未付款仍發五位 PIN，僅限首期堂數；第二／三期由 Admin 確認足額後發新 PIN，舊 PIN 不可跨期。學生／教練上傳收據不自行解鎖；Admin 確認會同步原有學生／教練通知，重複確認不換碼、不重發。學生詳情頁提供持續確認入口。
 
 English: first-term credit is distinct from paid status; later PIN issuance is gated by Admin confirmation and the current lesson tranche. Provider-stub regression tests cover these rules. No new live WhatsApp test is implied.
+
+
+### [F001][S004] Missing student signatures
+
+學生資料頁：未有簽名或原圖載入失敗時，顯示空白手寫 canvas。「清除」只清除未提交筆跡；「提交」經現有授權 API 儲存 PNG，再顯示簽名原圖。空白時不可提交，失敗會保留筆跡。請由學員本人簽署。
+
+Student details show a blank signature canvas when the PNG is missing or unavailable. Clear resets the local draft; Submit persists the student’s own handwriting through the existing staff-authorized endpoint. Blank submissions are disabled; failed saves preserve the draft.
+
+### [F008][S005] Coach agenda first / 教練課堂清單置頂
+
+The coach portal shows an expanded, keyboard-accessible selected-day agenda before the month/week calendar. Selecting another day expands its matching sessions.
+
+教練首頁先顯示可展開／收起的當日課堂，再顯示月／週日曆；換日期後清單更新並展開。登入頁「如何登入？」亦已加入用戶指定的 Fung DEMO 帳戶提示。
