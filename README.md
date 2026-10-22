@@ -140,3 +140,9 @@ Student details show a blank signature canvas when the PNG is missing or unavail
 The coach portal shows an expanded, keyboard-accessible selected-day agenda before the month/week calendar. Selecting another day expands its matching sessions.
 
 教練首頁先顯示可展開／收起的當日課堂，再顯示月／週日曆；換日期後清單更新並展開。登入頁「如何登入？」亦已加入用戶指定的 Fung DEMO 帳戶提示。
+
+### [F006][S002] Alice coach login help / Alice 教練登入提示
+
+Owner-requested demo login help includes the Alice coach account. Account provisioning is a separate authenticated admin action; a visible help entry does not prove the account exists.
+
+「如何登入？」按用戶要求加入 Alice 教練帳戶提示。教練帳戶是否已建立，須獨立核對管理頁；登入提示本身不會建立帳戶。

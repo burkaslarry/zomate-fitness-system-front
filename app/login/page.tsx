@@ -146,6 +146,10 @@ export default function LoginPage() {
               <li>
                 <strong>funglo</strong> / 60552936（COACH · Fung 教練）
               </li>
+              {/* [F006][S002] Alice coach demo credentials supplied explicitly by the owner. */}
+              <li>
+                <strong>alice001</strong> / alice001（COACH · Alice 教練）
+              </li>
               <li>
                 <strong>coachdemo</strong> / 12347890（COACH · 教練日程）
               </li>

@@ -164,3 +164,7 @@ The four approved payment wordings remain unchanged. Additional check-in mapping
 ### [F008][S005] 教練首頁課堂清單
 
 當日課堂清單位於月／週日曆上方，預設展開。按日期標題可收起／展開；揀另一日期後更新並展開清單。「改期」及「取消今堂」維持原有流程。
+
+### [F006][S002] Alice 教練帳戶
+
+Alice 使用帳號 `alice001`，聯絡電話 `98124321`。「如何登入？」提供用戶指定嘅 DEMO 提示。管理員須先喺教練管理完成帳戶建立，再驗證 COACH 登入。
