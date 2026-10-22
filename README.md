@@ -146,3 +146,8 @@ The coach portal shows an expanded, keyboard-accessible selected-day agenda befo
 Owner-requested demo login help includes the Alice coach account. Account provisioning is a separate authenticated admin action; a visible help entry does not prove the account exists.
 
 「如何登入？」按用戶要求加入 Alice 教練帳戶提示。教練帳戶是否已建立，須獨立核對管理頁；登入提示本身不會建立帳戶。
+
+### [F003][S004] Same-day staff booking / 職員即日排堂 (2026-10-23)
+Assigned coaches and authorized staff can make a first booking for today, including a slot already in progress but not ended (Hong Kong time). Open the coach portal, select today and an unexpired slot, then use the student's current PIN for same-day check-in. Past/ended slots, conflicting bookings and edits through first-confirmation are rejected. The 72-hour replacement-slot and 24-hour cancellation/change rules, Today-only PIN, installment payment gates and duplicate attendance protection remain enforced.
+
+獲授權教練／職員首次排堂可選今日，包括已開始但未完結時段（香港時間）。教練首頁選今日、未完堂時段並確認，學生可用當期 PIN 即日簽到。已完堂、撞堂及重複確認整個課程會被拒絕；改期新時段仍須提前 72 小時，改期／取消仍須提前 24 小時。Today-only、後續分期付款及防重複扣堂規則繼續生效。

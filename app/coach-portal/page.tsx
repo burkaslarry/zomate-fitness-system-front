@@ -76,10 +76,9 @@ function todayKey(): string {
   return todayDateKey();
 }
 
-/** [F003][S004] Earliest calendar date allowed by the 72-hour booking policy. */
+/** [F003][S004] Authorized first bookings may start today; the API rejects ended slots. */
 function bookingMinDateKey(): string {
-  const d = new Date(Date.now() + 72 * 60 * 60 * 1000);
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  return todayDateKey();
 }
 
 /** [F003][S009] Build a local wall-clock datetime accepted by the booking API. */
@@ -408,7 +407,7 @@ export default function CoachDashboardPage() {
       return;
     }
     if (selectedDay < bookingMinDateKey()) {
-      setStatus("新預約須最少提前 72 小時，請選較後日期。");
+      setStatus("首次排堂可選今日或未來日期。");
       return;
     }
     if (

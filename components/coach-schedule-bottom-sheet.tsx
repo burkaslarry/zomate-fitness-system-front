@@ -103,7 +103,7 @@ export default function CoachScheduleBottomSheet({
               onChange={onDayChange}
               minDate={minDate}
             />
-            <p className="mt-1.5 text-[11px] text-ink/55">新預約須最少提前 72 小時。</p>
+            <p className="mt-1.5 text-[11px] text-ink/55">教練首次排堂可選今日未完結時段，排堂後可於當日簽到。</p>
           </div>
 
           <CoachStartTimeSelect
