@@ -570,7 +570,20 @@ export const api = {
     request("/api/expenses", { method: "POST", body: JSON.stringify(payload) }),
   renewal: (payload: Record<string, unknown>) =>
     request("/api/renewal", { method: "POST", body: JSON.stringify(payload) }),
-  listStudents: () => request("/api/students"),
+  /** [F001][S003] Paginated admin roster; default first 100. */
+  listStudents: (query?: {
+    limit?: number;
+    offset?: number;
+    q?: string;
+    medical_pending?: boolean;
+  }) => {
+    const sp = new URLSearchParams();
+    sp.set("limit", String(query?.limit ?? 100));
+    sp.set("offset", String(query?.offset ?? 0));
+    if (query?.q?.trim()) sp.set("q", query.q.trim());
+    if (query?.medical_pending) sp.set("medical_pending", "true");
+    return request(`/api/students?${sp.toString()}`);
+  },
   trialPurchase: (payload: unknown) =>
     request("/api/trial-purchase", { method: "POST", body: JSON.stringify(payload) }),
   /** Redeem lesson: exactly one of `phone` or `student_id` plus `pin_code`. */

@@ -13,8 +13,11 @@
 import { NextResponse } from "next/server";
 import { mockApiStore } from "../../../lib/mock-api-store";
 
-export async function GET() {
-  const rows = mockApiStore.students.map((s) => ({
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit") ?? 100) || 100));
+  const offset = Math.max(0, Number(url.searchParams.get("offset") ?? 0) || 0);
+  const all = mockApiStore.students.map((s) => ({
     id: s.id,
     full_name: s.full_name,
     phone: s.phone,
@@ -28,6 +31,14 @@ export async function GET() {
     current_course_package_status: s.lesson_balance > 0 ? "Active package" : "No active package",
     last_checkin_at: null
   }));
-
-  return NextResponse.json(rows);
+  const items = all.slice(offset, offset + limit);
+  return NextResponse.json({
+    items,
+    total: all.length,
+    limit,
+    offset,
+    total_all: all.length,
+    active_count: all.filter((s) => s.lesson_balance > 0).length,
+    medical_pending_count: 0
+  });
 }

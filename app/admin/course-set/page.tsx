@@ -111,7 +111,7 @@ export default function AdminCourseSetPage() {
           api.publicCourseCategories(),
           api.publicBranches(),
           api.publicCoaches(),
-          api.listStudents()
+          api.listStudents({ limit: 200, offset: 0 })
         ]);
         if (cancelled) return;
         setKinds(Array.isArray(k) ? (k as CourseCategoryDto[]) : []);
@@ -120,7 +120,13 @@ export default function AdminCourseSetPage() {
         /** [F007][S002] Default student course branch → 尖沙咀分店 (TST). */
         setBranchId((prev) => (prev !== "" ? prev : preferDefaultBranchId(branchList)));
         setCoaches(Array.isArray(c) ? (c as CoachDto[]) : []);
-        setStudents(Array.isArray(s) ? (s as MemberProfile[]) : []);
+        const studentPayload = s as { items?: MemberProfile[] } | MemberProfile[];
+        const studentRows = Array.isArray(studentPayload)
+          ? studentPayload
+          : Array.isArray(studentPayload?.items)
+            ? studentPayload.items
+            : [];
+        setStudents(studentRows);
       } catch (e) {
         if (!cancelled) alertApiError(e);
       } finally {
