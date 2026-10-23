@@ -128,8 +128,6 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   const [coaches, setCoaches] = useState<CoachOption[]>([]);
   const [coachCategories, setCoachCategories] = useState<{ id: number; name: string }[]>([]);
   const [coachCategoriesLoading, setCoachCategoriesLoading] = useState(false);
-  const [showSignatureErrorModal, setShowSignatureErrorModal] = useState(false);
-  const [signatureHintError, setSignatureHintError] = useState(false);
   /** True when member was created without signature (staff 候補 later). */
   const [signatureDeferred, setSignatureDeferred] = useState(false);
 
@@ -152,7 +150,6 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   const disclaimerWatch = form.watch("disclaimer_accepted");
   // [F001][S001] Explicit consent gates submission, rather than relying only on schema errors.
   const whatsappOptInWatch = form.watch("whatsapp_reminder_opt_in");
-  const digitalSignatureWatch = form.watch("digital_signature");
   const courseCategoryWatch = form.watch("course_category_id");
   const step1Watch = form.watch([
     "chinese_name",
@@ -411,19 +408,14 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   /**
    * [F001][S004]
    * Feature: Student Onboarding
-   * Step: Final submit — `POST /api/members`; on signature Load failed, retry without signature (職員候補).
+   * Step: Final submit — signature optional; on formatApiError/Load failed, bypass signature (職員候補).
    */
   async function onFinalSubmit(values: StudentRegistrationPayload) {
-    const signatureData =
+    const signatureData = (
       signatureRef.current?.isEmpty() === false
         ? signatureRef.current?.getDataUrl() ?? values.digital_signature
-        : values.digital_signature;
-    if (!signatureData?.trim()) {
-      setShowSignatureErrorModal(true);
-      setSignatureHintError(true);
-      form.setError("digital_signature", { message: "請在簽名框手寫簽署" });
-      return;
-    }
+        : values.digital_signature
+    )?.trim() ?? "";
     if (!values.coach_username?.trim() || !values.coach_id || values.coach_id < 1) {
       form.setError("coach_username", { message: "請先選擇教練" });
       return;
@@ -435,6 +427,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     setStatus("提交中…");
     setShowSuccessDialog(false);
     setSignatureDeferred(false);
+    form.clearErrors("digital_signature");
 
     const basePayload = {
       chinese_name: values.chinese_name,
@@ -479,10 +472,10 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         ...basePayload,
         digital_signature: signatureData
       })) as { member?: { hkid?: string; full_name?: string } };
-      finishSuccess(res, false);
+      finishSuccess(res, !signatureData);
     } catch (err) {
-      // Signature payload often triggers Safari "Load failed" — save member without signature for 候補.
-      if (isNetworkFetchError(err)) {
+      // formatApiError / Safari "Load failed" — still create member without signature.
+      if (signatureData && isNetworkFetchError(err)) {
         try {
           setStatus("簽名上載失敗，改以無簽名提交（職員可候補）…");
           const res = (await api.createMember({
@@ -911,14 +904,13 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
             )}
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-ink">電子簽署 Signature *</p>
+                <p className="text-sm font-medium text-ink">電子簽署 Signature（可選）</p>
                 <button
                   type="button"
                   className="rounded-md border border-ink/15 bg-surface px-3 py-1.5 text-xs font-medium text-ink hover:bg-canvas"
                   onClick={() => {
                     signatureRef.current?.clear();
                     form.setValue("digital_signature", "");
-                    setSignatureHintError(false);
                   }}
                 >
                   清除
@@ -929,23 +921,13 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                   ref={signatureRef}
                   onChange={(data) => {
                     form.setValue("digital_signature", data, { shouldDirty: true, shouldValidate: true });
-                    if (data) setSignatureHintError(false);
                   }}
                 />
               </div>
-              <p
-                className={
-                  signatureHintError
-                    ? "text-xs font-medium text-red-500"
-                    : "text-xs text-ink/55"
-                }
-              >
-                請用手指或滑鼠簽署；系統只儲存簽名圖片 URL。
+              <p className="text-xs text-ink/55">
+                可先不簽；提交後職員可於學員檔案候補簽署。若簽名上載失敗，系統亦會照常新增會員。
               </p>
             </div>
-            {form.formState.errors.digital_signature && (
-              <p className="text-xs text-rose-400">{form.formState.errors.digital_signature.message}</p>
-            )}
             <textarea
               className={`${fieldClass} min-h-[4rem] resize-y`}
               placeholder="備註（可選）"
@@ -980,46 +962,12 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
               type="submit"
               disabled={!step3SubmitEnabled}
               className={step3SubmitEnabled ? btnPrimaryEnabled : btnPrimaryDisabled}
-              onClick={(e) => {
-                const sig = form.getValues("digital_signature");
-                if (!sig?.trim() || signatureRef.current?.isEmpty()) {
-                  e.preventDefault();
-                  setShowSignatureErrorModal(true);
-                  setSignatureHintError(true);
-                  form.setError("digital_signature", { message: "請在簽名框手寫簽署" });
-                }
-              }}
             >
               提交登記
             </button>
           )}
         </div>
       </form>
-
-      {showSignatureErrorModal ? (
-        <div
-          className="fixed inset-0 z-[160] flex items-center justify-center bg-black/40 px-4"
-          role="alertdialog"
-          aria-modal="true"
-          aria-labelledby="signature-error-title"
-        >
-          <div className="w-full max-w-sm space-y-4 rounded-xl border border-rose-200 bg-surface p-5 text-ink shadow-xl ring-1 ring-rose-500/20">
-            <h2 id="signature-error-title" className="text-lg font-semibold text-rose-700">
-              缺少電子簽署
-            </h2>
-            <p className="text-sm text-ink/80">
-              請在「電子簽署 Signature」框內手寫簽署後，再按「提交登記」。
-            </p>
-            <button
-              type="button"
-              className={btnPrimaryEnabled + " w-full"}
-              onClick={() => setShowSignatureErrorModal(false)}
-            >
-              確定
-            </button>
-          </div>
-        </div>
-      ) : null}
 
       {/* [F001][S004] Post-submit success — optional redirect to photo flow via session context */}
       {showSuccessDialog && (
@@ -1028,7 +976,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
             <h2 className="text-lg font-semibold">申請成功</h2>
             <p className="text-sm text-ink/80">
               {signatureDeferred
-                ? "電子簽名未能一併上載。請通知職員於學員檔案頁候補簽署。"
+                ? "會員已新增。電子簽署可稍後由職員於學員檔案頁候補。"
                 : "資料已提交，可繼續後續流程。"}
             </p>
             <button

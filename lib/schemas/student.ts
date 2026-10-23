@@ -70,7 +70,7 @@ export const onboardingStep3Schema = z.object({
   whatsapp_reminder_opt_in: z
     .boolean()
     .refine((v) => v === true, { message: "請同意接收 WhatsApp 預約確認及上課提醒" }),
-  digital_signature: z.string()
+  digital_signature: z.string().optional().default("")
 });
 
 /** Full POST body after wizard steps — medical clearance filename is optional (候補). */
@@ -93,7 +93,8 @@ export const studentRegistrationPayloadSchema = z
     cooling_off_acknowledged: z.boolean(),
     disclaimer_accepted: z.boolean(),
     whatsapp_reminder_opt_in: z.boolean(),
-    digital_signature: z.string().min(1, "請在簽名框手寫簽署"),
+    // Optional — staff can 候補簽署 later from admin student detail.
+    digital_signature: z.string().optional().default(""),
     coach_username: z.string().min(1, "請先選擇教練"),
     coach_id: z.number().int().min(0),
     course_category_id: z.number().int().min(0),
