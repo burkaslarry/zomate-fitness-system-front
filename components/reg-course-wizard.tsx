@@ -464,6 +464,8 @@ export default function RegCourseWizard({
       };
       const enr = courseRes.enrollments?.[0];
       const balanceRes = (await api.memberLookupByPhone(member.phone)) as MemberProfile;
+      // [F002][S003] Coach must not see student check-in PIN — only staff / student surfaces show it.
+      const hidePin = mode === "coach";
       setPurchaseSummary({
         studentId: member.id,
         studentName: member.full_name,
@@ -472,14 +474,16 @@ export default function RegCourseWizard({
         coursePackageType: selectedKind.name,
         amountPaid: firstInstallmentAmount,
         totalAmount,
-        approvedMessage: courseRes.payment_whatsapp?.student?.message ?? "",
+        approvedMessage: hidePin ? "" : (courseRes.payment_whatsapp?.student?.message ?? ""),
         remainingBalance: balanceRes.lesson_balance,
         paymentMethod: method,
         coachName: selectedCoach?.full_name ?? "—",
         branchName: selectedBranch?.name ?? "—",
         totalInstallments,
-        checkinPin: enr?.checkin_pin ?? "—",
-        installmentSegments: enr?.installment_segments ?? [],
+        checkinPin: hidePin ? "" : (enr?.checkin_pin ?? "—"),
+        installmentSegments: hidePin
+          ? []
+          : (enr?.installment_segments ?? []),
         enrollmentId: courseRes.id ?? null
       });
     } catch (err) {
@@ -500,7 +504,7 @@ export default function RegCourseWizard({
     <div className="mx-auto w-full max-w-2xl space-y-4 sm:space-y-5">
       <p className="text-sm text-ink/65">
         {mode === "coach"
-          ? "記錄付款並產生簽到 PIN（頁內顯示，唔彈窗）。分期：第 2／3 期未付時簽到頁會提示。"
+          ? "記錄付款並替學員開課。課堂 PIN 只顯示俾學生；教練完成後可返學員頁跟進排程。"
           : "確認付款後即時開課並顯示 PIN；學生詳情「已開課程」亦會見到。分期第 2／3 期須收款後才可簽到。"}
       </p>
 
@@ -775,23 +779,34 @@ export default function RegCourseWizard({
 
       {purchaseSummary ? (
         <section className="space-y-4 rounded-xl border border-emerald-300 bg-emerald-50 p-4 shadow-sm sm:p-5">
-          <h2 className="text-lg font-semibold text-emerald-900">已記錄付款 · 簽到 PIN</h2>
+          <h2 className="text-lg font-semibold text-emerald-900">
+            {mode === "coach" ? "已替學員報 Course" : "已記錄付款 · 簽到 PIN"}
+          </h2>
 
-          <div className="rounded-xl border-2 border-emerald-700/30 bg-white px-4 py-5 text-center shadow-sm">
-            <p className="text-xs font-medium uppercase tracking-wide text-ink/55">課堂 PIN</p>
-            <p className="mt-1 font-mono text-3xl font-bold tracking-[0.2em] text-ink sm:text-4xl">
-              {purchaseSummary.checkinPin}
-            </p>
-            {purchaseSummary.totalInstallments > 1 ? (
-              <p className="mt-2 text-xs text-amber-900">
-                分期 {purchaseSummary.totalInstallments} 期 — 第 1 期 PIN 可簽到；第 2／3 期須收款後由櫃台標記已付。
+          {mode === "staff" ? (
+            <div className="rounded-xl border-2 border-emerald-700/30 bg-white px-4 py-5 text-center shadow-sm">
+              <p className="text-xs font-medium uppercase tracking-wide text-ink/55">課堂 PIN</p>
+              <p className="mt-1 font-mono text-3xl font-bold tracking-[0.2em] text-ink sm:text-4xl">
+                {purchaseSummary.checkinPin}
               </p>
-            ) : (
-              <p className="mt-2 text-xs text-emerald-800">一次付清 — 此 PIN 可立即用於簽到。</p>
-            )}
-          </div>
+              {purchaseSummary.totalInstallments > 1 ? (
+                <p className="mt-2 text-xs text-amber-900">
+                  分期 {purchaseSummary.totalInstallments} 期 — 第 1 期 PIN 可簽到；第 2／3 期須收款後由櫃台標記已付。
+                </p>
+              ) : (
+                <p className="mt-2 text-xs text-emerald-800">一次付清 — 此 PIN 可立即用於簽到。</p>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-emerald-700/20 bg-white px-4 py-4 text-sm text-emerald-950">
+              <p className="font-medium text-emerald-900">課堂 PIN 只顯示俾學生</p>
+              <p className="mt-1 text-xs text-ink/65">
+                學員可於學生端／WhatsApp 查看簽到 PIN；教練端唔顯示 PIN，請用學員頁跟進排程。
+              </p>
+            </div>
+          )}
 
-          {purchaseSummary.installmentSegments.length > 1 ? (
+          {mode === "staff" && purchaseSummary.installmentSegments.length > 1 ? (
             <ul className="space-y-1.5 text-xs">
               {purchaseSummary.installmentSegments.map((seg) => (
                 <li
@@ -834,7 +849,7 @@ export default function RegCourseWizard({
             </div>
           </dl>
 
-          {purchaseSummary.studentPhone && purchaseSummary.approvedMessage ? (
+          {mode === "staff" && purchaseSummary.studentPhone && purchaseSummary.approvedMessage ? (
             <WhatsAppButton
               href={waMeLink(
                 purchaseSummary.studentPhone,
@@ -852,7 +867,14 @@ export default function RegCourseWizard({
             >
               查看學生詳情（已開課程 · PIN）
             </Link>
-          ) : null}
+          ) : (
+            <Link
+              href="/coach-portal?tab=students"
+              className="block w-full rounded-md bg-ink px-4 py-3 text-center text-sm font-semibold text-white"
+            >
+              返回學員（排程／跟進）
+            </Link>
+          )}
           {mode === "staff" ? (
             <Link
               href="/admin/course-set"

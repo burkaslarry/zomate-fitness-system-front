@@ -3,10 +3,10 @@
 /**
  * [F008][S005]
  * Feature: Coach Session Management
- * Step: Coach portal — 5 bottom tabs with icons
+ * Step: Coach portal — bottom tabs (報 Course via 學員 detail, not a tab)
  */
 
-import { CalendarDays, ClipboardList, CreditCard, UserRound, UserPlus } from "lucide-react";
+import { CalendarDays, ClipboardList, CreditCard, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
@@ -40,13 +40,6 @@ const TABS: {
     match: (path, tab) => path === "/coach-portal" && tab === "payments"
   },
   {
-    id: "reg-course",
-    label: "報Course",
-    href: "/coach-portal/reg-course",
-    icon: UserPlus,
-    match: (path) => path.startsWith("/coach-portal/reg-course")
-  },
-  {
     id: "report",
     label: "出勤",
     href: "/coach-portal/report",
@@ -65,7 +58,7 @@ export default function CoachPortalBottomNav() {
       data-coach-portal-tabs
       className="fixed bottom-0 left-0 right-0 z-40 border-t border-ink/10 bg-surface/95 backdrop-blur-md"
     >
-      <div className="mx-auto flex max-w-lg">
+      <div className="mx-auto flex max-w-lg justify-around">
         {TABS.map((item) => {
           const active = item.match(pathname, tab);
           const Icon = item.icon;
