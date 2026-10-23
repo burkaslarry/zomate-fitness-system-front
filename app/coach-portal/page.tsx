@@ -292,7 +292,7 @@ export default function CoachDashboardPage() {
 
   useEffect(() => {
     if (!coach) return;
-    const range = calendarMode === "week" ? weekRange(selectedDay) : monthRange(selectedDay);
+    const range = calendarMode === "day" ? { from: selectedDay, to: selectedDay } : calendarMode === "week" ? weekRange(selectedDay) : monthRange(selectedDay);
     void api
       .coachSessions(coach.id, { fromDate: range.from, toDate: range.to })
       .then((rows) => setRangeSessions((rows ?? []) as CoachSessionRow[]))
@@ -321,17 +321,11 @@ export default function CoachDashboardPage() {
             total_lessons: target.total_lessons
           })
         );
-        if (target.coach_time_confirmed) {
-          const d = new Date(target.scheduled_start);
-          setSelectedDay(localDateKey(target.scheduled_start));
-          setStartHour(d.getHours());
-          setStartMinute((Math.round(d.getMinutes() / 15) * 15) as CoachStartMinute);
-        } else {
-          setSelectedDay(isPastDay(selectedDay) ? todayKey() : selectedDay);
-          setStartHour(9);
-          setStartMinute(0);
-          setDurationHours(1);
-        }
+        // [F003][S009] Every next appointment is a new explicit booking, never an inferred weekly slot.
+        setSelectedDay(isPastDay(selectedDay) ? todayKey() : selectedDay);
+        setStartHour(9);
+        setStartMinute(0);
+        setDurationHours(1);
         setScheduleSheetOpen(false);
       } catch (e) {
         setScheduleStudentId(null);
@@ -675,7 +669,7 @@ export default function CoachDashboardPage() {
           }
         />
         <h2 className="text-sm font-semibold text-ink">日曆 · 學員上堂</h2>
-        <p className="mt-1 text-xs text-ink/55">月／週檢視 · 點日期後，上方顯示當日全部課堂，可展開或收起</p>
+        <p className="mt-1 text-xs text-ink/55">日／週／月檢視 · 每堂須由教練排程，點課堂可查看完整資料</p>
         <CoachScheduleCalendarNav
           selectedDay={selectedDay}
           mode={calendarMode}
@@ -959,11 +953,6 @@ export default function CoachDashboardPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        if (enr.coach_time_confirmed) {
-                          router.push("/coach-portal?tab=schedule");
-                          setStatus("請喺日曆揀指定一堂，再按「改期」。");
-                          return;
-                        }
                         setBookingEnrollmentId(enr.enrollment_id);
                         setBookingOriginalDate(null);
                         setBookDay(bookingMinDateKey());
@@ -973,7 +962,7 @@ export default function CoachDashboardPage() {
                       }}
                       className="min-h-11 rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-medium text-black"
                     >
-                      {enr.coach_time_confirmed ? "到日曆揀一堂改期" : "排程 0.5–2h"}
+                      {enr.coach_time_confirmed ? "排下一堂" : "排程 0.5–2h"}
                     </button>
                     <button
                       type="button"

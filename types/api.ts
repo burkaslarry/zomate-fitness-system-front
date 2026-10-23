@@ -219,6 +219,7 @@ export type CategoryEnrollmentRow = {
 };
 
 export type PaymentRecordRow = {
+  note?: string | null;
   id: string;
   record_type: "renewal" | "receipt" | "installment";
   ref_id: number;

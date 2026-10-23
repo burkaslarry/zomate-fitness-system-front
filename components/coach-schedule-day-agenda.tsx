@@ -83,9 +83,9 @@ export default function CoachScheduleDayAgenda({
                   ) : null}
                 </div>
                 <p className="mt-1 text-xs text-ink/70">{formatSessionLine(s)}</p>
-                <p className="mt-0.5 text-[11px] text-ink/45">{s.course_title}</p>
+                <p className="mt-0.5 text-[11px] text-ink/45">{s.course_title} · {s.attendance_status}{s.attendance_status === "已簽到" ? "（已鎖定）" : ""}</p>
               </div>
-              {!isPastDay && (onReschedule || onCancel) ? (
+              {!isPastDay && s.attendance_status !== "已簽到" && (onReschedule || onCancel) ? (
                 <div className="flex w-full gap-2 sm:w-auto">
                   {onReschedule ? (
                     <button

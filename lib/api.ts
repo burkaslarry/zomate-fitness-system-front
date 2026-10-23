@@ -595,6 +595,9 @@ export const api = {
   studentTodayLessons: (studentId: number) =>
     request(`/api/public/student-today-lessons?student_id=${encodeURIComponent(String(studentId))}`),
   summary: () => request("/api/admin/summary"),
+  /** [F004][S002] Admin-only audited payment metadata/pending amount correction. */
+  updatePaymentRecord: (recordType: string, refId: number, payload: Record<string, unknown>) =>
+    request(`/api/admin/payment-records/${recordType}/${refId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   paymentRecords: (query?: { status?: string; q?: string }) => {
     const sp = new URLSearchParams();
     if (query?.status) sp.set("status", query.status);

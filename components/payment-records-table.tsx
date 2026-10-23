@@ -15,6 +15,7 @@ import type { PaymentRecordRow } from "../types/api";
 import { alertApiError, api, apiAssetUrl, downloadReceiptFile } from "../lib/api";
 import { formatHktDateTime } from "../lib/format-hkt";
 import WhatsAppButton from "./whatsapp-button";
+import { getAuthSession } from "../lib/auth";
 
 type OptionalColumn = "status" | "coach" | "receipt";
 
@@ -137,6 +138,38 @@ export default function PaymentRecordsTable({
     receipt: false
   });
   const [detailRow, setDetailRow] = useState<PaymentRecordRow | null>(null);
+  // [F004][S002] Edits stay local until a deliberate Admin save succeeds.
+  const [editing, setEditing] = useState(false);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [draft, setDraft] = useState({ amount: "", payment_method: "", note: "", created_at: "", due_date: "" });
+  /** [F004][S002] Use Hong Kong wall time in the editable payment date. */
+  function startEdit() {
+    if (!detailRow) return;
+    const date = new Date(detailRow.created_at);
+    const local = Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat("sv-SE", {
+      timeZone: "Asia/Hong_Kong", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false
+    }).format(date).replace(" ", "T");
+    setDraft({ amount: String(detailRow.amount ?? 0), payment_method: detailRow.payment_method ?? "",
+      note: detailRow.note ?? "", created_at: local, due_date: detailRow.due_date ?? "" });
+    setEditError(""); setEditing(true);
+  }
+  /** [F004][S002] Never issue payment confirmation or WhatsApp as a side effect of an edit. */
+  async function saveEdit() {
+    if (!detailRow || editBusy) return;
+    setEditBusy(true); setEditError("");
+    try {
+      const payload: Record<string, unknown> = { amount: Number(draft.amount), created_at: `${draft.created_at}:00+08:00` };
+      if (detailRow.record_type === "installment") payload.due_date = draft.due_date;
+      else { payload.payment_method = draft.payment_method; payload.note = draft.note; }
+      const result = await api.updatePaymentRecord(detailRow.record_type, detailRow.ref_id, payload) as {record: PaymentRecordRow};
+      setDetailRow(result.record); setEditing(false); setUploadStatus("付款詳情已更新。");
+      if (onPaymentConfirmed) await onPaymentConfirmed();
+      else if (onReceiptUploaded) await onReceiptUploaded();
+    } catch (error) { setEditError(error instanceof Error ? error.message : String(error)); }
+    finally { setEditBusy(false); }
+  }
+
   const [portalReady, setPortalReady] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("");
@@ -155,6 +188,8 @@ export default function PaymentRecordsTable({
   }, []);
 
   useEffect(() => {
+    setEditing(false);
+    setEditError("");
     setUploadStatus("");
     setUploading(false);
     setConfirmBusy(false);
@@ -415,6 +450,19 @@ export default function PaymentRecordsTable({
                 </button>
               </div>
 
+              {/* [F004][S002] Confirmed amounts remain locked; metadata edits are audited. */}
+              {canConfirmPayment && getAuthSession()?.role === "ADMIN" && !editing ? <button type="button" onClick={startEdit} className="mt-3 min-h-11 rounded-lg border border-primary/40 px-4 text-sm font-semibold">編輯付款詳情</button> : null}
+              {editing ? <form className="mt-3 space-y-3 rounded-lg border border-primary/25 bg-canvas p-3" onSubmit={e => { e.preventDefault(); void saveEdit(); }}>
+                <label className="block text-sm">金額 HKD<input aria-label="編輯金額" type="number" min="0" max="9999999999" step="0.01" required disabled={detailRow.status === "paid" || editBusy} value={draft.amount} onChange={e => setDraft({...draft, amount:e.target.value})} className="mt-1 w-full rounded border border-ink/20 p-2 disabled:opacity-60" /></label>
+                {detailRow.status === "paid" ? <p className="text-xs text-ink/60">已確認金額已鎖定；可修改方式、日期及備註。</p> : null}
+                {detailRow.record_type === "installment" ? <label className="block text-sm">到期日<input aria-label="編輯到期日" type="date" required value={draft.due_date} onChange={e => setDraft({...draft,due_date:e.target.value})} className="w-full rounded border p-2" /></label> : <>
+                  <label className="block text-sm">付款方式<select aria-label="編輯付款方式" value={draft.payment_method} required onChange={e => setDraft({...draft,payment_method:e.target.value})} className="mt-1 w-full rounded border border-ink/20 p-2"><option value="">請選擇</option>{Object.entries(PAYMENT_METHOD_LABELS).map(([key,label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+                  <label className="block text-sm">備註<textarea aria-label="編輯備註" maxLength={2000} value={draft.note} onChange={e => setDraft({...draft,note:e.target.value})} className="mt-1 w-full rounded border border-ink/20 p-2" /></label>
+                </>}
+                <label className="block text-sm">付款日期（香港時間）<input aria-label="編輯付款日期" type="datetime-local" required value={draft.created_at} onChange={e => setDraft({...draft,created_at:e.target.value})} className="mt-1 w-full rounded border border-ink/20 p-2" /></label>
+                {editError ? <p role="alert" className="text-sm text-red-700">{editError}</p> : null}
+                <div className="flex gap-2"><button type="submit" disabled={editBusy} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold">{editBusy ? "儲存中…" : "儲存修改"}</button><button type="button" disabled={editBusy} onClick={() => setEditing(false)} className="min-h-11 rounded-lg border px-4 text-sm">取消編輯</button></div>
+              </form> : null}
               <dl className="mt-3">
                 {showStudent ? (
                   <DetailRow label="學員">
@@ -432,6 +480,7 @@ export default function PaymentRecordsTable({
                   <span className="font-semibold tabular-nums">{formatPaymentAmount(detailRow.amount)}</span>
                 </DetailRow>
                 <DetailRow label="方式">{formatPaymentMethod(detailRow.payment_method)}</DetailRow>
+                <DetailRow label="備註">{detailRow.note || "—"}</DetailRow>
                 <DetailRow label="狀態">{statusBadge(detailRow.status)}</DetailRow>
                 <DetailRow label="教練">{detailRow.coach_name ?? "—"}</DetailRow>
                 <DetailRow label="收據">
