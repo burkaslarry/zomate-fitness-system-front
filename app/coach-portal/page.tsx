@@ -21,7 +21,7 @@ import CoachDateStepper from "../../components/coach-date-stepper";
 import CoachSlotDurationChips from "../../components/coach-slot-duration-chips";
 import CoachStartEndSummary from "../../components/coach-start-end-summary";
 import CoachStartTimeSelect from "../../components/coach-start-time-select";
-import { monthRange, weekRange, isPastDay, todayDateKey } from "../../lib/coach-schedule-dates";
+import { monthRange, weekRange, shiftDay, isPastDay, todayDateKey } from "../../lib/coach-schedule-dates";
 import {
   type CoachSlotDuration,
   type CoachStartMinute,
@@ -292,11 +292,16 @@ export default function CoachDashboardPage() {
 
   useEffect(() => {
     if (!coach) return;
-    const range = calendarMode === "day" ? { from: selectedDay, to: selectedDay } : calendarMode === "week" ? weekRange(selectedDay) : monthRange(selectedDay);
+    // [F008][S005] Load one range covering the mini month and any cross-month visible days.
+    const month = monthRange(selectedDay);
+    const visible = calendarMode === "week" ? weekRange(selectedDay) : { from: selectedDay, to: calendarMode === "three-day" ? shiftDay(selectedDay, 2) : selectedDay };
+    const range = { from: month.from < visible.from ? month.from : visible.from, to: month.to > visible.to ? month.to : visible.to };
+    let active = true;
     void api
       .coachSessions(coach.id, { fromDate: range.from, toDate: range.to })
-      .then((rows) => setRangeSessions((rows ?? []) as CoachSessionRow[]))
-      .catch(() => setRangeSessions([]));
+      .then((rows) => { if (active) setRangeSessions((rows ?? []) as CoachSessionRow[]); })
+      .catch(() => { if (active) setRangeSessions([]); });
+    return () => { active = false; };
   }, [coach, calendarMode, selectedDay]);
 
   const pickStudentForSchedule = useCallback(
@@ -622,9 +627,9 @@ export default function CoachDashboardPage() {
   }
 
   const schedulePanel = (
-    <div className="relative space-y-4 pb-8">
+    <div className="relative flex flex-col gap-4 pb-8">
       {pending.length > 0 ? (
-        <section className="rounded-xl border border-primary/20 bg-primary/5 p-3 shadow-sm">
+        <section className="order-2 rounded-xl border border-primary/20 bg-primary/5 p-3 shadow-sm sm:order-none">
           <p className="text-xs font-semibold text-ink">
             待排期 · {pending.length} 位學員
           </p>
@@ -648,7 +653,8 @@ export default function CoachDashboardPage() {
         </section>
       ) : null}
 
-      <section className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
+      <section className="order-1 flex flex-col bg-white p-1 sm:bg-surface sm:order-none sm:rounded-xl sm:border sm:border-ink/10 sm:p-4 sm:shadow-sm">
+        <div className="order-2 mt-4 sm:order-none sm:mt-0">
         {/* [F008][S005] Selected-day sessions precede the calendar; changing day expands its agenda. */}
         <CoachScheduleDayAgenda
           key={selectedDay}
@@ -668,8 +674,10 @@ export default function CoachDashboardPage() {
             })
           }
         />
-        <h2 className="text-sm font-semibold text-ink">日曆 · 學員上堂</h2>
-        <p className="mt-1 text-xs text-ink/55">日／週／月檢視 · 每堂須由教練排程，點課堂可查看完整資料</p>
+        </div>
+        <div className="order-1 sm:order-none">
+        <h2 className="hidden text-sm font-semibold text-ink sm:block">日曆 · 學員上堂</h2>
+        <p className="mt-1 hidden text-xs text-ink/55 sm:block">行程／日／3 日／週／月 · 點課堂查看詳情</p>
         <CoachScheduleCalendarNav
           selectedDay={selectedDay}
           mode={calendarMode}
@@ -678,6 +686,7 @@ export default function CoachDashboardPage() {
           onModeChange={setCalendarMode}
           onNavigate={handleCalendarDaySelect}
         />
+        </div>
 
       </section>
 
@@ -1068,7 +1077,13 @@ export default function CoachDashboardPage() {
       {/* [F008][S005] Desktop schedule needs a full-width week; other coach tabs retain compact forms. */}
       <div className={`mx-auto px-3 py-4 md:px-4 ${tab === "schedule" ? "max-w-7xl" : "max-w-lg md:max-w-2xl"}`}>
         {paymentUrgent.length > 0 ? (
-          <section className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm">
+          <details className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 sm:hidden">
+            <summary className="cursor-pointer font-semibold">付款提醒 · {paymentUrgent.length} 位學員待跟進</summary>
+            <div className="flex gap-4 py-3"><Link href="/coach-portal?tab=payments" className="underline">付款紀錄</Link><Link href="/coach-portal?tab=students" className="underline">學員 · WhatsApp 催款</Link></div>
+          </details>
+        ) : null}
+        {paymentUrgent.length > 0 ? (
+          <section className="mb-4 hidden rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm sm:block">
             <p className="font-semibold">付款提醒 · {paymentUrgent.length} 位學員待跟進</p>
             <p className="mt-1 text-xs text-amber-900/85">
               請主動聯絡以下學員安排付款：

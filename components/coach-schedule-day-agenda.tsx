@@ -6,6 +6,7 @@
  * Step: Expandable selected-day agenda above the calendar
  */
 
+import { useEffect, useRef } from "react";
 import { formatDateLabel } from "../lib/coach-schedule-dates";
 import { calendarChipClass, formatSessionLine, type CoachSessionRow } from "../lib/coach-sessions";
 
@@ -24,12 +25,17 @@ export default function CoachScheduleDayAgenda({
   onReschedule,
   onCancel
 }: Props) {
+  const disclosureRef = useRef<HTMLDetailsElement>(null);
+  // [F008][S005] Phone calendar stays primary; expand lesson actions on demand.
+  useEffect(() => {
+    if (disclosureRef.current) disclosureRef.current.open = window.matchMedia("(min-width: 640px)").matches;
+  }, []);
   const sorted = [...sessions].sort(
     (a, b) => a.start_time.localeCompare(b.start_time) || a.student_name.localeCompare(b.student_name)
   );
 
   return (
-    <details open className="group mb-4 border-b border-ink/10 pb-4">
+    <details ref={disclosureRef} open className="group mb-4 border-b border-ink/10 pb-4">
       {/* [F003][S002] Native disclosure supports keyboard and touch without extra fetching. */}
       <summary className="mb-3 flex cursor-pointer list-none flex-wrap items-baseline justify-between gap-2 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary [&::-webkit-details-marker]:hidden">
         <div>

@@ -163,7 +163,7 @@ The four approved payment wordings remain unchanged. Additional check-in mapping
 
 ### [F008][S005] 教練首頁課堂清單
 
-當日課堂清單位於月／週日曆上方，預設展開。按日期標題可收起／展開；揀另一日期後更新並展開清單。「改期」及「取消今堂」維持原有流程。
+桌面當日課堂清單位於日曆上方，預設展開；手機位於日曆下方，預設收起。按日期標題可收起／展開；揀另一日期後更新清單。「改期」及「取消今堂」維持原有流程。
 
 ### [F006][S002] Alice 教練帳戶
 
@@ -185,5 +185,11 @@ Admin: payment record → details → edit → save. Pending amounts, payment me
 Admin：付款紀錄 → 詳情 → 編輯付款詳情 → 儲存修改。可改待確認金額、付款方式、香港日期及備註；分期記錄可改未付金額、日期及到期日。已確認金額鎖定以保護付款／PIN 狀態，其他資料仍可編輯。每次修改保留稽核紀錄，不會自動確認付款或發訊息。
 
 ### [F008][S005] Phone calendar / 手機日曆 (2026-10-23)
-The month grid fits seven columns without sideways scrolling. Phones show two compact chips per date plus a +N selector; the selected-date agenda lists every appointment. Week/day grids pin the opaque time gutter and date-header corner while scrolling. Event details open as a phone bottom sheet. Desktop keeps its full appointment cards.
-手機月曆七日完整顯示，毋須左右捲；每日期顯示兩個精簡標籤及 +N，點日期後下方列出當日全部課堂。週／日時間表固定左側時間及標題，左右掃日期時仍看得到時間。課堂詳情以手機底部面板開啟，桌面保留原有完整課堂卡。
+The month grid fits seven columns without sideways scrolling. Phones show three single-line appointment bars per date plus a +N selector; the selected-date agenda lists every appointment. Week/day grids pin the opaque time gutter and date-header corner while scrolling. Event details open as a phone bottom sheet. Desktop keeps its full appointment cards.
+手機月曆七日完整顯示，毋須左右捲；每日期顯示三個單行課堂色塊及 +N，點日期後下方列出當日全部課堂。週／日時間表固定左側時間及標題，左右掃日期時仍看得到時間。課堂詳情以手機底部面板開啟，桌面保留原有完整課堂卡。
+
+### [F008][S005] Google Calendar phone references / 手機日曆參考介面
+Five views share confirmed appointments: Agenda, Day, 3 days, Week and Month. Tap the period title to expand the mini month picker with event dots and month navigation. Three days fit the phone width; week scrolls sideways with a pinned time gutter. Timelines open near the earliest visible lesson. Solid event colours are stable per student; tap for full details. Phone payment reminders collapse, the calendar appears first, and selected-day actions and pending students remain below. Desktop keeps its expanded actions above the calendar.
+五個檢視共用已確認排程：行程、日、3 日、週、月。按期間標題展開迷你月曆，可揀日期及切換月份；有課堂嘅日期顯示色點。3 日檢視完整適應手機寬度，週檢視固定左側時間欄；時間表自動定位至最早課堂附近。學生有固定課堂色塊，按下可睇完整資料。手機付款提醒可展開，先顯示日曆，再列出可展開嘅當日課堂操作及待排期學員；桌面維持上方展開操作。
+
+Verification / 驗證：`tests/mobile-coach-calendar.spec.ts` covers 320/375/430px, three-day navigation, mini month selection, complete agenda, overflow details and pinned time labels. Calendar/payment, signature and same-day booking regressions also pass.

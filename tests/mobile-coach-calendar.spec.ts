@@ -28,6 +28,28 @@ for(const width of [320,375,430]){
     await agenda.getByRole('button').filter({hasText:'Mobile QA 6'}).click();
     await expect(page.getByRole('dialog',{name:'課堂詳情'})).toContainText('Mobile Yoga 6');
     await page.getByRole('button',{name:'關閉課堂詳情'}).click();
+    // [F007][S005] Three columns fit phones and navigation advances three days.
+    const calendar=page.getByLabel('教練排程日曆');
+    await calendar.getByRole('button',{name:'3 日',exact:true}).click();
+    const three=page.getByLabel('三日時間表');
+    await expect(three.getByRole('button').filter({hasText:'Mobile QA'})).toHaveCount(7);
+    expect(await three.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+    if(width===375)await page.screenshot({animations:'disabled',path:'../output/verification/google-style-fixture-three-day.png'});
+    await calendar.getByRole('button',{name:'下一段',exact:true}).click();
+    await expect(three).toContainText('26');
+    await expect(three.getByRole('button').filter({hasText:'Mobile QA'})).toHaveCount(0);
+    await calendar.getByRole('button',{name:'上一段',exact:true}).click();
+    // [F007][S005] Agenda retains all lessons; the date picker changes the selected date.
+    await calendar.getByRole('button',{name:'行程',exact:true}).click();
+    await expect(page.getByLabel('行程清單').getByRole('button').filter({hasText:'Mobile QA'})).toHaveCount(7);
+    await calendar.getByRole('button',{name:'展開迷你月曆'}).click();
+    if(width===375)await page.screenshot({animations:'disabled',path:'../output/verification/google-style-fixture-agenda.png',fullPage:true});
+    const mini=page.getByLabel('迷你月曆');
+    await expect(mini.getByRole('button',{name:'2026年10月23日週五',exact:true})).toHaveAttribute('aria-pressed','true');
+    await mini.getByRole('button',{name:'2026年10月24日週六',exact:true}).click();
+    await expect(mini.getByRole('button',{name:'2026年10月24日週六',exact:true})).toHaveAttribute('aria-pressed','true');
+    await calendar.getByRole('button',{name:'展開迷你月曆'}).click();
+    await calendar.getByRole('button',{name:'今天',exact:true}).click();
     await page.getByLabel('教練排程日曆').getByRole('button',{name:'週',exact:true}).click();
     const week=page.getByLabel('每週時間表');
     const gutter=page.getByLabel('固定時間欄',{exact:true});
