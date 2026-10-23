@@ -8,7 +8,6 @@
  */
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -123,7 +122,6 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   const parqFileRef = useRef<HTMLInputElement | null>(null);
   const parqClearanceFileRef = useRef<File | null>(null);
   const signatureRef = useRef<SignaturePadHandle | null>(null);
-  const router = useRouter();
   const [parqUploadError, setParqUploadError] = useState("");
   const [coaches, setCoaches] = useState<CoachOption[]>([]);
   const [coachCategories, setCoachCategories] = useState<{ id: number; name: string }[]>([]);
@@ -969,22 +967,38 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         </div>
       </form>
 
-      {/* [F001][S004] Post-submit success — optional redirect to photo flow via session context */}
+      {/* [F001][S004] Post-submit success — Congratulations + close browser tab */}
       {showSuccessDialog && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/35 px-4">
-          <div className="w-full max-w-sm space-y-4 rounded-xl border border-emerald-200/80 bg-emerald-50 p-5 text-ink shadow-xl ring-1 ring-ink/[0.06]">
-            <h2 className="text-lg font-semibold">申請成功</h2>
+          <div
+            className="w-full max-w-sm space-y-4 rounded-xl border border-emerald-200/80 bg-emerald-50 p-5 text-center text-ink shadow-xl ring-1 ring-ink/[0.06]"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="register-success-title"
+          >
+            <h2 id="register-success-title" className="text-xl font-semibold tracking-tight text-emerald-900">
+              Congratulations
+            </h2>
             <p className="text-sm text-ink/80">
               {signatureDeferred
-                ? "會員已新增。電子簽署可稍後由職員於學員檔案頁候補。"
-                : "資料已提交，可繼續後續流程。"}
+                ? "申請成功。電子簽署可稍後由職員於學員檔案頁候補。"
+                : "申請成功。多謝你嘅登記。"}
             </p>
             <button
               type="button"
               className="w-full rounded-md border border-ink/15 bg-primary/90 px-4 py-3 text-sm font-semibold text-black shadow-sm hover:bg-primary"
-              onClick={() => router.push("/")}
+              onClick={() => {
+                // [F001][S004] Close this tab/window (works when opened via QR / window.open).
+                window.close();
+                // Some mobile browsers ignore close — fall back to blank page.
+                window.setTimeout(() => {
+                  if (!window.closed) {
+                    window.location.replace("about:blank");
+                  }
+                }, 150);
+              }}
             >
-              回到主頁
+              關閉頁面
             </button>
           </div>
         </div>

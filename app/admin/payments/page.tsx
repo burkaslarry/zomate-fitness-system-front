@@ -15,7 +15,8 @@ import type { PaymentRecordRow } from "../../../types/api";
 
 const STATUS_OPTIONS = [
   { value: "", label: "全部" },
-  { value: "paid", label: "已付" },
+  { value: "pending_confirmation", label: "待確認" },
+  { value: "paid", label: "付款已確認" },
   { value: "outstanding", label: "待付" },
   { value: "missing_receipt", label: "缺收據" }
 ] as const;
@@ -169,7 +170,7 @@ export default function AdminPaymentsPage() {
         <div>
           <h2 className="text-xl font-semibold text-ink sm:text-2xl">付款紀錄</h2>
           <p className="mt-1 text-sm text-ink/65">
-            全館學員交易、續會、收據與分期紀錄。預設顯示學員／項目／金額／方式／日期；可按「顯示欄位」打開狀態、教練、收據。按「詳情」睇齊全部資料。支援 CSV／Excel（.xlsx／.xls 只讀第一個 sheet）／ZIP 匯出匯入。
+            全館學員交易、續會、收據與分期紀錄。預設顯示學員／項目／金額／方式／日期；可按「顯示欄位」打開狀態、教練、收據。按「詳情」核對收據後可「Admin 確認付款」（WhatsApp 付款狀態轉為「付款已確認」）。支援 CSV／Excel／ZIP 匯出匯入。
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -243,6 +244,8 @@ export default function AdminPaymentsPage() {
           onDelete={handleDelete}
           onRequestReceiptUpload={handleRequestReceiptUpload}
           onReceiptUploaded={reload}
+          onPaymentConfirmed={reload}
+          canConfirmPayment
           receiptUploadBusyId={receiptUploadBusyId}
         />
       </div>

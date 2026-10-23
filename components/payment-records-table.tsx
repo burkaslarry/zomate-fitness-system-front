@@ -39,7 +39,16 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
 
 function statusBadge(status: PaymentRecordRow["status"]) {
   if (status === "paid") {
-    return <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">已付</span>;
+    return (
+      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+        付款已確認
+      </span>
+    );
+  }
+  if (status === "pending_confirmation") {
+    return (
+      <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-900">待確認</span>
+    );
   }
   if (status === "missing_receipt") {
     return <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">缺收據</span>;
@@ -103,6 +112,8 @@ export default function PaymentRecordsTable({
   onDelete,
   onRequestReceiptUpload,
   onReceiptUploaded,
+  onPaymentConfirmed,
+  canConfirmPayment = false,
   receiptUploadBusyId
 }: {
   rows: PaymentRecordRow[];
@@ -113,11 +124,15 @@ export default function PaymentRecordsTable({
   onRequestReceiptUpload?: (row: PaymentRecordRow) => void | Promise<void>;
   /** Called after admin uploads a receipt document from 詳情 modal. */
   onReceiptUploaded?: () => void | Promise<void>;
+  /** [F004][S002] After Admin 確認付款 from 付款紀錄詳情 — reload list. */
+  onPaymentConfirmed?: () => void | Promise<void>;
+  /** Admin-only: show 確認付款 in detail when course is pending confirmation. */
+  canConfirmPayment?: boolean;
   receiptUploadBusyId?: string | null;
 }) {
   /** Optional columns hidden by default — toggle to show in grid. */
   const [visibleOptional, setVisibleOptional] = useState<Record<OptionalColumn, boolean>>({
-    status: false,
+    status: true,
     coach: false,
     receipt: false
   });
@@ -125,6 +140,7 @@ export default function PaymentRecordsTable({
   const [portalReady, setPortalReady] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("");
+  const [confirmBusy, setConfirmBusy] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   /** [F005][S003] After receipt upload, surface wa.me confirmation (Meta auto-send skipped to avoid multi-course 400). */
   const [postUploadWhatsapp, setPostUploadWhatsapp] = useState<{
@@ -141,11 +157,12 @@ export default function PaymentRecordsTable({
   useEffect(() => {
     setUploadStatus("");
     setUploading(false);
+    setConfirmBusy(false);
     setPostUploadWhatsapp(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [detailRow?.id]);
 
-  /** Keep open 詳情 in sync after list reload (e.g. post-upload). */
+  /** Keep open 詳情 in sync after list reload (e.g. post-upload / confirm). */
   useEffect(() => {
     if (!detailRow) return;
     const next = rows.find((r) => r.id === detailRow.id);
@@ -153,11 +170,52 @@ export default function PaymentRecordsTable({
     if (
       next.receipt_id !== detailRow.receipt_id ||
       next.receipt_url !== detailRow.receipt_url ||
-      next.status !== detailRow.status
+      next.status !== detailRow.status ||
+      next.course_enrollment_id !== detailRow.course_enrollment_id
     ) {
       setDetailRow(next);
     }
   }, [rows, detailRow]);
+
+  /**
+   * [F004][S002]
+   * Feature: Admin Reports & Financials
+   * Step: Admin 確認付款 from 付款紀錄詳情
+   * Logic: PATCH installment-paid → WhatsApp payment_status becomes 付款已確認.
+   */
+  async function handleConfirmPayment() {
+    if (!detailRow?.course_enrollment_id) return;
+    const installmentNo = detailRow.installment_no ?? 1;
+    if (
+      !window.confirm(
+        `已核對此筆付款（第 ${installmentNo} 期）？確認後會發出 WhatsApp（付款狀態：付款已確認）及相應 PIN。`
+      )
+    ) {
+      return;
+    }
+    setConfirmBusy(true);
+    setUploadStatus("");
+    try {
+      await api.markCourseInstallmentPaid(detailRow.course_enrollment_id, {
+        student_id: detailRow.student_id,
+        installment_no: installmentNo
+      });
+      console.log("[F004][S002] Success: Admin confirmed payment from payment record", {
+        courseId: detailRow.course_enrollment_id,
+        installmentNo,
+        recordId: detailRow.id
+      });
+      setDetailRow({ ...detailRow, status: "paid" });
+      setUploadStatus("付款已確認；已通知學生／教練。");
+      if (onPaymentConfirmed) await onPaymentConfirmed();
+      else if (onReceiptUploaded) await onReceiptUploaded();
+    } catch (e) {
+      alertApiError(e);
+      console.error("[F004][S002] Error: Admin confirm payment from payment record failed.");
+    } finally {
+      setConfirmBusy(false);
+    }
+  }
 
   async function handleDownload(row: PaymentRecordRow) {
     if (!row.receipt_id) return;
@@ -200,7 +258,10 @@ export default function PaymentRecordsTable({
         source: "RENEWAL",
         context: "付款紀錄詳情上傳",
         renewal_id: detailRow.record_type === "renewal" ? detailRow.ref_id : undefined,
-        installment_no: detailRow.record_type === "installment" ? detailRow.installment_no : undefined,
+        course_enrollment_id: detailRow.course_enrollment_id ?? undefined,
+        installment_no:
+          detailRow.installment_no ??
+          (detailRow.record_type === "installment" ? detailRow.installment_no : undefined),
         installment_plan_id:
           detailRow.record_type === "installment" ? detailRow.installment_plan_id : undefined,
         send_whatsapp: true,
@@ -238,11 +299,11 @@ export default function PaymentRecordsTable({
         console.error("[F005][S003] Error: Receipt upload returned no WhatsApp payload.");
       }
       if (onReceiptUploaded) await onReceiptUploaded();
-      // Optimistically update modal so link appears immediately.
+      // Optimistically update modal — upload is evidence only; Admin confirm still required.
       if (res.id) {
         setDetailRow({
           ...detailRow,
-          status: "paid",
+          status: detailRow.course_enrollment_id ? "pending_confirmation" : "paid",
           receipt_id: res.id,
           receipt_url: res.file_url ?? detailRow.receipt_url,
           download_url: res.download_url ?? `/api/receipts/${res.id}/download`
@@ -426,6 +487,14 @@ export default function PaymentRecordsTable({
                 ) : null}
               </dl>
 
+              {uploadStatus &&
+              !(
+                !detailRow.receipt_id &&
+                (detailRow.status === "missing_receipt" || detailRow.record_type === "renewal")
+              ) ? (
+                <p className="mt-3 text-xs text-emerald-800">{uploadStatus}</p>
+              ) : null}
+
               <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-ink/[0.06] pt-4">
                 {postUploadWhatsapp?.studentWaUrl ? (
                   <WhatsAppButton href={postUploadWhatsapp.studentWaUrl} label="再發 WhatsApp（學生）" />
@@ -439,6 +508,18 @@ export default function PaymentRecordsTable({
                     disabled={receiptUploadBusyId === detailRow.id}
                     onClick={() => void onRequestReceiptUpload(detailRow)}
                   />
+                ) : null}
+                {canConfirmPayment &&
+                detailRow.course_enrollment_id &&
+                detailRow.status === "pending_confirmation" ? (
+                  <button
+                    type="button"
+                    disabled={confirmBusy}
+                    onClick={() => void handleConfirmPayment()}
+                    className="rounded-lg border border-emerald-600/40 bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
+                  >
+                    {confirmBusy ? "確認中…" : "Admin 確認付款"}
+                  </button>
                 ) : null}
                 {onDelete &&
                 (detailRow.record_type === "renewal" || detailRow.record_type === "receipt") ? (

@@ -227,7 +227,8 @@ export type PaymentRecordRow = {
   student_phone: string;
   amount: number | null;
   payment_method: string | null;
-  status: "paid" | "outstanding" | "missing_receipt";
+  /** paid = Admin 已確認；pending_confirmation = 收據／金額待 Admin 確認 */
+  status: "paid" | "outstanding" | "missing_receipt" | "pending_confirmation";
   coach_id?: number | null;
   coach_name?: string | null;
   label: string;
@@ -241,6 +242,8 @@ export type PaymentRecordRow = {
   installment_no?: number;
   installment_plan_id?: number;
   category_enrollment_id?: number;
+  /** Linked CourseEnrollment for Admin 確認付款 from 付款紀錄詳情. */
+  course_enrollment_id?: number | null;
   due_date?: string | null;
   paid_at?: string | null;
   created_at: string;

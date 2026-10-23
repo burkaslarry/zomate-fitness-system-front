@@ -1078,6 +1078,9 @@ export default function AdminStudentDetailPage() {
               <PaymentRecordsTable
                 rows={data.payment_records ?? []}
                 onRequestReceiptUpload={handlePaymentRowReceiptUpload}
+                onReceiptUploaded={reload}
+                onPaymentConfirmed={reload}
+                canConfirmPayment={isAdmin}
                 receiptUploadBusyId={receiptUploadPromptBusyId}
               />
             </div>
