@@ -1065,7 +1065,8 @@ export default function CoachDashboardPage() {
 
   return (
     <>
-      <div className="mx-auto max-w-lg px-3 py-4 md:max-w-2xl md:px-4">
+      {/* [F008][S005] Desktop schedule needs a full-width week; other coach tabs retain compact forms. */}
+      <div className={`mx-auto px-3 py-4 md:px-4 ${tab === "schedule" ? "max-w-7xl" : "max-w-lg md:max-w-2xl"}`}>
         {paymentUrgent.length > 0 ? (
           <section className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm">
             <p className="font-semibold">付款提醒 · {paymentUrgent.length} 位學員待跟進</p>

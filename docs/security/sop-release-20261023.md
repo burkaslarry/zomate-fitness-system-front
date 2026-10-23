@@ -7,3 +7,5 @@ Next.js 16.4.0 scan found GHSA-2464-fhr4-w9xw, GHSA-p3m5-59mp-jv5r and GHSA-673q
 Backend tests include unconfirmed PIN rejection, consumed picker removal, next-lesson rebooking, permission/conflict guards, payment persistence/audit and confirmed-fund protection. Browser tests cover all calendar views, overlap positions, locked lessons and payment save/reload, plus prior signature/booking regressions. Production screen verification uses the existing Fung account without modifying customer records.
 
 Validation: backend suite 95 passed; focused browser suite 6 passed on patched Next.js 16.4.1; 58-route webpack production build passed; pip-audit and full/runtime npm audits report zero known vulnerabilities. Build required network access for the existing Google Fonts download.
+
+Production visual follow-up: old max-w-2xl shell constrained desktop weeks. Widened only the schedule tab to max-w-7xl; added a >=900px desktop time-grid assertion. Targeted 2 browser tests and 58-route build passed. Backend and dependency versions unchanged.

@@ -20,6 +20,7 @@ test('calendar day week month and locked lessons',async({page})=>{
   await expect(calendar.getByRole('button').filter({hasText:'Calendar QA'})).toHaveCount(7);
   await calendar.getByRole('button',{name:'週',exact:true}).click();
   const week=page.getByLabel('每週時間表');
+  expect((await week.boundingBox())!.width).toBeGreaterThanOrEqual(900);
   await expect(week.getByRole('button').filter({hasText:'Calendar QA'})).toHaveCount(7);
   const a=await week.getByRole('button').filter({hasText:'Calendar QA 0'}).boundingBox();
   const b=await week.getByRole('button').filter({hasText:'Calendar QA 1'}).boundingBox();
