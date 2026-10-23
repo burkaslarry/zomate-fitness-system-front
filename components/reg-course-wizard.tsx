@@ -63,7 +63,8 @@ function amountsMatchTotal(parts: string[], totalRaw: string): boolean {
 }
 
 function digitsOnlyLessons(raw: string): string {
-  return raw.replace(/\D/g, "").slice(0, 2);
+  // [F002][S003] Free-form package size (1–999); no longer locked to 10–30.
+  return raw.replace(/\D/g, "").slice(0, 3);
 }
 
 function pythonWeekdayFromDate(d: Date): number {
@@ -178,20 +179,7 @@ export default function RegCourseWizard({
       .memberLookupByPhone(q)
       .then((row) => {
         if (cancelled) return;
-        const profile = row as MemberProfile;
-        setMember(profile);
-        setStep(mode === "coach" ? 2 : 1);
-        if (mode !== "coach") setCoachId(profile.onboarding_coach_id ?? lockedCoachId ?? "");
-        setCategoryId("");
-        setLessonsText("10");
-        setAmount("");
-        if (lockedBranchId != null) setBranchId(lockedBranchId);
-        selectFullPay();
-        setInstallmentCount(2);
-        setInstallmentAmounts(["", ""]);
-        setInstallmentAmountsTouched(false);
-        setRemarks("");
-        setPurchaseSummary(null);
+        applyMemberAfterLookup(row as MemberProfile);
       })
       .catch((err) => {
         if (!cancelled) alertApiError(err);
@@ -240,15 +228,48 @@ export default function RegCourseWizard({
     return coaches.find((c) => c.id === coachId) ?? null;
   }, [mode, lockedCoachId, lockedCoachName, lockedBranchId, coaches, coachId]);
 
+  const lockedOnboardingCategoryId = member?.onboarding_course_category_id ?? null;
+  const lockedOnboardingCategoryName = member?.onboarding_course_category_name ?? null;
+  const categoryLockedFromRegister = Boolean(lockedOnboardingCategoryId);
+
   const filteredCategories = useMemo(() => {
     if (!member) return [];
     const hasPaidBefore = member.lesson_balance > 0 || member.current_course_package_status !== "No active package";
-    return categories.filter((kind) => {
+    const list = categories.filter((kind) => {
       if (kind.is_active === false) return false;
       if (hasPaidBefore && kind.name.startsWith(NEW_STUDENT_CATEGORY_PREFIX)) return false;
       return true;
     });
-  }, [categories, member]);
+    // [F002][S003] Keep register-chosen category visible even if filtered out of coach skills list.
+    if (
+      lockedOnboardingCategoryId != null &&
+      !list.some((k) => k.id === lockedOnboardingCategoryId) &&
+      lockedOnboardingCategoryName
+    ) {
+      list.unshift({
+        id: lockedOnboardingCategoryId,
+        name: lockedOnboardingCategoryName,
+        is_active: true
+      } as CourseCategoryDto);
+    }
+    return list;
+  }, [categories, member, lockedOnboardingCategoryId, lockedOnboardingCategoryName]);
+
+  function applyMemberAfterLookup(profile: MemberProfile) {
+    setMember(profile);
+    setStep(mode === "coach" ? 2 : 1);
+    if (mode !== "coach") setCoachId(profile.onboarding_coach_id ?? lockedCoachId ?? "");
+    setCategoryId(profile.onboarding_course_category_id ?? "");
+    setLessonsText("");
+    setAmount("");
+    if (lockedBranchId != null) setBranchId(lockedBranchId);
+    selectFullPay();
+    setInstallmentCount(2);
+    setInstallmentAmounts(["", ""]);
+    setInstallmentAmountsTouched(false);
+    setRemarks("");
+    setPurchaseSummary(null);
+  }
 
   const totalInstallments = installmentPay ? installmentCount : 1;
 
@@ -305,20 +326,7 @@ export default function RegCourseWizard({
     setLookupBusy(true);
     setLookupHint("");
     try {
-      const row = (await api.memberLookupByPhone(q)) as MemberProfile;
-      setMember(row);
-      setStep(mode === "coach" ? 2 : 1);
-      if (mode !== "coach") setCoachId(row.onboarding_coach_id ?? lockedCoachId ?? "");
-      setCategoryId("");
-      setLessonsText("10");
-      setAmount("");
-      if (lockedBranchId != null) setBranchId(lockedBranchId);
-      selectFullPay();
-      setInstallmentCount(2);
-      setInstallmentAmounts(["", ""]);
-      setInstallmentAmountsTouched(false);
-      setRemarks("");
-      setPurchaseSummary(null);
+      applyMemberAfterLookup((await api.memberLookupByPhone(q)) as MemberProfile);
     } catch (err) {
       setMember(null);
       setStep(0);
@@ -338,11 +346,14 @@ export default function RegCourseWizard({
       const list = Array.isArray(rows) ? (rows as CourseCategoryDto[]) : [];
       setCategories(list);
       setCategoryId((prev) => {
+        // Prefer register-chosen category; never overwrite a locked onboarding pick.
+        const onboardId = member?.onboarding_course_category_id;
+        if (onboardId) return onboardId;
         if (prev && list.some((c) => c.id === prev)) return prev;
         return list[0]?.id ?? "";
       });
     });
-  }, [coachId, lockedCoachId]);
+  }, [coachId, lockedCoachId, member?.onboarding_course_category_id]);
 
   function goCoachNext() {
     if (!coachId) {
@@ -366,8 +377,8 @@ export default function RegCourseWizard({
       alertApiError(new Error("請選擇課堂種類"));
       return;
     }
-    if (!Number.isFinite(lessons) || lessons < 10 || lessons > 30) {
-      alertApiError(new Error("堂數須為 10–30 的整數"));
+    if (!Number.isFinite(lessons) || lessons < 1 || lessons > 999) {
+      alertApiError(new Error("請輸入堂數（1–999）"));
       return;
     }
     setStep(3);
@@ -583,7 +594,8 @@ export default function RegCourseWizard({
       {member && step === 2 && !purchaseSummary && (
         <section className="space-y-4 rounded-xl border border-ink/10 bg-surface p-4 shadow-sm sm:p-5">
           <h2 className="text-sm font-semibold">
-            {mode === "coach" ? "Step 1" : "Step 2"} · 課堂種類 · 堂數
+            {mode === "coach" ? "Step 1" : "Step 2"} ·{" "}
+            {categoryLockedFromRegister ? "堂數 · 付款資料" : "課堂種類 · 堂數"}
           </h2>
           <MobileRadioList
             name="reg-course-branch"
@@ -593,21 +605,33 @@ export default function RegCourseWizard({
             onChange={setBranchId}
             emptyLabel="暫無分店 — 請 ADMIN 於分店管理新增"
           />
-          <MobileRadioList
-            name="reg-course-category"
-            legend="所屬教練可授的課堂種類"
-            value={categoryId}
-            options={filteredCategories.map((k) => ({ value: k.id, label: k.name }))}
-            onChange={setCategoryId}
-            emptyLabel="暫無課程種類"
-          />
+          {categoryLockedFromRegister ? (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm text-emerald-950">
+              <p className="text-xs font-medium text-emerald-800/80">登記時已選課堂種類（毋須再揀）</p>
+              <p className="mt-0.5 font-semibold">
+                {lockedOnboardingCategoryName ??
+                  filteredCategories.find((c) => c.id === lockedOnboardingCategoryId)?.name ??
+                  "—"}
+              </p>
+            </div>
+          ) : (
+            <MobileRadioList
+              name="reg-course-category"
+              legend="所屬教練可授的課堂種類"
+              value={categoryId}
+              options={filteredCategories.map((k) => ({ value: k.id, label: k.name }))}
+              onChange={setCategoryId}
+              emptyLabel="暫無課程種類"
+            />
+          )}
           <label className="block text-sm">
-            <span className="text-ink/70">堂數（10–30）</span>
+            <span className="text-ink/70">堂數（可任填 1–999）</span>
             <input
               inputMode="numeric"
               pattern="[0-9]*"
               value={lessonsText}
               onChange={(e) => setLessonsText(digitsOnlyLessons(e.target.value))}
+              placeholder="例如 12"
               className="mt-1 w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2.5 text-base sm:text-sm"
             />
           </label>

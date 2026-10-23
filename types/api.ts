@@ -30,6 +30,9 @@ export type MemberProfile = {
   parq_any_yes?: boolean;
   onboarding_coach_id?: number | null;
   onboarding_coach_name?: string | null;
+  /** [F002][S003] Course kind chosen at /register (e.g. 新學生一對一) — coach reg-course locks this. */
+  onboarding_course_category_id?: number | null;
+  onboarding_course_category_name?: string | null;
 };
 
 export type MedicalClearanceHealth = {
