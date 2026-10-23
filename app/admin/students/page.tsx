@@ -234,7 +234,10 @@ export default function AdminStudentsPage() {
       const res = (await uploadCsv("/api/admin/students/import", f)) as {
         imported?: number;
         updated?: number;
+        restored?: number;
         skipped?: number;
+        before_count?: number;
+        after_count?: number;
         skip_reasons?: Array<{
           row?: number;
           code?: string;
@@ -253,8 +256,13 @@ export default function AdminStudentsPage() {
               .map((r) => r.message ?? `第${r.row ?? "?"}行 ${r.reason ?? ""}`)
               .join("；")
           : "";
+      const countLine =
+        res.before_count != null && res.after_count != null
+          ? `｜名單 ${res.before_count} → ${res.after_count}`
+          : "";
+      const restoredLine = res.restored ? `，還原 ${res.restored}` : "";
       setStatus(
-        `匯入完成：新增 ${res.imported ?? 0}，更新 ${res.updated ?? 0}，略過 ${res.skipped ?? 0}${reasonLines}`
+        `匯入完成：新增 ${res.imported ?? 0}，更新 ${res.updated ?? 0}${restoredLine}，略過 ${res.skipped ?? 0}${countLine}${reasonLines}`
       );
       reload();
     } catch (e) {
@@ -303,6 +311,10 @@ export default function AdminStudentsPage() {
                 </li>
                 <li>
                   僅當<strong className="text-ink">姓名與電話皆與現有學員吻合</strong>時才更新該筆；電話相同但姓名不同會略過。
+                </li>
+                <li>
+                  <strong className="text-ink">匯入唔會刪除現有學員</strong>，亦<strong className="text-ink">唔會改動已有堂數／套餐</strong>
+                  （只係新增／更新基本資料）。大批 Excel 唔會洗走原先名單。
                 </li>
                 <li>
                   disclaimer_accepted＝免責聲明已確認；Excel 無此欄時新增學員預設為已接受。
