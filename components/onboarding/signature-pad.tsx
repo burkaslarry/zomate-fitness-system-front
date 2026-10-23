@@ -34,6 +34,45 @@ type StrokePoint = { x: number; y: number; time: number };
 type StrokeData = StrokePoint[][];
 
 const CANVAS_HEIGHT = 160;
+/** Cap export width so retina PNG data URLs stay small enough for Safari multipart POST. */
+const EXPORT_MAX_WIDTH = 720;
+
+/**
+ * [F001][S004]
+ * Feature: Student Onboarding
+ * Step: Compress canvas signature before upload
+ * Logic: Downscale trimmed strokes onto a white PNG so FormData does not trip Safari "Load failed".
+ */
+function exportCompressedPng(source: HTMLCanvasElement, maxWidth = EXPORT_MAX_WIDTH): string {
+  const srcW = source.width;
+  const srcH = source.height;
+  if (srcW < 1 || srcH < 1) return "";
+  const scale = srcW > maxWidth ? maxWidth / srcW : 1;
+  const w = Math.max(1, Math.round(srcW * scale));
+  const h = Math.max(1, Math.round(srcH * scale));
+  const out = document.createElement("canvas");
+  out.width = w;
+  out.height = h;
+  const ctx = out.getContext("2d");
+  if (!ctx) return source.toDataURL("image/png");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(source, 0, 0, w, h);
+  return out.toDataURL("image/png");
+}
+
+function readSignatureDataUrl(sig: SignatureCanvas): string {
+  try {
+    if (sig.isEmpty()) return "";
+    return exportCompressedPng(sig.getTrimmedCanvas());
+  } catch {
+    try {
+      return exportCompressedPng(sig.getCanvas());
+    } catch {
+      return "";
+    }
+  }
+}
 
 export const SignaturePad = forwardRef<SignaturePadHandle, Props>(function SignaturePad(
   { onChange, height = CANVAS_HEIGHT, className },
@@ -55,8 +94,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, Props>(function Signa
     }
     strokeDataRef.current = sig.toData() as StrokeData;
     setHasStroke(strokeDataRef.current.length > 0);
-    const dataUrl = sig.getTrimmedCanvas().toDataURL("image/png");
-    onChange?.(dataUrl);
+    onChange?.(readSignatureDataUrl(sig));
   }, [onChange]);
 
   const applyCanvasDimensions = useCallback(() => {
@@ -120,9 +158,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, Props>(function Signa
         sig.fromData(sampleStrokes as Parameters<SignatureCanvas["fromData"]>[0]);
         strokeDataRef.current = sampleStrokes;
         setHasStroke(true);
-        if (!sig.isEmpty()) {
-          onChange?.(sig.getTrimmedCanvas().toDataURL("image/png"));
-        }
+        onChange?.(readSignatureDataUrl(sig));
       };
     }
     return () => {
@@ -132,7 +168,7 @@ export const SignaturePad = forwardRef<SignaturePadHandle, Props>(function Signa
         delete (window as unknown as { __zomateSeedSignature?: () => void }).__zomateSeedSignature;
       }
     };
-  }, [applyCanvasDimensions, restoreStrokes, syncFromCanvas]);
+  }, [applyCanvasDimensions, onChange, restoreStrokes, syncFromCanvas]);
 
   useImperativeHandle(
     ref,
@@ -148,8 +184,9 @@ export const SignaturePad = forwardRef<SignaturePadHandle, Props>(function Signa
         return sigRef.current?.isEmpty() ?? true;
       },
       getDataUrl: () => {
-        if (sigRef.current?.isEmpty()) return "";
-        return sigRef.current?.getTrimmedCanvas().toDataURL("image/png") ?? "";
+        const sig = sigRef.current;
+        if (!sig || sig.isEmpty()) return "";
+        return readSignatureDataUrl(sig);
       }
     }),
     [onChange]

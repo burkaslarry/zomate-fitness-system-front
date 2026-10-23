@@ -159,8 +159,18 @@ export function isStaleAuthMessage(message: string): boolean {
 
 /** Normalized message from API throws (already parsed by `errorFromApiBody` where applicable). */
 export function formatApiError(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  return String(err);
+  const message = err instanceof Error ? err.message : String(err);
+  const lower = message.trim().toLowerCase();
+  // Safari/WebKit network failures often surface as bare "Load failed" / "Failed to fetch".
+  if (
+    lower === "load failed" ||
+    lower === "failed to fetch" ||
+    lower === "networkerror when attempting to fetch resource." ||
+    lower.includes("network request failed")
+  ) {
+    return "網絡連線失敗，請檢查簽名／附件後再試一次。若持續出現，請縮短簽名或改用較穩定網絡。";
+  }
+  return message;
 }
 
 /** Native popup — use for backend errors so users never only see raw JSON. */
@@ -213,11 +223,14 @@ async function request(path: string, options?: RequestInit) {
   const headers = new Headers(options?.headers);
   const auth = authHeaders();
   Object.entries(auth).forEach(([k, v]) => headers.set(k, v));
-  if (options?.body && !(options.body instanceof FormData) && !headers.has("Content-Type")) {
+  const isFormData = options?.body instanceof FormData;
+  if (options?.body && !isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
+  // Multipart (signature / uploads): do not retry — Safari may fail reused FormData; also avoids duplicate creates.
+  const maxAttempts = isFormData ? 1 : RETRY_DELAYS_MS.length;
 
-  for (let attempt = 0; attempt < RETRY_DELAYS_MS.length; attempt += 1) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
       const fullUrl = `${API_BASE_URL}${path}`;
       const res = await fetch(fullUrl, {
@@ -238,9 +251,10 @@ async function request(path: string, options?: RequestInit) {
       }
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
+      if (isFormData) break;
     }
 
-    if (attempt < RETRY_DELAYS_MS.length - 1) {
+    if (attempt < maxAttempts - 1) {
       await sleep(RETRY_DELAYS_MS[attempt]);
     }
   }
