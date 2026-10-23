@@ -915,12 +915,25 @@ export default function CoachDashboardPage() {
 
       {studentRecords ? (
         <section className="space-y-4 rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
-          <h3 className="text-sm font-semibold text-ink">
-            {studentRecords.full_name} · 餘 {studentRecords.lesson_balance} 堂
-          </h3>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h3 className="text-sm font-semibold text-ink">
+              {studentRecords.full_name} · 餘 {studentRecords.lesson_balance} 堂
+            </h3>
+            <Link
+              href={`/coach-portal/reg-course?student=${encodeURIComponent(studentRecords.phone)}`}
+              className="rounded-lg bg-primary/90 px-3 py-2 text-xs font-semibold text-black"
+            >
+              報 Course · 填堂數／付款
+            </Link>
+          </div>
 
           <div>
             <h4 className="text-xs font-semibold uppercase tracking-wide text-ink/50">課程 / 分期</h4>
+            {studentRecords.enrollments.length === 0 ? (
+              <p className="mt-2 text-xs text-ink/55">
+                尚未報 Course。按上方「報 Course · 填堂數／付款」選擇 package、堂數與付款方式。
+              </p>
+            ) : null}
             <ul className="mt-2 space-y-3">
               {studentRecords.enrollments.map((enr) => (
                 <li key={enr.enrollment_id} className="rounded-lg border border-ink/10 bg-canvas p-3 text-sm">

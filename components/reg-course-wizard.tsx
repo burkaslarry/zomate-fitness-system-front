@@ -166,7 +166,43 @@ export default function RegCourseWizard({
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const seededPhone = params.get("student");
-    if (seededPhone) setPhone(seededPhone);
+    if (!seededPhone) return;
+    setPhone(seededPhone);
+    // [F002][S003] Prefill from coach student roster — auto lookup so coach can fill package next.
+    const q = inputToLookupPhone(seededPhone);
+    const digits = q.replace(/\D/g, "");
+    if (digits.length < 8) return;
+    let cancelled = false;
+    setLookupBusy(true);
+    void api
+      .memberLookupByPhone(q)
+      .then((row) => {
+        if (cancelled) return;
+        const profile = row as MemberProfile;
+        setMember(profile);
+        setStep(mode === "coach" ? 2 : 1);
+        if (mode !== "coach") setCoachId(profile.onboarding_coach_id ?? lockedCoachId ?? "");
+        setCategoryId("");
+        setLessonsText("10");
+        setAmount("");
+        if (lockedBranchId != null) setBranchId(lockedBranchId);
+        selectFullPay();
+        setInstallmentCount(2);
+        setInstallmentAmounts(["", ""]);
+        setInstallmentAmountsTouched(false);
+        setRemarks("");
+        setPurchaseSummary(null);
+      })
+      .catch((err) => {
+        if (!cancelled) alertApiError(err);
+      })
+      .finally(() => {
+        if (!cancelled) setLookupBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once from URL on mount
   }, []);
 
   useEffect(() => {
