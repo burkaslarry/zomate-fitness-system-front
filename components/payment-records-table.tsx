@@ -126,6 +126,12 @@ export default function PaymentRecordsTable({
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState("");
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  /** [F005][S003] After receipt upload, surface wa.me confirmation (Meta auto-send skipped to avoid multi-course 400). */
+  const [postUploadWhatsapp, setPostUploadWhatsapp] = useState<{
+    studentWaUrl?: string;
+    coachWaUrl?: string;
+    studentMessage?: string;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -135,6 +141,7 @@ export default function PaymentRecordsTable({
   useEffect(() => {
     setUploadStatus("");
     setUploading(false);
+    setPostUploadWhatsapp(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [detailRow?.id]);
 
@@ -177,7 +184,15 @@ export default function PaymentRecordsTable({
     }
     setUploading(true);
     setUploadStatus("");
+    setPostUploadWhatsapp(null);
     try {
+      /**
+       * [F005][S003]
+       * Feature: Balance Sync & Integrations
+       * Step: Post-upload WhatsApp confirmation from 跟進收條 / payment detail
+       * Logic: Upload proof without Meta auto-dispatch (multi-course students 400 if send_whatsapp=true
+       * without course_enrollment_id). Still read whatsapp.wa_me_url and show Send CTA.
+       */
       const res = (await api.uploadMemberReceiptById(detailRow.student_id, {
         file,
         amount: detailRow.amount != null ? String(detailRow.amount) : undefined,
@@ -185,14 +200,39 @@ export default function PaymentRecordsTable({
         source: "RENEWAL",
         context: "付款紀錄詳情上傳",
         renewal_id: detailRow.record_type === "renewal" ? detailRow.ref_id : undefined,
+        installment_no: detailRow.record_type === "installment" ? detailRow.installment_no : undefined,
+        installment_plan_id:
+          detailRow.record_type === "installment" ? detailRow.installment_plan_id : undefined,
+        // Keep false: backend rejects send_whatsapp when student has multiple courses and no course id.
         send_whatsapp: false,
-        notify_coach: false
-      })) as { id?: number; file_url?: string; download_url?: string };
+        notify_coach: true
+      })) as {
+        id?: number;
+        file_url?: string;
+        download_url?: string;
+        whatsapp?: {
+          student?: { wa_me_url?: string; message?: string };
+          coach?: { wa_me_url?: string };
+        };
+      };
       console.log("[F004][S002] Success: Receipt uploaded from payment detail", {
         receiptId: res.id,
-        renewalId: detailRow.record_type === "renewal" ? detailRow.ref_id : null
+        renewalId: detailRow.record_type === "renewal" ? detailRow.ref_id : null,
+        hasStudentWa: Boolean(res.whatsapp?.student?.wa_me_url)
       });
-      setUploadStatus("上傳成功，已寫入資料庫。");
+      const studentWa = res.whatsapp?.student?.wa_me_url;
+      const coachWa = res.whatsapp?.coach?.wa_me_url;
+      if (studentWa || coachWa) {
+        setPostUploadWhatsapp({
+          studentWaUrl: studentWa,
+          coachWaUrl: coachWa,
+          studentMessage: res.whatsapp?.student?.message
+        });
+        setUploadStatus("上傳成功。請按下方 WhatsApp 按鈕通知學生。");
+      } else {
+        setUploadStatus("上傳成功，已寫入資料庫。（未能產生 WhatsApp 連結，請檢查學員電話）");
+        console.error("[F005][S003] Error: Receipt upload returned no wa_me_url.");
+      }
       if (onReceiptUploaded) await onReceiptUploaded();
       // Optimistically update modal so link appears immediately.
       if (res.id) {
@@ -373,9 +413,22 @@ export default function PaymentRecordsTable({
                 <DetailRow label="日期">{fmtDate(detailRow.created_at)}</DetailRow>
                 {detailRow.due_date ? <DetailRow label="到期">{detailRow.due_date}</DetailRow> : null}
                 {detailRow.paid_at ? <DetailRow label="已付於">{fmtDate(detailRow.paid_at)}</DetailRow> : null}
+                {postUploadWhatsapp?.studentMessage ? (
+                  <DetailRow label="WhatsApp">
+                    <pre className="max-h-36 overflow-auto whitespace-pre-wrap rounded-lg border border-ink/10 bg-canvas p-2 text-[11px] text-ink/80">
+                      {postUploadWhatsapp.studentMessage}
+                    </pre>
+                  </DetailRow>
+                ) : null}
               </dl>
 
               <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-ink/[0.06] pt-4">
+                {postUploadWhatsapp?.studentWaUrl ? (
+                  <WhatsAppButton href={postUploadWhatsapp.studentWaUrl} label="WhatsApp 通知學生" />
+                ) : null}
+                {postUploadWhatsapp?.coachWaUrl ? (
+                  <WhatsAppButton href={postUploadWhatsapp.coachWaUrl} label="WhatsApp 通知教練" />
+                ) : null}
                 {detailRow.status === "missing_receipt" && onRequestReceiptUpload ? (
                   <WhatsAppButton
                     label={receiptUploadBusyId === detailRow.id ? "產生中…" : "WhatsApp 請上傳收據"}
