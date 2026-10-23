@@ -183,3 +183,7 @@ Day/week use hourly appointment blocks with overlap lanes; month shows every boo
 ### [F004][S002] Payment edit / 付款詳情編輯
 Admin: payment record → details → edit → save. Pending amounts, payment method, Hong Kong date and notes can be corrected (installments: amount/date/due date). Confirmed amounts are locked to preserve payment/PIN gates; metadata remains editable. Changes are audited and do not auto-confirm funds or send notifications.
 Admin：付款紀錄 → 詳情 → 編輯付款詳情 → 儲存修改。可改待確認金額、付款方式、香港日期及備註；分期記錄可改未付金額、日期及到期日。已確認金額鎖定以保護付款／PIN 狀態，其他資料仍可編輯。每次修改保留稽核紀錄，不會自動確認付款或發訊息。
+
+### [F008][S005] Phone calendar / 手機日曆 (2026-10-23)
+The month grid fits seven columns without sideways scrolling. Phones show two compact chips per date plus a +N selector; the selected-date agenda lists every appointment. Week/day grids pin the opaque time gutter and date-header corner while scrolling. Event details open as a phone bottom sheet. Desktop keeps its full appointment cards.
+手機月曆七日完整顯示，毋須左右捲；每日期顯示兩個精簡標籤及 +N，點日期後下方列出當日全部課堂。週／日時間表固定左側時間及標題，左右掃日期時仍看得到時間。課堂詳情以手機底部面板開啟，桌面保留原有完整課堂卡。

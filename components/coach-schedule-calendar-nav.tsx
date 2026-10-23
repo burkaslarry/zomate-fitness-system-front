@@ -61,23 +61,39 @@ export default function CoachScheduleCalendarNav({ selectedDay, mode, rangeSessi
       </div>
     </div>
     <p className="text-xs text-ink/60">只顯示教練已確認嘅逐堂排程；點課堂查看完整資料。已簽到課堂已鎖定。</p>
-    {mode === "month" ? <div className="overflow-x-auto rounded-xl border border-ink/15">
-      <div className="min-w-[630px]">
-        <div className="grid grid-cols-7 border-b border-ink/10 bg-canvas text-center text-xs">{['一','二','三','四','五','六','日'].map(d => <div key={d} className="p-2">星期{d}</div>)}</div>
-        {monthGrid(selectedDay).map((week,i) => <div key={i} className="grid grid-cols-7">{week.map((day,j) => <div key={day ?? `blank-${j}`} className={`min-h-28 border-b border-r border-ink/10 p-1 ${day === selectedDay ? 'bg-primary/5' : ''}`}>
+    {mode === "month" ? <div className="space-y-3">
+      {/* [F008][S005] Seven flexible columns fit phones; the agenda exposes overflow appointments. */}
+      <div aria-label="完整月曆" className="overflow-hidden rounded-xl border border-ink/15">
+      <div className="w-full min-w-0">
+        <div className="grid grid-cols-7 border-b border-ink/10 bg-canvas text-center text-xs">{['一','二','三','四','五','六','日'].map(d => <div key={d} className="min-w-0 py-2"><span className="sm:hidden">{d}</span><span className="hidden sm:inline">星期{d}</span></div>)}</div>
+        {monthGrid(selectedDay).map((week,i) => <div key={i} className="grid grid-cols-7">{week.map((day,j) => <div key={day ?? `blank-${j}`} className={`min-h-[100px] min-w-0 overflow-hidden border-b border-r border-ink/10 p-0.5 sm:min-h-28 sm:p-1 ${day === selectedDay ? 'bg-primary/5' : ''}`}>
           {day && <><button type="button" aria-label={formatDateLabel(day)} onClick={() => onSelectDay(day)} className={`mb-1 flex h-7 w-7 items-center justify-center rounded-full text-xs ${day === today ? 'bg-primary font-bold' : ''}`}>{parseDateKey(day).getDate()}</button>
-          {rows.filter(s => s.session_date === day).map(s => <button type="button" key={`${s.enrollment_id}-${s.session_date}`} onClick={() => open(s)} className={`mb-1 block w-full rounded border p-1 text-left text-[11px] ${calendarChipClass(s.student_id)}`}>
+          <div className="sm:hidden">
+            {rows.filter(s => s.session_date === day).slice(0,2).map(s => <button type="button" key={`${s.enrollment_id}-${s.session_date}`} aria-label={`${s.start_time} ${s.student_name} ${s.course_title}`} onClick={() => open(s)} className={`mb-0.5 block w-full min-w-0 overflow-hidden rounded border px-0.5 py-0.5 text-left text-[9px] leading-tight ${calendarChipClass(s.student_id)}`}>
+              <strong className="block truncate tabular-nums">{s.start_time}</strong><span className="block truncate">{s.student_name}</span>
+            </button>)}
+            {rows.filter(s => s.session_date === day).length > 2 ? <button type="button" aria-label={`${formatDateLabel(day)}全部課堂`} onClick={() => onSelectDay(day)} className="block w-full py-1 text-center text-[9px] font-semibold text-primary">+{rows.filter(s => s.session_date === day).length-2}</button> : null}
+          </div>
+          <div className="hidden sm:block">{rows.filter(s => s.session_date === day).map(s => <button type="button" key={`${s.enrollment_id}-${s.session_date}`} onClick={() => open(s)} className={`mb-1 block w-full min-w-0 rounded border p-1 text-left text-[11px] ${calendarChipClass(s.student_id)}`}>
             <strong className="block">{s.start_time}–{s.end_time}</strong><span className="block break-words">{s.student_name}</span><span className="block break-words">{s.course_title}</span><span>{s.attendance_status}</span>
-          </button>)}</>}
+          </button>)}</div></>}
         </div>)}</div>)}
       </div>
-    </div> : <div className="max-h-[650px] overflow-auto rounded-xl border border-ink/15" aria-label={mode === 'day' ? '每日時間表' : '每週時間表'}>
-      <div style={{ minWidth: mode === 'week' ? 900 : 320 }}>
+      </div>
+      <section aria-label="月曆當日課堂" className="space-y-2 rounded-xl border border-ink/15 bg-surface p-3 sm:hidden">
+        <h3 className="text-sm font-semibold">{formatDateLabel(selectedDay)}</h3>
+        {rows.filter(s => s.session_date === selectedDay).length === 0 ? <p className="py-3 text-sm text-ink/55">此日暫無已排課堂</p> : rows.filter(s => s.session_date === selectedDay).map(s => <button type="button" key={`${s.enrollment_id}-${s.session_date}`} onClick={() => open(s)} className={`flex min-h-16 w-full items-start gap-3 rounded-lg border p-3 text-left ${calendarChipClass(s.student_id)}`}>
+          <span className="shrink-0 text-xs font-semibold tabular-nums">{s.start_time}<br />{s.end_time}</span><span className="min-w-0"><strong className="block break-words text-sm">{s.student_name}</strong><span className="block break-words text-xs">{s.course_title}</span><span className="text-xs">{s.attendance_status}</span></span>
+        </button>)}
+      </section>
+    </div> : <div className="max-h-[min(650px,70svh)] overflow-auto overscroll-contain rounded-xl border border-ink/15" aria-label={mode === 'day' ? '每日時間表' : '每週時間表'}>
+      <div style={{ minWidth: mode === 'week' ? 900 : 0 }}>
         <div className="sticky top-0 z-20 grid border-b border-ink/15 bg-surface" style={{gridTemplateColumns:`56px repeat(${days.length}, minmax(0,1fr))`}}>
-          <div className="p-2 text-[10px] text-ink/50">香港時間</div>{days.map(day => <button type="button" key={day} onClick={() => onSelectDay(day)} className={`border-l border-ink/10 p-2 text-xs ${day === today ? 'font-bold text-primary' : ''}`}>{parseDateKey(day).toLocaleDateString('zh-HK',{weekday:'short',month:'numeric',day:'numeric'})}</button>)}
+          <div aria-label="固定時間欄標題" className="sticky left-0 z-30 bg-surface p-2 text-[10px] text-ink/50">香港時間</div>{days.map(day => <button type="button" key={day} onClick={() => onSelectDay(day)} className={`border-l border-ink/10 p-2 text-xs ${day === today ? 'font-bold text-primary' : ''}`}>{parseDateKey(day).toLocaleDateString('zh-HK',{weekday:'short',month:'numeric',day:'numeric'})}</button>)}
         </div>
         <div className="grid" style={{gridTemplateColumns:`56px repeat(${days.length}, minmax(0,1fr))`}}>
-          <div className="relative text-[10px] text-ink/55" style={{height}}>{hours.slice(0,-1).map(h => <span key={h} className="absolute right-2" style={{top:(h-firstHour)*72+2}}>{String(h).padStart(2,'0')}:00</span>)}</div>
+          {/* [F008][S005] Sticky opaque gutter remains visible while dates scroll horizontally. */}
+          <div aria-label="固定時間欄" className="sticky left-0 z-10 bg-surface text-[10px] text-ink/55" style={{height}}>{hours.slice(0,-1).map(h => <span key={h} className="absolute right-2" style={{top:(h-firstHour)*72+2}}>{String(h).padStart(2,'0')}:00</span>)}</div>
           {days.map(day => <div key={day} className="relative border-l border-ink/15" style={{height}}>
             {hours.slice(0,-1).map(h => <div key={h} className="absolute w-full border-t border-ink/10" style={{top:(h-firstHour)*72,height:72}}><div className="mt-9 border-t border-dashed border-ink/5" /></div>)}
             {eventLanes(rows.filter(s => s.session_date === day)).map(({session:s,lane,lanes}) => <button type="button" key={`${s.enrollment_id}-${s.session_date}`} onClick={() => open(s)} className={`absolute overflow-auto rounded-md border px-2 py-1 text-left text-[11px] shadow-sm ${calendarChipClass(s.student_id)}`} style={{top:(minutes(s.start_time)-firstHour*60)*1.2, height:Math.max(32,(minutes(s.end_time)-minutes(s.start_time))*1.2), left:`${lane*100/lanes}%`,width:`calc(${100/lanes}% - 3px)`}}>
@@ -87,8 +103,8 @@ export default function CoachScheduleCalendarNav({ selectedDay, mode, rangeSessi
         </div>
       </div>
     </div>}
-    {detail && <div className="fixed inset-0 z-[20000] flex items-center justify-center bg-black/40 p-4"><div role="dialog" aria-modal="true" aria-label="課堂詳情" className="w-full max-w-sm space-y-3 rounded-2xl bg-surface p-6 shadow-xl">
-      <h3 className="text-lg font-semibold">{detail.student_name}</h3><p>{detail.course_title}</p><p>{detail.session_date} · {detail.start_time}–{detail.end_time}</p><p>{detail.branch_name} · {detail.attendance_status}{detail.attendance_status === '已簽到' ? '（已鎖定）' : ''}</p><button type="button" onClick={() => setDetail(null)} className="min-h-11 rounded-lg bg-primary px-5">關閉課堂詳情</button>
+    {detail && <div className="fixed inset-0 z-[20000] flex items-end justify-center bg-black/40 sm:items-center sm:p-4"><div role="dialog" aria-modal="true" aria-label="課堂詳情" className="max-h-[85svh] w-full space-y-3 overflow-y-auto rounded-t-2xl bg-surface p-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-xl sm:max-w-sm sm:rounded-2xl">
+      <h3 className="text-lg font-semibold">{detail.student_name}</h3><p>{detail.course_title}</p><p>{detail.session_date} · {detail.start_time}–{detail.end_time}</p><p>{detail.branch_name} · {detail.attendance_status}{detail.attendance_status === '已簽到' ? '（已鎖定）' : ''}</p><button type="button" onClick={() => setDetail(null)} className="min-h-11 w-full rounded-lg bg-primary px-5">關閉課堂詳情</button>
     </div></div>}
   </div>;
 }
