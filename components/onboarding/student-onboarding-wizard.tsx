@@ -19,7 +19,7 @@ import {
   studentRegistrationPayloadSchema,
   type StudentRegistrationPayload
 } from "../../lib/schemas/student";
-import { alertApiError, api } from "../../lib/api";
+import { alertApiError, api, isNetworkFetchError } from "../../lib/api";
 import { SignaturePad, type SignaturePadHandle } from "./signature-pad";
 
 type CoachOption = { id: number; full_name: string; login_username?: string | null };
@@ -130,6 +130,8 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   const [coachCategoriesLoading, setCoachCategoriesLoading] = useState(false);
   const [showSignatureErrorModal, setShowSignatureErrorModal] = useState(false);
   const [signatureHintError, setSignatureHintError] = useState(false);
+  /** True when member was created without signature (staff 候補 later). */
+  const [signatureDeferred, setSignatureDeferred] = useState(false);
 
   /**
    * [F001][S001]
@@ -409,7 +411,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   /**
    * [F001][S004]
    * Feature: Student Onboarding
-   * Step: Final submit — `POST /api/members`; sessionStorage context + success dialog.
+   * Step: Final submit — `POST /api/members`; on signature Load failed, retry without signature (職員候補).
    */
   async function onFinalSubmit(values: StudentRegistrationPayload) {
     const signatureData =
@@ -432,41 +434,70 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     }
     setStatus("提交中…");
     setShowSuccessDialog(false);
-    try {
-      const res = (await api.createMember({
-        chinese_name: values.chinese_name,
-        full_name: values.full_name,
-        nickname: values.nickname,
-        gender: values.gender,
-        hkid: values.hkid,
-        phone: values.phone,
-        date_of_birth: values.date_of_birth,
-        emergency_contact_name: values.emergency_contact_name,
-        emergency_contact_relationship: values.emergency_contact_relationship,
-        emergency_contact_phone: values.emergency_contact_phone,
-        parq: values.parq,
-        medical_clearance_file_name: (values.medical_clearance_file_name || "").trim(),
-        medical_clearance_file: parqClearanceFileRef.current,
-        pdpo_acknowledged: values.pdpo_acknowledged,
-        cooling_off_acknowledged: values.cooling_off_acknowledged,
-        disclaimer_accepted: values.disclaimer_accepted,
-        whatsapp_reminder_opt_in: values.whatsapp_reminder_opt_in,
-        digital_signature: signatureData,
-        coach_username: values.coach_username.trim(),
-        coach_id: values.coach_id,
-        course_category_id: values.course_category_id
-      })) as {
-        member?: { hkid?: string; full_name?: string };
-      };
+    setSignatureDeferred(false);
+
+    const basePayload = {
+      chinese_name: values.chinese_name,
+      full_name: values.full_name,
+      nickname: values.nickname,
+      gender: values.gender,
+      hkid: values.hkid,
+      phone: values.phone,
+      date_of_birth: values.date_of_birth,
+      emergency_contact_name: values.emergency_contact_name,
+      emergency_contact_relationship: values.emergency_contact_relationship,
+      emergency_contact_phone: values.emergency_contact_phone,
+      parq: values.parq,
+      medical_clearance_file_name: (values.medical_clearance_file_name || "").trim(),
+      medical_clearance_file: parqClearanceFileRef.current,
+      pdpo_acknowledged: values.pdpo_acknowledged,
+      cooling_off_acknowledged: values.cooling_off_acknowledged,
+      disclaimer_accepted: values.disclaimer_accepted,
+      whatsapp_reminder_opt_in: values.whatsapp_reminder_opt_in,
+      coach_username: values.coach_username.trim(),
+      coach_id: values.coach_id,
+      course_category_id: values.course_category_id
+    };
+
+    const finishSuccess = (
+      res: { member?: { hkid?: string; full_name?: string } },
+      deferredSignature: boolean
+    ) => {
       const createdHkid = res.member?.hkid ?? values.hkid;
       const createdName = res.member?.full_name ?? values.full_name;
       window.sessionStorage.setItem(
         "zomate_register_context",
-        JSON.stringify({ hkid: createdHkid, full_name: createdName })
+        JSON.stringify({ hkid: createdHkid, full_name: createdName, signature_deferred: deferredSignature })
       );
-      setStatus("申請成功。");
+      setSignatureDeferred(deferredSignature);
+      setStatus(deferredSignature ? "申請成功（簽名請職員候補）。" : "申請成功。");
       setShowSuccessDialog(true);
+    };
+
+    try {
+      const res = (await api.createMember({
+        ...basePayload,
+        digital_signature: signatureData
+      })) as { member?: { hkid?: string; full_name?: string } };
+      finishSuccess(res, false);
     } catch (err) {
+      // Signature payload often triggers Safari "Load failed" — save member without signature for 候補.
+      if (isNetworkFetchError(err)) {
+        try {
+          setStatus("簽名上載失敗，改以無簽名提交（職員可候補）…");
+          const res = (await api.createMember({
+            ...basePayload,
+            digital_signature: "",
+            medical_clearance_file: parqClearanceFileRef.current
+          })) as { member?: { hkid?: string; full_name?: string } };
+          finishSuccess(res, true);
+          return;
+        } catch (retryErr) {
+          setStatus("");
+          alertApiError(retryErr);
+          return;
+        }
+      }
       setStatus("");
       alertApiError(err);
     }
@@ -995,7 +1026,11 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/35 px-4">
           <div className="w-full max-w-sm space-y-4 rounded-xl border border-emerald-200/80 bg-emerald-50 p-5 text-ink shadow-xl ring-1 ring-ink/[0.06]">
             <h2 className="text-lg font-semibold">申請成功</h2>
-            <p className="text-sm text-ink/80"></p>
+            <p className="text-sm text-ink/80">
+              {signatureDeferred
+                ? "電子簽名未能一併上載。請通知職員於學員檔案頁候補簽署。"
+                : "資料已提交，可繼續後續流程。"}
+            </p>
             <button
               type="button"
               className="w-full rounded-md border border-ink/15 bg-primary/90 px-4 py-3 text-sm font-semibold text-black shadow-sm hover:bg-primary"

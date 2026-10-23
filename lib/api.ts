@@ -157,18 +157,26 @@ export function isStaleAuthMessage(message: string): boolean {
   return message === "Invalid auth token." || message === "Session expired." || message === "Missing auth token.";
 }
 
-/** Normalized message from API throws (already parsed by `errorFromApiBody` where applicable). */
-export function formatApiError(err: unknown): string {
+/** Safari/WebKit + generic browser network failures (often bare "Load failed"). */
+export function isNetworkFetchError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
   const lower = message.trim().toLowerCase();
-  // Safari/WebKit network failures often surface as bare "Load failed" / "Failed to fetch".
-  if (
+  return (
     lower === "load failed" ||
     lower === "failed to fetch" ||
     lower === "networkerror when attempting to fetch resource." ||
-    lower.includes("network request failed")
-  ) {
-    return "網絡連線失敗，請檢查簽名／附件後再試一次。若持續出現，請縮短簽名或改用較穩定網絡。";
+    lower.includes("network request failed") ||
+    lower.includes("signature image is too large") ||
+    lower.includes("string_too_long") ||
+    lower.includes("ensure this value has at most")
+  );
+}
+
+/** Normalized message from API throws (already parsed by `errorFromApiBody` where applicable). */
+export function formatApiError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  if (isNetworkFetchError(err)) {
+    return "網絡連線失敗，請稍後再試。簽名若未能上載，職員可於學員檔案候補簽署。";
   }
   return message;
 }

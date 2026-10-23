@@ -35,7 +35,7 @@ type StrokeData = StrokePoint[][];
 
 const CANVAS_HEIGHT = 160;
 /** Cap export width so retina PNG data URLs stay small enough for Safari multipart POST. */
-const EXPORT_MAX_WIDTH = 720;
+const EXPORT_MAX_WIDTH = 480;
 
 /**
  * [F001][S004]
