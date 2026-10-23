@@ -189,9 +189,9 @@ export default function PaymentRecordsTable({
       /**
        * [F005][S003]
        * Feature: Balance Sync & Integrations
-       * Step: Post-upload WhatsApp confirmation from 跟進收條 / payment detail
-       * Logic: Upload proof without Meta auto-dispatch (multi-course students 400 if send_whatsapp=true
-       * without course_enrollment_id). Still read whatsapp.wa_me_url and show Send CTA.
+       * Step: Post-upload WhatsApp API — Zomate 已收到收據（學生 + 教練）
+       * Logic: On success, backend log_whatsapp → Meta Cloud API to student and coach;
+       * wa.me kept as manual resend fallback.
        */
       const res = (await api.uploadMemberReceiptById(detailRow.student_id, {
         file,
@@ -203,35 +203,39 @@ export default function PaymentRecordsTable({
         installment_no: detailRow.record_type === "installment" ? detailRow.installment_no : undefined,
         installment_plan_id:
           detailRow.record_type === "installment" ? detailRow.installment_plan_id : undefined,
-        // Keep false: backend rejects send_whatsapp when student has multiple courses and no course id.
-        send_whatsapp: false,
+        send_whatsapp: true,
         notify_coach: true
       })) as {
         id?: number;
         file_url?: string;
         download_url?: string;
         whatsapp?: {
-          student?: { wa_me_url?: string; message?: string };
-          coach?: { wa_me_url?: string };
+          student?: { wa_me_url?: string; message?: string; template_key?: string };
+          coach?: { wa_me_url?: string; template_key?: string };
         };
       };
-      console.log("[F004][S002] Success: Receipt uploaded from payment detail", {
+      console.log("[F005][S003] Success: Receipt uploaded; WhatsApp API notified student/coach", {
         receiptId: res.id,
         renewalId: detailRow.record_type === "renewal" ? detailRow.ref_id : null,
-        hasStudentWa: Boolean(res.whatsapp?.student?.wa_me_url)
+        studentTemplate: res.whatsapp?.student?.template_key,
+        coachTemplate: res.whatsapp?.coach?.template_key
       });
       const studentWa = res.whatsapp?.student?.wa_me_url;
       const coachWa = res.whatsapp?.coach?.wa_me_url;
+      setPostUploadWhatsapp({
+        studentWaUrl: studentWa,
+        coachWaUrl: coachWa,
+        studentMessage: res.whatsapp?.student?.message
+      });
       if (studentWa || coachWa) {
-        setPostUploadWhatsapp({
-          studentWaUrl: studentWa,
-          coachWaUrl: coachWa,
-          studentMessage: res.whatsapp?.student?.message
-        });
-        setUploadStatus("上傳成功。請按下方 WhatsApp 按鈕通知學生。");
+        setUploadStatus(
+          coachWa
+            ? "上傳成功；已透過 WhatsApp API 通知學生「Zomate 已收到收據」，並通知教練。"
+            : "上傳成功；已透過 WhatsApp API 通知學生「Zomate 已收到收據」。（未有教練電話可通知）"
+        );
       } else {
-        setUploadStatus("上傳成功，已寫入資料庫。（未能產生 WhatsApp 連結，請檢查學員電話）");
-        console.error("[F005][S003] Error: Receipt upload returned no wa_me_url.");
+        setUploadStatus("上傳成功，已寫入資料庫。（未能產生 WhatsApp 通知，請檢查學員電話／同意接收）");
+        console.error("[F005][S003] Error: Receipt upload returned no WhatsApp payload.");
       }
       if (onReceiptUploaded) await onReceiptUploaded();
       // Optimistically update modal so link appears immediately.
@@ -424,10 +428,10 @@ export default function PaymentRecordsTable({
 
               <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-ink/[0.06] pt-4">
                 {postUploadWhatsapp?.studentWaUrl ? (
-                  <WhatsAppButton href={postUploadWhatsapp.studentWaUrl} label="WhatsApp 通知學生" />
+                  <WhatsAppButton href={postUploadWhatsapp.studentWaUrl} label="再發 WhatsApp（學生）" />
                 ) : null}
                 {postUploadWhatsapp?.coachWaUrl ? (
-                  <WhatsAppButton href={postUploadWhatsapp.coachWaUrl} label="WhatsApp 通知教練" />
+                  <WhatsAppButton href={postUploadWhatsapp.coachWaUrl} label="再發 WhatsApp（教練）" />
                 ) : null}
                 {detailRow.status === "missing_receipt" && onRequestReceiptUpload ? (
                   <WhatsAppButton
