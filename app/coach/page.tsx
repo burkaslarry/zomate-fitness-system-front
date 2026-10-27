@@ -13,6 +13,7 @@ import BackendShell from "../../components/backend-shell";
 import CoachCategoryFilter from "../../components/coach-category-filter";
 import { alertApiError, api } from "../../lib/api";
 import { getAuthSession } from "../../lib/auth";
+import { todayHktDate } from "../../lib/format-hkt";
 
 type CoachOpt = { id: number; full_name: string };
 type SessionRow = {
@@ -33,8 +34,7 @@ type SessionRow = {
 };
 
 function todayKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return todayHktDate();
 }
 
 export default function CoachStaffDayPage() {
@@ -218,6 +218,9 @@ export default function CoachStaffDayPage() {
                       {s.attendance_status}
                     </span>
                   </div>
+                  <p className="mt-1 text-sm font-medium tabular-nums text-ink/85">
+                    電話 {s.student_phone || "—"}
+                  </p>
                   <p className="mt-1 text-xs text-ink/60">
                     {s.start_time}–{s.end_time} · {s.branch_name} · PIN {s.checkin_pin}
                   </p>

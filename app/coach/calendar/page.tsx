@@ -22,6 +22,7 @@ import {
   sessionRedeemedDayKey,
   sessionRedeemedPairKey
 } from "../../../lib/coach-sessions";
+import { formatHktDateTime, todayHktDate } from "../../../lib/format-hkt";
 
 type CoachOpt = { id: number; full_name: string; phone: string; branch_id: number | null };
 
@@ -132,7 +133,8 @@ export default function CoachCalendarPage() {
   const [viewYear, setViewYear] = useState(now.getFullYear());
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [coaches, setCoaches] = useState<CoachOpt[]>([]);
-  const [coachId, setCoachId] = useState<number | "">("");
+  /** Staff: `"all"` = 同一畫面睇晒所有教練；coach portal keeps a single coach id. */
+  const [coachId, setCoachId] = useState<number | "" | "all">("");
   const [sessions, setSessions] = useState<CoachSessionRow[]>([]);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
@@ -151,8 +153,9 @@ export default function CoachCalendarPage() {
       .then((list) => {
         const arr = list as CoachOpt[];
         setCoaches(arr);
-        if (!coachPortal && arr.length) {
-          setCoachId((prev) => (prev === "" ? arr[0].id : prev));
+        if (!coachPortal) {
+          // [F008][S002] Masteracc default: all coaches on one calendar.
+          setCoachId((prev) => (prev === "" ? "all" : prev));
         }
       })
       .catch((e) => setStatus(String(e)));
@@ -195,7 +198,7 @@ export default function CoachCalendarPage() {
     if (!portalResolved || coachId === "") return;
     setLoading(true);
     try {
-      const rows = (await api.coachSessions(Number(coachId), {
+      const rows = (await api.coachSessions(coachId === "all" ? "all" : Number(coachId), {
         fromDate: rangeFrom,
         toDate: rangeTo,
         categoryIds: categoryIds.length ? categoryIds : undefined
@@ -290,15 +293,20 @@ export default function CoachCalendarPage() {
   }
 
   function goToday() {
-    const t = new Date();
-    setViewYear(t.getFullYear());
-    setViewMonth(t.getMonth());
+    const [y, m] = todayHktDate().split("-").map((x) => parseInt(x, 10));
+    if (y && m) {
+      setViewYear(y);
+      setViewMonth(m - 1);
+    }
   }
 
   const title = `${viewYear} 年 ${viewMonth + 1} 月`;
   const selectedSessions = selectedKey ? byDay.get(selectedKey) ?? [] : [];
 
-  const selectedCoachLabel = coaches.find((c) => c.id === coachId)?.full_name ?? "—";
+  const selectedCoachLabel =
+    coachId === "all"
+      ? "全部教練"
+      : (coaches.find((c) => c.id === coachId)?.full_name ?? "—");
 
   const sessionLooksRedeemed = useCallback(
     (s: CoachSessionRow) => sessionIsCheckedIn(s, redeemedPairs),
@@ -348,7 +356,7 @@ export default function CoachCalendarPage() {
                 <span className="shrink-0 text-xs font-medium text-emerald-700">餘 {ev.lesson_balance ?? "—"} 堂</span>
               </div>
               <p className="mt-1 text-[11px] text-ink/50">
-                {ev.created_at ? new Date(ev.created_at).toLocaleString() : ""} · {ev.channel ?? "—"}
+                {ev.created_at ? formatHktDateTime(ev.created_at) : ""} · {ev.channel ?? "—"}
               </p>
               {ev.course_title ? (
                 <p className="mt-1 text-[11px] font-medium text-emerald-800/90">課堂：{ev.course_title}</p>
@@ -379,7 +387,7 @@ export default function CoachCalendarPage() {
   };
 
   async function exportMonth() {
-    if (coachId === "") return;
+    if (coachId === "" || coachId === "all") return;
     setExporting(true);
     try {
       await api.downloadCoachSessionsExport(
@@ -426,7 +434,7 @@ export default function CoachCalendarPage() {
             {!coachPortal ? (
               <>
                 <p className="mt-1 max-w-xl text-sm text-ink/55">
-                  月曆顯示堂數；右側 WebSocket 即時顯示學生簽到。可篩選課程類型並匯出 Excel。
+                  預設顯示全部教練日程（同一時間睇晒）；右側 WebSocket 即時顯示學生簽到（香港時間 HKT）。
                 </p>
                 <Link href="/coach" className="mt-2 inline-block text-sm text-primary hover:text-ink hover:underline">
                   返回教練上堂（單日）
@@ -453,9 +461,14 @@ export default function CoachCalendarPage() {
                 <select
                   className="!w-auto min-w-[10rem] max-w-[min(100%,16rem)] rounded-lg border border-ink/15 bg-canvas px-2 py-1.5 text-sm text-ink shadow-sm outline-hidden focus:ring-2 focus:ring-primary/35 [&>option]:bg-surface [&>option]:text-ink"
                   value={coachId === "" ? "" : String(coachId)}
-                  onChange={(ev) => setCoachId(ev.target.value ? Number(ev.target.value) : "")}
+                  onChange={(ev) => {
+                    const v = ev.target.value;
+                    if (v === "all") setCoachId("all");
+                    else if (v) setCoachId(Number(v));
+                    else setCoachId("");
+                  }}
                 >
-                  <option value="">—</option>
+                  <option value="all">全部教練</option>
                   {coaches.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.full_name}
@@ -476,7 +489,8 @@ export default function CoachCalendarPage() {
               type="button"
               className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-sm font-medium text-black disabled:opacity-50"
               onClick={() => void exportMonth()}
-              disabled={exporting || coachId === ""}
+              disabled={exporting || coachId === "" || coachId === "all"}
+              title={coachId === "all" ? "請先揀單一教練再匯出" : undefined}
             >
               {exporting ? "匯出中…" : "匯出 Excel"}
             </button>
@@ -570,15 +584,17 @@ export default function CoachCalendarPage() {
                       <div className="mt-1 space-y-0.5">
                         {daySessions.slice(0, 3).map((s) => (
                           <div
-                            key={`${s.enrollment_id}-${s.session_date}-${s.student_id}`}
+                            key={`${s.enrollment_id}-${s.session_date}-${s.student_id}-${s.coach_id ?? ""}`}
                             className={`truncate rounded px-1 py-px text-[10px] leading-tight ${
                               sessionLooksRedeemed(s)
                                 ? "border border-emerald-400/65 bg-emerald-100/90 font-semibold text-emerald-950"
                                 : "border border-ink/[0.06] bg-canvas text-ink/70"
                             }`}
-                            title={`${s.student_name} · ${s.category_name}`}
+                            title={`${s.coach_name ? `${s.coach_name} · ` : ""}${s.student_name} · ${s.category_name}`}
                           >
-                            {s.start_time} {s.student_name}
+                            {s.start_time}{" "}
+                            {coachId === "all" && s.coach_name ? `${s.coach_name}·` : ""}
+                            {s.student_name}
                           </div>
                         ))}
                         {daySessions.length > 3 && (
@@ -618,12 +634,18 @@ export default function CoachCalendarPage() {
                             <span className="rounded-full bg-primary/10 px-2 py-px text-[10px] text-black/80">
                               {s.category_name}
                             </span>
+                            {s.coach_name ? (
+                              <span className="rounded-full bg-ink/5 px-2 py-px text-[10px] text-ink/70">
+                                {s.coach_name}
+                              </span>
+                            ) : null}
                             {checkedIn ? (
                               <span className="rounded-full bg-emerald-600/95 px-2 py-px text-[10px] font-semibold uppercase text-white">
                                 已簽到
                               </span>
                             ) : null}
                           </div>
+                          <p className="mt-1 text-sm tabular-nums text-ink/80">電話 {s.student_phone || "—"}</p>
                           <p className="text-xs text-ink/55">
                             {s.session_date} {s.start_time} – {s.end_time}
                           </p>

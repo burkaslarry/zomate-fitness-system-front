@@ -1011,7 +1011,7 @@ export const api = {
     }),
   /** [F008][S002] Filtered coach session rows (calendar / day / report). */
   coachSessions: (
-    coachId: number,
+    coachId: number | "all",
     query?: {
       day?: string;
       fromDate?: string;
@@ -1019,7 +1019,9 @@ export const api = {
       categoryIds?: number[];
     }
   ) => {
-    const sp = new URLSearchParams({ coach_id: String(coachId) });
+    const sp = new URLSearchParams();
+    if (coachId === "all") sp.set("all_coaches", "true");
+    else sp.set("coach_id", String(coachId));
     if (query?.day) sp.set("day", query.day);
     if (query?.fromDate) sp.set("from_date", query.fromDate);
     if (query?.toDate) sp.set("to_date", query.toDate);
@@ -1028,7 +1030,7 @@ export const api = {
   },
   /** [F008][S003] Coach-scoped session export (Excel-compatible CSV). */
   downloadCoachSessionsExport: (
-    coachId: number,
+    coachId: number | "all",
     query?: {
       day?: string;
       fromDate?: string;
@@ -1037,7 +1039,9 @@ export const api = {
     },
     filename = "coach-sessions.csv"
   ) => {
-    const sp = new URLSearchParams({ coach_id: String(coachId) });
+    const sp = new URLSearchParams();
+    if (coachId === "all") sp.set("all_coaches", "true");
+    else sp.set("coach_id", String(coachId));
     if (query?.day) sp.set("day", query.day);
     if (query?.fromDate) sp.set("from_date", query.fromDate);
     if (query?.toDate) sp.set("to_date", query.toDate);

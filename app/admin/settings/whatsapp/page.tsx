@@ -11,6 +11,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import BackendShell from "../../../../components/backend-shell";
 import { alertApiError, api } from "../../../../lib/api";
+import { formatHktDateTime } from "../../../../lib/format-hkt";
 
 type ApiWaLog = {
   id: number;
@@ -137,13 +138,21 @@ export default function AdminSettingsWhatsappPage() {
   }
 
   const tableRows =
-    apiLogs?.map((log) => ({
-      id: String(log.id),
-      when: log.created_at,
-      recipient: log.recipient,
-      message: log.message,
-      status: "✅ 已記錄"
-    })) ?? [];
+    apiLogs?.map((log) => {
+      const msg = log.message || "";
+      let status = "已記錄";
+      if (msg.startsWith("[skipped:whatsapp_opt_out]")) status = "已略過（學生關閉提醒）";
+      else if (msg.startsWith("[dry_run:")) status = "未真正送出（dry-run／無 template map）";
+      else if (msg.startsWith("[send_failed:")) status = "送出失敗";
+      else if (msg.startsWith("[api_accepted")) status = "Meta 已接受（≠手機必達）";
+      return {
+        id: String(log.id),
+        when: log.created_at,
+        recipient: log.recipient,
+        message: log.message,
+        status
+      };
+    }) ?? [];
 
   const studentTemplates = templates.filter((t) => t.audience === "student");
   const coachTemplates = templates.filter((t) => t.audience === "coach");
@@ -163,7 +172,7 @@ export default function AdminSettingsWhatsappPage() {
                   <p className="text-xs text-ink/45 font-mono">{t.key}</p>
                 </div>
                 {t.updated_at ? (
-                  <p className="text-[11px] text-ink/45">更新 {new Date(t.updated_at).toLocaleString()}</p>
+                  <p className="text-[11px] text-ink/45">更新 {formatHktDateTime(t.updated_at)}</p>
                 ) : null}
               </div>
               <textarea
@@ -264,7 +273,7 @@ export default function AdminSettingsWhatsappPage() {
             <div>
               <dt className="text-ink/45">最後一筆 log</dt>
               <dd>
-                {analytics?.last_sent_at ? new Date(analytics.last_sent_at).toLocaleString() : "尚無"}
+                {analytics?.last_sent_at ? formatHktDateTime(analytics.last_sent_at) : "尚無"}
               </dd>
             </div>
           </dl>
@@ -309,7 +318,7 @@ export default function AdminSettingsWhatsappPage() {
                   tableRows.map((row) => (
                     <tr key={row.id} className="border-b border-ink/[0.08] last:border-0 hover:bg-canvas/80">
                       <td className="whitespace-nowrap px-4 py-3 align-top text-ink/80">
-                        {new Date(row.when).toLocaleString()}
+                        {formatHktDateTime(row.when)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 align-top text-ink/80">{row.recipient}</td>
                       <td className="max-w-md whitespace-pre-wrap px-4 py-3 align-top text-ink/85">{row.message}</td>

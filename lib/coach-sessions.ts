@@ -10,6 +10,8 @@ export type CoachSessionRow = {
   student_id: number;
   student_name: string;
   student_phone: string;
+  coach_id?: number | null;
+  coach_name?: string | null;
   category_id: number | null;
   category_name: string;
   session_date: string;

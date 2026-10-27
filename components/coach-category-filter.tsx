@@ -25,7 +25,7 @@ export default function CoachCategoryFilter({
   onChange,
   className = ""
 }: {
-  coachId: number | "";
+  coachId: number | "" | "all";
   selectedIds: number[];
   onChange: (ids: number[]) => void;
   className?: string;
@@ -39,7 +39,7 @@ export default function CoachCategoryFilter({
       return;
     }
     void api
-      .publicCourseCategories(Number(coachId))
+      .publicCourseCategories(coachId === "all" ? undefined : Number(coachId))
       .then((rows) => {
         const arr = (rows as { id: number; name: string }[]).map((r) => ({
           id: r.id,

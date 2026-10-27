@@ -35,6 +35,7 @@ import {
 } from "../../lib/coach-sessions";
 import { alertApiError, api, formatApiError } from "../../lib/api";
 import { getAuthSession } from "../../lib/auth";
+import { formatHktDateTime } from "../../lib/format-hkt";
 import type { CoachStudentBriefDto, CoachStudentRecordDto, CoachRemindPaymentDto } from "../../types/api";
 
 type CoachMe = { id: number; full_name: string; phone: string; branch_name: string | null };
@@ -1159,13 +1160,12 @@ export default function CoachDashboardPage() {
               <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-xs text-ink/75">
                 {studentRecords.attendance.map((a) => (
                   <li key={`att-${a.id}`}>
-                    {a.session_calendar_date} · {a.course_title ?? "課堂"} ·{" "}
-                    {new Date(a.attended_at).toLocaleTimeString("zh-HK", { hour: "2-digit", minute: "2-digit" })}
+                    {a.session_calendar_date} · {a.course_title ?? "課堂"} · {formatHktDateTime(a.attended_at)}
                   </li>
                 ))}
                 {studentRecords.checkins.map((c) => (
                   <li key={`chk-${c.id}`}>
-                    {new Date(c.created_at).toLocaleString("zh-HK")} · {c.channel}
+                    {formatHktDateTime(c.created_at)} · {c.channel}
                     {c.remarks ? ` · ${c.remarks}` : ""}
                   </li>
                 ))}
