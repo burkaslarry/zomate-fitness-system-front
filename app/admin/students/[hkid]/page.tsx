@@ -493,8 +493,12 @@ export default function AdminStudentDetailPage() {
     0
   );
   const ledgerBalance = data?.profile.lesson_balance ?? 0;
-  const ledgerMismatch =
-    packageLessons > 0 && categoryLessons === 0 && ledgerBalance !== packageLessons;
+  /** Lessons consumed after check-in (paid packages − remaining balance). */
+  const deductedLessons =
+    packageLessons > 0 && categoryLessons === 0 ? Math.max(0, packageLessons - ledgerBalance) : 0;
+  /** True over-credit only: remaining > paid packages (possible duplicate top-up). */
+  const ledgerOverCredit =
+    packageLessons > 0 && categoryLessons === 0 && ledgerBalance > packageLessons;
   const photoSrc = apiAssetUrl(data?.profile.photo_url ?? undefined);
   /** [F001][S004] Refresh a repaired image even when its persisted URL is unchanged. */
   const signatureAsset = apiAssetUrl(data?.profile.signature_image_url ?? undefined);
@@ -826,17 +830,27 @@ export default function AdminStudentDetailPage() {
                     <p className="text-xs text-ink/55">可扣堂餘額</p>
                     <p className="mt-1 text-2xl font-semibold text-primary">{ledgerBalance}</p>
                   </div>
+                  {packageLessons > 0 && categoryLessons === 0 ? (
+                    <div className="rounded-lg border border-ink/10 bg-surface p-3 sm:col-span-3 sm:max-w-xs">
+                      <p className="text-xs text-ink/55">已扣堂（簽到）</p>
+                      <p className="mt-1 text-2xl font-semibold text-ink">{deductedLessons}</p>
+                    </div>
+                  ) : null}
                 </div>
                 {categoryLessons > 0 ? (
                   <p className="mt-2 text-xs text-ink/55">種類報讀帳面：{categoryLessons} 堂（與套餐分開計）</p>
                 ) : null}
-                {ledgerMismatch ? (
+                {ledgerOverCredit ? (
                   <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                    餘額（{ledgerBalance}）同已付款套餐（{packageLessons}）唔一致 — 可能重複入帳。請 Admin 用 ledger 修正。
+                    餘額（{ledgerBalance}）高過已付款套餐（{packageLessons}）— 可能重複入帳。請 Admin 用 ledger 修正。
+                  </p>
+                ) : deductedLessons > 0 ? (
+                  <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                    已扣堂 {deductedLessons} 堂（套餐 {packageLessons} − 餘額 {ledgerBalance}）。簽到後餘額會遞減，屬正常。
                   </p>
                 ) : (
                   <p className="mt-2 text-xs text-ink/55">
-                    報課流程：先記錄付款，再開課派 PIN；可扣堂餘額應等於已付款套餐（扣堂後遞減）。
+                    報課流程：先記錄付款，再開課派 PIN；簽到扣堂後「可扣堂餘額」會減少，「已扣堂」會增加。
                   </p>
                 )}
               </div>

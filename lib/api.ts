@@ -637,10 +637,11 @@ export const api = {
   /** [F004][S002] Admin-only audited payment metadata/pending amount correction. */
   updatePaymentRecord: (recordType: string, refId: number, payload: Record<string, unknown>) =>
     request(`/api/admin/payment-records/${recordType}/${refId}`, { method: "PATCH", body: JSON.stringify(payload) }),
-  paymentRecords: (query?: { status?: string; q?: string }) => {
+  paymentRecords: (query?: { status?: string; q?: string; month?: string }) => {
     const sp = new URLSearchParams();
     if (query?.status) sp.set("status", query.status);
     if (query?.q) sp.set("q", query.q);
+    if (query?.month) sp.set("month", query.month);
     const qs = sp.toString();
     return request(`/api/admin/payment-records${qs ? `?${qs}` : ""}`);
   },

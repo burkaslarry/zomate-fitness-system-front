@@ -25,6 +25,7 @@ type Ack = {
   channel: string;
   lesson_balance: number;
   created_at: string;
+  course_title?: string | null;
 };
 
 type SearchRow = {
@@ -162,6 +163,8 @@ export default function StudentCheckinPage() {
   async function redeem(e: FormEvent) {
     e.preventDefault();
     if (!selected || !selectedLesson) return;
+    const studentLabel = selected.full_name;
+    const lessonLabel = selectedLesson.title;
     setStatus("扣堂中…");
     setLastBalance(null);
     setPinPadError(false);
@@ -173,7 +176,10 @@ export default function StudentCheckinPage() {
       })) as { student?: { lesson_balance?: number } };
       const bal = res.student?.lesson_balance;
       if (typeof bal === "number") setLastBalance(bal);
-      setStatus("簽到成功！已透過 WhatsApp 通知學生及教練。");
+      const balText = typeof bal === "number" ? `，餘下 ${bal} 堂` : "";
+      // [F003][S001] Clear success toast — never surface machine channel codes (qr_pin).
+      setStatus(`✅ 簽到成功！${studentLabel} · ${lessonLabel} 已扣 1 堂${balText}`);
+      window.alert(`簽到成功！\n\n${studentLabel}\n${lessonLabel}\n已扣 1 堂${balText}`);
       setPin("");
       setSelectedLesson(null);
       setSelected(null);
@@ -203,10 +209,13 @@ export default function StudentCheckinPage() {
       const res = (await api.checkin({
         phone: fbPhone.trim(),
         pin_code: fbPin.trim()
-      })) as { student?: { lesson_balance?: number } };
+      })) as { student?: { lesson_balance?: number; full_name?: string } };
       const bal = res.student?.lesson_balance;
+      const name = res.student?.full_name || fbPhone.trim();
       if (typeof bal === "number") setLastBalance(bal);
-      setStatus("簽到成功！");
+      const balText = typeof bal === "number" ? `，餘下 ${bal} 堂` : "";
+      setStatus(`✅ 簽到成功！${name} 已扣 1 堂${balText}`);
+      window.alert(`簽到成功！\n\n${name}\n已扣 1 堂${balText}`);
       setFbPin("");
       setFbPhone("");
     } catch (err) {
@@ -476,13 +485,29 @@ export default function StudentCheckinPage() {
               </button>
             </form>
           )}
+      {status.startsWith("✅") || lastBalance != null ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-950 shadow"
+        >
+          <h2 className="mb-1 text-sm font-semibold">簽到成功</h2>
+          <p className="text-sm">{status.startsWith("✅") ? status.replace(/^✅\s*/, "") : status || "已扣 1 堂"}</p>
+          {lastBalance != null ? (
+            <p className="mt-1 text-xs text-emerald-800/80">更新後餘額：{lastBalance} 堂</p>
+          ) : null}
+        </div>
+      ) : null}
+
       {acks.length > 0 && (
         <div className="rounded-lg bg-white p-4 shadow [color-scheme:light] text-slate-900">
           <h2 className="mb-2 text-sm font-semibold text-slate-900">即時回饋</h2>
           <ul className="space-y-2 text-sm text-slate-700">
             {acks.map((a, i) => (
               <li key={`${a.created_at}-${i}`} className="border-b border-slate-100 pb-2">
-                {a.student_name} · 餘 {a.lesson_balance} · {a.channel}
+                {/* [F003][S001] Never show raw channel codes like qr_pin */}
+                ✅ {a.student_name} 簽到成功 · 餘 {a.lesson_balance} 堂
+                {a.course_title ? ` · ${a.course_title}` : ""}
               </li>
             ))}
           </ul>

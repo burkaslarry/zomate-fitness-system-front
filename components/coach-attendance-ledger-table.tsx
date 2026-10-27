@@ -272,6 +272,7 @@ function CoachAttendanceLedgerInner({
         { header: "帳號", key: "coach_username" },
         { header: "學員", key: "student_name" },
         { header: "電話", key: "student_phone" },
+        { header: "上咩課堂", key: "course_type" },
         { header: "日期", key: "session_date" },
         { header: "簽到時間", key: "check_in_time" },
         { header: "簽退時間", key: "check_out_time" },
@@ -284,6 +285,7 @@ function CoachAttendanceLedgerInner({
         coach_username: r.coach_username ?? "",
         student_name: r.student_name ?? "",
         student_phone: r.student_phone ?? "",
+        course_type: r.course_type || "—",
         status: ledgerStatusLabel(r.status)
       }))
     });
