@@ -271,13 +271,32 @@ async function request(path: string, options?: RequestInit) {
         if (res.status < 500) {
           throw err;
         }
+        // [F006][S002] App 500s (e.g. SQL) should surface immediately — retries often end as Failed to fetch.
+        const transient =
+          res.status === 502 ||
+          res.status === 503 ||
+          res.status === 504 ||
+          /timeout|unavailable|bad gateway|cloudflare/i.test(String(err.message));
+        if (!transient) {
+          throw err;
+        }
         lastError = err;
       } else {
         return res.json();
       }
     } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
+      const caught = error instanceof Error ? error : new Error(String(error));
       if (isFormData) break;
+      // Preserve prior API error if a later retry only hits a transport failure.
+      if (
+        attempt > 0 &&
+        lastError &&
+        !isTransportNetworkError(lastError) &&
+        isTransportNetworkError(caught)
+      ) {
+        break;
+      }
+      lastError = caught;
     }
 
     if (attempt < maxAttempts - 1) {
