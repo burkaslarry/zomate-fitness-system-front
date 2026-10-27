@@ -1166,7 +1166,8 @@ export default function CoachDashboardPage() {
                 ))}
                 {studentRecords.checkins.map((c) => (
                   <li key={`chk-${c.id}`}>
-                    {formatHktDateTime(c.created_at)} · {c.channel}
+                    {/* [F003][S001] Hide machine channel codes (qr_pin) from staff UI */}
+                    {formatHktDateTime(c.created_at)} · 簽到成功
                     {c.remarks ? ` · ${c.remarks}` : ""}
                   </li>
                 ))}

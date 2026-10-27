@@ -356,7 +356,8 @@ export default function CoachCalendarPage() {
                 <span className="shrink-0 text-xs font-medium text-emerald-700">餘 {ev.lesson_balance ?? "—"} 堂</span>
               </div>
               <p className="mt-1 text-[11px] text-ink/50">
-                {ev.created_at ? formatHktDateTime(ev.created_at) : ""} · {ev.channel ?? "—"}
+                {/* [F003][S001] Hide machine channel codes (qr_pin) */}
+                {ev.created_at ? formatHktDateTime(ev.created_at) : ""} · 簽到成功
               </p>
               {ev.course_title ? (
                 <p className="mt-1 text-[11px] font-medium text-emerald-800/90">課堂：{ev.course_title}</p>
