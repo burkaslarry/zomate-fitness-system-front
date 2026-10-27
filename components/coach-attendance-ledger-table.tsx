@@ -200,6 +200,19 @@ function CoachAttendanceLedgerInner({
         )
       },
       {
+        id: "student_name",
+        accessorKey: "student_name",
+        header: "學員",
+        cell: ({ row }) => (
+          <div>
+            <p className="font-medium text-ink">{row.original.student_name || "—"}</p>
+            <p className="mt-0.5 text-xs tabular-nums text-ink/55">
+              {row.original.student_phone || "—"}
+            </p>
+          </div>
+        )
+      },
+      {
         id: "session_date",
         accessorKey: "session_date",
         header: "日期"
@@ -257,6 +270,8 @@ function CoachAttendanceLedgerInner({
         { header: "分店", key: "branch_name" },
         { header: "教練", key: "coach_name" },
         { header: "帳號", key: "coach_username" },
+        { header: "學員", key: "student_name" },
+        { header: "電話", key: "student_phone" },
         { header: "日期", key: "session_date" },
         { header: "簽到時間", key: "check_in_time" },
         { header: "簽退時間", key: "check_out_time" },
@@ -267,6 +282,8 @@ function CoachAttendanceLedgerInner({
       rows: rows.map((r) => ({
         ...r,
         coach_username: r.coach_username ?? "",
+        student_name: r.student_name ?? "",
+        student_phone: r.student_phone ?? "",
         status: ledgerStatusLabel(r.status)
       }))
     });

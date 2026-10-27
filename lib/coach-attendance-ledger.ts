@@ -10,6 +10,9 @@ export type CoachAttendanceLedgerRow = {
   coach_id: number;
   coach_name: string;
   coach_username: string | null;
+  student_id?: number | null;
+  student_name?: string;
+  student_phone?: string;
   session_date: string;
   check_in_time: string;
   check_out_time: string;
