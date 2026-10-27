@@ -87,8 +87,7 @@ export default function CoachScheduleStudentPickerSheet({
                   >
                     <div className="font-medium text-ink">{p.student_name}</div>
                     <div className="mt-0.5 text-xs text-ink/60">
-                      {p.course_title}
-                      {p.branch_name ? ` · ${p.branch_name}` : ""} · {p.total_lessons} 堂
+                      {p.course_title} · {p.total_lessons} 堂
                     </div>
                   </button>
                 </li>

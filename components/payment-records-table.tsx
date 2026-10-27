@@ -14,8 +14,18 @@ import { Eye, Upload, X } from "lucide-react";
 import type { PaymentRecordRow } from "../types/api";
 import { alertApiError, api, apiAssetUrl, downloadReceiptFile } from "../lib/api";
 import { formatHktDateTime } from "../lib/format-hkt";
+import { memberBranchLabel, memberHomeBranches, type BranchLike } from "../lib/branches";
 import WhatsAppButton from "./whatsapp-button";
 import { getAuthSession } from "../lib/auth";
+
+function paymentBranchLabel(row: PaymentRecordRow): string {
+  if (!row.branch_id && !row.branch_name && !row.branch_code) return "—";
+  return memberBranchLabel({
+    id: row.branch_id ?? 0,
+    name: row.branch_name,
+    code: row.branch_code
+  });
+}
 
 type OptionalColumn = "status" | "coach" | "receipt";
 
@@ -142,24 +152,53 @@ export default function PaymentRecordsTable({
   const [editing, setEditing] = useState(false);
   const [editBusy, setEditBusy] = useState(false);
   const [editError, setEditError] = useState("");
-  const [draft, setDraft] = useState({ amount: "", payment_method: "", note: "", created_at: "", due_date: "" });
+  const [draft, setDraft] = useState({
+    amount: "",
+    payment_method: "",
+    note: "",
+    created_at: "",
+    due_date: "",
+    branch_id: "" as string
+  });
+  const [branchOptions, setBranchOptions] = useState<BranchLike[]>([]);
   /** [F004][S002] Use Hong Kong wall time in the editable payment date. */
-  function startEdit() {
+  async function startEdit() {
     if (!detailRow) return;
     const date = new Date(detailRow.created_at);
     const local = Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat("sv-SE", {
       timeZone: "Asia/Hong_Kong", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false
     }).format(date).replace(" ", "T");
-    setDraft({ amount: String(detailRow.amount ?? 0), payment_method: detailRow.payment_method ?? "",
-      note: detailRow.note ?? "", created_at: local, due_date: detailRow.due_date ?? "" });
-    setEditError(""); setEditing(true);
+    setDraft({
+      amount: String(detailRow.amount ?? 0),
+      payment_method: detailRow.payment_method ?? "",
+      note: detailRow.note ?? "",
+      created_at: local,
+      due_date: detailRow.due_date ?? "",
+      branch_id: detailRow.branch_id ? String(detailRow.branch_id) : ""
+    });
+    setEditError("");
+    setEditing(true);
+    try {
+      const branches = (await api.publicBranches()) as BranchLike[];
+      setBranchOptions(memberHomeBranches(branches));
+    } catch {
+      setBranchOptions([]);
+    }
   }
   /** [F004][S002] Never issue payment confirmation or WhatsApp as a side effect of an edit. */
   async function saveEdit() {
     if (!detailRow || editBusy) return;
+    if (!draft.branch_id) {
+      setEditError("請選擇分店（尖沙咀 TST 或上環 SW）");
+      return;
+    }
     setEditBusy(true); setEditError("");
     try {
-      const payload: Record<string, unknown> = { amount: Number(draft.amount), created_at: `${draft.created_at}:00+08:00` };
+      const payload: Record<string, unknown> = {
+        amount: Number(draft.amount),
+        created_at: `${draft.created_at}:00+08:00`,
+        branch_id: Number(draft.branch_id)
+      };
       if (detailRow.record_type === "installment") payload.due_date = draft.due_date;
       else { payload.payment_method = draft.payment_method; payload.note = draft.note; }
       const result = await api.updatePaymentRecord(detailRow.record_type, detailRow.ref_id, payload) as {record: PaymentRecordRow};
@@ -206,7 +245,8 @@ export default function PaymentRecordsTable({
       next.receipt_id !== detailRow.receipt_id ||
       next.receipt_url !== detailRow.receipt_url ||
       next.status !== detailRow.status ||
-      next.course_enrollment_id !== detailRow.course_enrollment_id
+      next.course_enrollment_id !== detailRow.course_enrollment_id ||
+      next.branch_id !== detailRow.branch_id
     ) {
       setDetailRow(next);
     }
@@ -438,6 +478,23 @@ export default function PaymentRecordsTable({
                   <label className="block text-sm">備註<textarea aria-label="編輯備註" maxLength={2000} value={draft.note} onChange={e => setDraft({...draft,note:e.target.value})} className="mt-1 w-full rounded border border-ink/20 p-2" /></label>
                 </>}
                 <label className="block text-sm">付款日期（香港時間）<input aria-label="編輯付款日期" type="datetime-local" required value={draft.created_at} onChange={e => setDraft({...draft,created_at:e.target.value})} className="mt-1 w-full rounded border border-ink/20 p-2" /></label>
+                <label className="block text-sm">
+                  分店（SW / TST）
+                  <select
+                    aria-label="編輯分店"
+                    required
+                    value={draft.branch_id}
+                    onChange={(e) => setDraft({ ...draft, branch_id: e.target.value })}
+                    className="mt-1 w-full rounded border border-ink/20 p-2"
+                  >
+                    <option value="">請選擇分店（SW / TST）</option>
+                    {branchOptions.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {memberBranchLabel(b)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 {editError ? <p role="alert" className="text-sm text-red-700">{editError}</p> : null}
                 <div className="flex gap-2"><button type="submit" disabled={editBusy} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold">{editBusy ? "儲存中…" : "儲存修改"}</button><button type="button" disabled={editBusy} onClick={() => setEditing(false)} className="min-h-11 rounded-lg border px-4 text-sm">取消編輯</button></div>
               </form> : null}
@@ -454,6 +511,7 @@ export default function PaymentRecordsTable({
                   </DetailRow>
                 ) : null}
                 <DetailRow label="項目">{humanizePaymentLabel(detailRow.label)}</DetailRow>
+                <DetailRow label="分店">{paymentBranchLabel(detailRow)}</DetailRow>
                 <DetailRow label="金額">
                   <span className="font-semibold tabular-nums">{formatPaymentAmount(detailRow.amount)}</span>
                 </DetailRow>

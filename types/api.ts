@@ -248,6 +248,10 @@ export type PaymentRecordRow = {
   category_enrollment_id?: number;
   /** Linked CourseEnrollment for Admin 確認付款 from 付款紀錄詳情. */
   course_enrollment_id?: number | null;
+  /** [F004][S002] SW / TST from renewal / course / student home branch. */
+  branch_id?: number | null;
+  branch_name?: string | null;
+  branch_code?: string | null;
   due_date?: string | null;
   paid_at?: string | null;
   created_at: string;

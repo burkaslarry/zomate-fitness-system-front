@@ -111,15 +111,6 @@ function slotConflictForDay(
   );
 }
 
-function branchLabel(branchName?: string | null, branchCode?: string | null): string {
-  const name = (branchName || "").trim();
-  const code = (branchCode || "").trim().toUpperCase();
-  if (name && code) return `${name} (${code === "SHEUNGWAN" ? "SW" : code})`;
-  if (name) return name;
-  if (code) return code === "SHEUNGWAN" ? "SW" : code;
-  return "";
-}
-
 function pendingFromEnrollment(
   studentId: number,
   studentName: string,
@@ -129,8 +120,6 @@ function pendingFromEnrollment(
     course_title: string;
     scheduled_start: string;
     total_lessons: number;
-    branch_name?: string | null;
-    branch_code?: string | null;
   }
 ): PendingRow {
   return {
@@ -140,7 +129,7 @@ function pendingFromEnrollment(
     student_name: studentName,
     student_phone: studentPhone,
     course_title: enr.course_title,
-    branch_name: branchLabel(enr.branch_name, enr.branch_code),
+    branch_name: "",
     total_lessons: enr.total_lessons,
     placeholder_start: enr.scheduled_start
   };
@@ -414,9 +403,7 @@ export default function CoachDashboardPage() {
             enrollment_id: target.enrollment_id,
             course_title: target.course_title,
             scheduled_start: target.scheduled_start,
-            total_lessons: target.total_lessons,
-            branch_name: target.branch_name,
-            branch_code: target.branch_code
+            total_lessons: target.total_lessons
           })
         );
         // [F003][S009] Every next appointment is a new explicit booking, never an inferred weekly slot.
@@ -822,7 +809,6 @@ export default function CoachDashboardPage() {
           open={scheduleSheetOpen}
           studentName={personalBlockMode ? "其他事項" : selectedPending?.student_name || ""}
           courseTitle={personalBlockMode ? "私人日曆標記" : selectedPending?.course_title || ""}
-          branchName={personalBlockMode ? "" : selectedPending?.branch_name || ""}
           selectedDay={selectedDay}
           minDate={bookingMinDateKey()}
           dayCourses={dayCoursesForPanel}
@@ -1076,9 +1062,6 @@ export default function CoachDashboardPage() {
                 <li key={enr.enrollment_id} className="rounded-lg border border-ink/10 bg-canvas p-3 text-sm">
                   <div className="font-medium text-ink">{enr.course_title}</div>
                   <div className="mt-1 text-xs text-ink/60">
-                    {branchLabel(enr.branch_name, enr.branch_code)
-                      ? `分店 ${branchLabel(enr.branch_name, enr.branch_code)} · `
-                      : ""}
                     {enr.coach_time_confirmed
                       ? `${new Date(enr.scheduled_start).toLocaleString("zh-HK")} · ${enr.total_lessons} 堂`
                       : "待排程"}
