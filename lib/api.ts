@@ -403,6 +403,7 @@ export const api = {
     disclaimer_accepted: boolean;
     whatsapp_reminder_opt_in: boolean;
     digital_signature: string;
+    branch_id: number;
     coach_username: string;
     coach_id: number;
     course_category_id: number;
@@ -425,6 +426,7 @@ export const api = {
     form.append("disclaimer_accepted", payload.disclaimer_accepted ? "true" : "false");
     form.append("whatsapp_reminder_opt_in", payload.whatsapp_reminder_opt_in ? "true" : "false");
     form.append("digital_signature", payload.digital_signature);
+    form.append("branch_id", String(payload.branch_id));
     form.append("coach_username", payload.coach_username);
     form.append("coach_id", String(payload.coach_id));
     form.append("course_category_id", String(payload.course_category_id));

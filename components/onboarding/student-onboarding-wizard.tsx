@@ -19,6 +19,7 @@ import {
   type StudentRegistrationPayload
 } from "../../lib/schemas/student";
 import { alertApiError, api, isNetworkFetchError } from "../../lib/api";
+import { memberBranchLabel, memberHomeBranches, type BranchLike } from "../../lib/branches";
 import { SignaturePad, type SignaturePadHandle } from "./signature-pad";
 
 type CoachOption = { id: number; full_name: string; login_username?: string | null };
@@ -100,6 +101,7 @@ const defaults: Partial<StudentRegistrationPayload> = {
   disclaimer_accepted: false,
   whatsapp_reminder_opt_in: false,
   digital_signature: "",
+  branch_id: 0,
   coach_username: "",
   coach_id: 0,
   course_category_id: 0,
@@ -124,6 +126,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   const signatureRef = useRef<SignaturePadHandle | null>(null);
   const [parqUploadError, setParqUploadError] = useState("");
   const [coaches, setCoaches] = useState<CoachOption[]>([]);
+  const [branches, setBranches] = useState<BranchLike[]>([]);
   const [coachCategories, setCoachCategories] = useState<{ id: number; name: string }[]>([]);
   const [coachCategoriesLoading, setCoachCategoriesLoading] = useState(false);
   /** True when member was created without signature (staff 候補 later). */
@@ -143,6 +146,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
 
   const selectedCoachId = form.watch("coach_id");
   const selectedCoachUsername = form.watch("coach_username");
+  const selectedBranchId = form.watch("branch_id");
   const pdpoWatch = form.watch("pdpo_acknowledged");
   const coolingOffWatch = form.watch("cooling_off_acknowledged");
   const disclaimerWatch = form.watch("disclaimer_accepted");
@@ -203,6 +207,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     Boolean(pdpoWatch) &&
     Boolean(coolingOffWatch) &&
     Boolean(disclaimerWatch) &&
+    selectedBranchId >= 1 &&
     Boolean((selectedCoachUsername || "").trim()) &&
     selectedCoachId >= 1 &&
     courseCategoryWatch >= 1;
@@ -257,6 +262,20 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         setCoaches(list);
       })
       .catch(() => setCoaches([]));
+    void api
+      .publicBranches()
+      .then((rows) => {
+        const list = Array.isArray(rows)
+          ? memberHomeBranches(
+              rows.filter(
+                (r): r is BranchLike =>
+                  Boolean(r && typeof r === "object" && "id" in r && typeof (r as BranchLike).id === "number")
+              )
+            )
+          : [];
+        setBranches(list);
+      })
+      .catch(() => setBranches([]));
   }, [step]);
 
   useEffect(() => {
@@ -414,6 +433,10 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         ? signatureRef.current?.getDataUrl() ?? values.digital_signature
         : values.digital_signature
     )?.trim() ?? "";
+    if (!values.branch_id || values.branch_id < 1) {
+      form.setError("branch_id", { message: "請選擇分店（尖沙咀 TST 或上環 SW）" });
+      return;
+    }
     if (!values.coach_username?.trim() || !values.coach_id || values.coach_id < 1) {
       form.setError("coach_username", { message: "請先選擇教練" });
       return;
@@ -445,6 +468,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
       cooling_off_acknowledged: values.cooling_off_acknowledged,
       disclaimer_accepted: values.disclaimer_accepted,
       whatsapp_reminder_opt_in: values.whatsapp_reminder_opt_in,
+      branch_id: values.branch_id,
       coach_username: values.coach_username.trim(),
       coach_id: values.coach_id,
       course_category_id: values.course_category_id
@@ -727,6 +751,29 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         {step === 3 && (
           <div className="space-y-4">
             <div className="space-y-3 rounded-lg border border-primary/25 bg-primary/5 p-4">
+              <p className="text-sm font-semibold text-ink">Step 0 · 分店（必選）</p>
+              <label className="block space-y-1 text-sm">
+                <span className="text-ink/70">主要上課分店</span>
+                <select
+                  className={fieldClass}
+                  value={selectedBranchId || ""}
+                  onChange={(e) =>
+                    form.setValue("branch_id", e.target.value ? Number(e.target.value) : 0, {
+                      shouldValidate: true
+                    })
+                  }
+                >
+                  <option value="">請選擇分店（SW / TST）</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {memberBranchLabel(b)}
+                    </option>
+                  ))}
+                </select>
+                {form.formState.errors.branch_id ? (
+                  <p className="text-xs text-rose-400">{String(form.formState.errors.branch_id.message)}</p>
+                ) : null}
+              </label>
               <p className="text-sm font-semibold text-ink">Step 1 · 選擇教練（必選）</p>
               <label className="block space-y-1 text-sm">
                 <span className="text-ink/70">負責教練</span>

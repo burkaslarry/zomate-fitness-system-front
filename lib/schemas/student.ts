@@ -95,12 +95,15 @@ export const studentRegistrationPayloadSchema = z
     whatsapp_reminder_opt_in: z.boolean(),
     // Optional (empty OK) — staff can 候補簽署 later from admin student detail.
     digital_signature: z.string(),
+    // [F001][S001] Home branch — SW or TST required at registration.
+    branch_id: z.number().int().min(0),
     coach_username: z.string().min(1, "請先選擇教練"),
     coach_id: z.number().int().min(0),
     course_category_id: z.number().int().min(0),
     package_sessions: z.union([z.literal(10), z.literal(30)]).optional(),
     renewal_notes: z.string().optional()
   })
+  .refine((d) => d.branch_id >= 1, { message: "請選擇分店（尖沙咀 TST 或上環 SW）", path: ["branch_id"] })
   .refine((d) => d.coach_id >= 1, { message: "請先選擇教練", path: ["coach_username"] })
   .refine((d) => d.course_category_id >= 1, { message: "請選擇課程種類", path: ["course_category_id"] })
   .refine((d) => d.pdpo_acknowledged, {
