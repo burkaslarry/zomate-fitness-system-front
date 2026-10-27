@@ -32,6 +32,7 @@ type Props = {
   open: boolean;
   studentName: string;
   courseTitle: string;
+  branchName?: string;
   selectedDay: string;
   minDate?: string;
   dayCourses: DayCourse[];
@@ -67,6 +68,7 @@ export default function CoachScheduleBottomSheet({
   open,
   studentName,
   courseTitle,
+  branchName = "",
   selectedDay,
   minDate = todayDateKey(),
   dayCourses,
@@ -102,6 +104,7 @@ export default function CoachScheduleBottomSheet({
               <p>
                 已揀 <strong>{studentName}</strong>
                 {courseTitle ? <> · {courseTitle}</> : null}
+                {branchName ? <> · 分店 {branchName}</> : null}
               </p>
               {onChangeSelection ? (
                 <button

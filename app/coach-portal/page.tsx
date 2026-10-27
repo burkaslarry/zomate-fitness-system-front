@@ -111,6 +111,15 @@ function slotConflictForDay(
   );
 }
 
+function branchLabel(branchName?: string | null, branchCode?: string | null): string {
+  const name = (branchName || "").trim();
+  const code = (branchCode || "").trim().toUpperCase();
+  if (name && code) return `${name} (${code === "SHEUNGWAN" ? "SW" : code})`;
+  if (name) return name;
+  if (code) return code === "SHEUNGWAN" ? "SW" : code;
+  return "";
+}
+
 function pendingFromEnrollment(
   studentId: number,
   studentName: string,
@@ -120,6 +129,8 @@ function pendingFromEnrollment(
     course_title: string;
     scheduled_start: string;
     total_lessons: number;
+    branch_name?: string | null;
+    branch_code?: string | null;
   }
 ): PendingRow {
   return {
@@ -129,7 +140,7 @@ function pendingFromEnrollment(
     student_name: studentName,
     student_phone: studentPhone,
     course_title: enr.course_title,
-    branch_name: "",
+    branch_name: branchLabel(enr.branch_name, enr.branch_code),
     total_lessons: enr.total_lessons,
     placeholder_start: enr.scheduled_start
   };
@@ -285,6 +296,26 @@ export default function CoachDashboardPage() {
     []
   );
 
+  const reloadCalendarRange = useCallback(
+    async (coachId: number, dayKey: string, mode: CalendarMode) => {
+      const month = monthRange(dayKey);
+      const visible =
+        mode === "week"
+          ? weekRange(dayKey)
+          : { from: dayKey, to: mode === "three-day" ? shiftDay(dayKey, 2) : dayKey };
+      const range = {
+        from: month.from < visible.from ? month.from : visible.from,
+        to: month.to > visible.to ? month.to : visible.to
+      };
+      const [rows, personal] = await Promise.all([
+        api.coachSessions(coachId, { fromDate: range.from, toDate: range.to }) as Promise<CoachSessionRow[]>,
+        personalBlocksAsSessions(coachId, { fromDate: range.from, toDate: range.to })
+      ]);
+      setRangeSessions([...(rows ?? []), ...personal]);
+    },
+    [personalBlocksAsSessions]
+  );
+
   const reloadAll = useCallback(async (coachId: number) => {
     const [pList, payList, sList, studentsList, personal] = await Promise.all([
       api.coachPendingStudents(coachId) as Promise<PendingRow[]>,
@@ -297,7 +328,9 @@ export default function CoachDashboardPage() {
     setPayments(payList ?? []);
     setDaySessions([...(sList ?? []), ...personal]);
     setStudents(studentsList ?? []);
-  }, [selectedDay, personalBlocksAsSessions]);
+    // [F003][S003] Keep week/month calendar in sync after book / 其他事項 / cancel.
+    await reloadCalendarRange(coachId, selectedDay, calendarMode);
+  }, [selectedDay, calendarMode, personalBlocksAsSessions, reloadCalendarRange]);
 
   useEffect(() => {
     const session = getAuthSession();
@@ -381,7 +414,9 @@ export default function CoachDashboardPage() {
             enrollment_id: target.enrollment_id,
             course_title: target.course_title,
             scheduled_start: target.scheduled_start,
-            total_lessons: target.total_lessons
+            total_lessons: target.total_lessons,
+            branch_name: target.branch_name,
+            branch_code: target.branch_code
           })
         );
         // [F003][S009] Every next appointment is a new explicit booking, never an inferred weekly slot.
@@ -492,7 +527,7 @@ export default function CoachDashboardPage() {
         durationHours
       )
     ) {
-      setStatus("此時段已被佔用或超出 19:00，請另選。");
+      setStatus("此時段已被佔用或超出當日 24:00，請另選。");
       return;
     }
     setScheduling(true);
@@ -597,7 +632,7 @@ export default function CoachDashboardPage() {
         bookDuration
       )
     ) {
-      setStatus("此時段已被佔用或超出 19:00，請另選。");
+      setStatus("此時段已被佔用或超出當日 24:00，請另選。");
       return;
     }
     setBookBusy(true);
@@ -630,6 +665,8 @@ export default function CoachDashboardPage() {
       setBookingEnrollmentId(null);
       setBookingOriginalDate(null);
       setStatus(confirmed ? "已改這一堂；其餘課堂不變。" : "已排程。");
+      // [F003][S010] After booking from 學員 tab, jump back to calendar.
+      router.push("/coach-portal?tab=schedule");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (/conflict|409|佔用/i.test(msg)) {
@@ -674,9 +711,10 @@ export default function CoachDashboardPage() {
     }
   }
 
-  function handleScheduleSuccessGoStudents() {
+  function handleScheduleSuccessDone() {
     setScheduleSuccess(null);
-    router.push("/coach-portal?tab=students");
+    // [F003][S010] Stay on 排程 tab so calendar (auto-refreshed) stays visible.
+    router.push("/coach-portal?tab=schedule");
   }
 
   async function sendPaymentReminder(studentId: number, courseId: number) {
@@ -784,6 +822,7 @@ export default function CoachDashboardPage() {
           open={scheduleSheetOpen}
           studentName={personalBlockMode ? "其他事項" : selectedPending?.student_name || ""}
           courseTitle={personalBlockMode ? "私人日曆標記" : selectedPending?.course_title || ""}
+          branchName={personalBlockMode ? "" : selectedPending?.branch_name || ""}
           selectedDay={selectedDay}
           minDate={bookingMinDateKey()}
           dayCourses={dayCoursesForPanel}
@@ -1037,6 +1076,9 @@ export default function CoachDashboardPage() {
                 <li key={enr.enrollment_id} className="rounded-lg border border-ink/10 bg-canvas p-3 text-sm">
                   <div className="font-medium text-ink">{enr.course_title}</div>
                   <div className="mt-1 text-xs text-ink/60">
+                    {branchLabel(enr.branch_name, enr.branch_code)
+                      ? `分店 ${branchLabel(enr.branch_name, enr.branch_code)} · `
+                      : ""}
                     {enr.coach_time_confirmed
                       ? `${new Date(enr.scheduled_start).toLocaleString("zh-HK")} · ${enr.total_lessons} 堂`
                       : "待排程"}
@@ -1202,7 +1244,7 @@ export default function CoachDashboardPage() {
         day={scheduleSuccess?.day ?? todayKey()}
         startHour={scheduleSuccess?.startHour ?? 9}
         durationHours={scheduleSuccess?.durationHours ?? 1}
-        onGoStudents={handleScheduleSuccessGoStudents}
+        onDone={handleScheduleSuccessDone}
       />
       <CoachCancelConfirmDialog
         open={cancelDialog != null}

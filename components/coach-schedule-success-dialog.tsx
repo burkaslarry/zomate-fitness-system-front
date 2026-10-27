@@ -3,7 +3,7 @@
 /**
  * [F003][S010]
  * Feature: Coach Dashboard
- * Step: Post-schedule success dialog — redirect to 學員 tab
+ * Step: Post-schedule success dialog — return to 排程 calendar
  */
 
 import { formatHourMinute } from "../lib/coach-schedule-duration";
@@ -15,7 +15,7 @@ type Props = {
   day: string;
   startHour: number;
   durationHours: number;
-  onGoStudents: () => void;
+  onDone: () => void;
 };
 
 function formatDayLabel(day: string): string {
@@ -35,7 +35,7 @@ export default function CoachScheduleSuccessDialog({
   day,
   startHour,
   durationHours,
-  onGoStudents
+  onDone
 }: Props) {
   if (!open) return null;
 
@@ -61,10 +61,10 @@ export default function CoachScheduleSuccessDialog({
         </p>
         <button
           type="button"
-          onClick={onGoStudents}
+          onClick={onDone}
           className="mt-5 w-full rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-black"
         >
-          查看學員
+          返回排程
         </button>
       </div>
     </div>

@@ -136,6 +136,9 @@ export type CoachStudentRecordDto = {
   enrollments: {
     enrollment_id: number;
     course_title: string;
+    branch_id?: number | null;
+    branch_name?: string | null;
+    branch_code?: string | null;
     scheduled_start: string;
     scheduled_end: string;
     total_lessons: number;

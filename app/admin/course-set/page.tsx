@@ -336,16 +336,18 @@ export default function AdminCourseSetPage() {
                 onChange={(e) => setBranchId(e.target.value ? Number(e.target.value) : "")}
                 className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2 text-sm text-ink"
               >
-                <option value="">請選擇</option>
+                <option value="">請選擇分店（SW / TST）</option>
                 {branches.map((b) => (
                   <option key={b.id} value={b.id}>
-                    {b.name} · {b.address}
+                    {b.name} ({String(b.code || "").toUpperCase() === "SHEUNGWAN" ? "SW" : String(b.code || "").toUpperCase() || "—"})
+                    {b.address ? ` · ${b.address}` : ""}
                   </option>
                 ))}
               </select>
               {branchDetail ? (
                 <span className="text-xs text-ink/55">
                   {[
+                    `課程分店：${branchDetail.name} (${String(branchDetail.code || "").toUpperCase() === "SHEUNGWAN" ? "SW" : String(branchDetail.code || "").toUpperCase()})`,
                     branchDetail.address,
                     branchDetail.business_start_time && branchDetail.business_end_time
                       ? `${branchDetail.business_start_time}–${branchDetail.business_end_time}`

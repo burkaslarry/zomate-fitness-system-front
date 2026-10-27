@@ -8,8 +8,11 @@ export const COACH_SLOT_DURATIONS = [0.5, 1, 1.5, 2] as const;
 export type CoachSlotDuration = (typeof COACH_SLOT_DURATIONS)[number];
 export const COACH_START_MINUTES = [0, 15, 30, 45] as const;
 export type CoachStartMinute = (typeof COACH_START_MINUTES)[number];
-export const SCHEDULE_DAY_END_HOUR = 19;
-export const COACH_START_HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18] as const;
+/** [F003][S003] Slots may run through midnight (start 00–23, end ≤ 24:00). */
+export const SCHEDULE_DAY_END_HOUR = 24;
+export const COACH_START_HOURS = [
+  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23
+] as const;
 
 export type HourRange = { start: number; end: number };
 
