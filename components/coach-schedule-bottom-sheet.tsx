@@ -40,11 +40,14 @@ type Props = {
   startMinute: CoachStartMinute;
   durationHours: CoachSlotDuration;
   scheduling: boolean;
+  confirmLabel?: string;
   onClose: () => void;
   onDayChange: (day: string) => void;
   onStartTimeChange: (hour: number, minute: CoachStartMinute) => void;
   onDurationChange: (hours: CoachSlotDuration) => void;
   onConfirm: () => void;
+  /** Re-open student / 其他事項 picker. */
+  onChangeSelection?: () => void;
 };
 
 function formatCourseLine(c: DayCourse): string {
@@ -72,11 +75,13 @@ export default function CoachScheduleBottomSheet({
   startMinute,
   durationHours,
   scheduling,
+  confirmLabel = "確認排程",
   onClose,
   onDayChange,
   onStartTimeChange,
   onDurationChange,
-  onConfirm
+  onConfirm,
+  onChangeSelection
 }: Props) {
   const startDecimal = startSlotDecimal(startHour, startMinute);
   const endDecimal = startDecimal + durationHours;
@@ -92,9 +97,23 @@ export default function CoachScheduleBottomSheet({
     >
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 pb-3">
-          <p className="rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-xs text-black">
-            已揀 <strong>{studentName}</strong> · {courseTitle}
-          </p>
+          <div className="rounded-lg border border-primary/25 bg-primary/10 px-3 py-2 text-xs text-black">
+            <div className="flex items-start justify-between gap-2">
+              <p>
+                已揀 <strong>{studentName}</strong>
+                {courseTitle ? <> · {courseTitle}</> : null}
+              </p>
+              {onChangeSelection ? (
+                <button
+                  type="button"
+                  onClick={onChangeSelection}
+                  className="shrink-0 text-[11px] font-semibold text-primary underline"
+                >
+                  更換
+                </button>
+              ) : null}
+            </div>
+          </div>
 
           <div>
             <p className="mb-1 text-xs font-medium text-ink/70">日期</p>
@@ -168,7 +187,7 @@ export default function CoachScheduleBottomSheet({
             onClick={onConfirm}
             className="w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-black disabled:opacity-50"
           >
-            {scheduling ? "提交中…" : "確認排程"}
+            {scheduling ? "提交中…" : confirmLabel}
           </button>
         </div>
       </div>

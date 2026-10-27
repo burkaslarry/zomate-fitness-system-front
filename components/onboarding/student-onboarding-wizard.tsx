@@ -977,12 +977,12 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
             aria-labelledby="register-success-title"
           >
             <h2 id="register-success-title" className="text-xl font-semibold tracking-tight text-emerald-900">
-              Congratulations
+              提交成功
             </h2>
             <p className="text-sm text-ink/80">
               {signatureDeferred
-                ? "申請成功。電子簽署可稍後由職員於學員檔案頁候補。"
-                : "申請成功。多謝你嘅登記。"}
+                ? "多謝你嘅登記，祝健身愉快！電子簽署可稍後由職員於學員檔案頁候補。"
+                : "多謝你嘅登記，祝健身愉快！"}
             </p>
             <button
               type="button"

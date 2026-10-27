@@ -172,10 +172,28 @@ export function isNetworkFetchError(err: unknown): boolean {
   );
 }
 
-/** Normalized message from API throws (already parsed by `errorFromApiBody` where applicable). */
-export function formatApiError(err: unknown): string {
+/** True only for transport/network failures (not signature-size validation). */
+export function isTransportNetworkError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
-  if (isNetworkFetchError(err)) {
+  const lower = message.trim().toLowerCase();
+  return (
+    lower === "load failed" ||
+    lower === "failed to fetch" ||
+    lower === "networkerror when attempting to fetch resource." ||
+    lower.includes("network request failed")
+  );
+}
+
+/** Normalized message from API throws (already parsed by `errorFromApiBody` where applicable). */
+export function formatApiError(err: unknown, opts?: { context?: "onboarding" | "general" }): string {
+  const message = err instanceof Error ? err.message : String(err);
+  if (isTransportNetworkError(err)) {
+    if (opts?.context === "onboarding") {
+      return "網絡連線失敗，請稍後再試。簽名若未能上載，職員可於學員檔案候補簽署。";
+    }
+    return "網絡連線失敗，請稍後再試。";
+  }
+  if (isNetworkFetchError(err) && opts?.context === "onboarding") {
     return "網絡連線失敗，請稍後再試。簽名若未能上載，職員可於學員檔案候補簽署。";
   }
   return message;
@@ -880,7 +898,39 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload)
     }),
-  /** [F003][S009] Coach soft-cancels assigned enrollment. */
+  /** [F003][S003] Coach private calendar marks（其他事項）. */
+  coachListPersonalBlocks: (params?: {
+    coach_id?: number;
+    day?: string;
+    from_date?: string;
+    to_date?: string;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params?.coach_id != null) sp.set("coach_id", String(params.coach_id));
+    if (params?.day) sp.set("day", params.day);
+    if (params?.from_date) sp.set("from_date", params.from_date);
+    if (params?.to_date) sp.set("to_date", params.to_date);
+    const qs = sp.toString();
+    return request(`/api/coach/personal-blocks${qs ? `?${qs}` : ""}`);
+  },
+  coachCreatePersonalBlock: (payload: {
+    day: string;
+    start_hour: number;
+    start_minute?: number;
+    duration_hours: number;
+    title?: string;
+    notes?: string;
+    coach_id?: number;
+  }) =>
+    request("/api/coach/personal-blocks", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+  coachDeletePersonalBlock: (blockId: number, coachId?: number) => {
+    const qs = coachId != null ? `?coach_id=${coachId}` : "";
+    return request(`/api/coach/personal-blocks/${blockId}${qs}`, { method: "DELETE" });
+  },
+  /** [F003][S009] Admin soft-cancels whole enrollment (coach blocked server-side). */
   coachCancelEnrollment: (enrollmentId: number, payload?: { coach_id?: number }) =>
     request(`/api/coach/enrollments/${enrollmentId}/cancel`, {
       method: "POST",

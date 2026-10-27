@@ -1183,12 +1183,12 @@ export default function AdminStudentDetailPage() {
                 </select>
               </label>
               <label className="flex items-center gap-2 text-xs text-ink/70">
-                <input type="checkbox" name="send_whatsapp" defaultChecked className="rounded border-ink/20" />
-                上傳後產生 WhatsApp 提醒（學生）
+                <input type="checkbox" name="send_whatsapp" className="rounded border-ink/20" />
+                上傳後即發 WhatsApp（預設關閉；正常請用「Admin 確認付款」只發一次）
               </label>
               <label className="flex items-center gap-2 text-xs text-ink/70">
-                <input type="checkbox" name="notify_coach" defaultChecked className="rounded border-ink/20" />
-                同時通知教練
+                <input type="checkbox" name="notify_coach" className="rounded border-ink/20" />
+                同時通知教練（僅上項開啟時）
               </label>
               <label className="block text-xs text-ink/55">
                 備註（選填）

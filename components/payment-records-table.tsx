@@ -280,11 +280,10 @@ export default function PaymentRecordsTable({
     setPostUploadWhatsapp(null);
     try {
       /**
-       * [F005][S003]
-       * Feature: Balance Sync & Integrations
-       * Step: Post-upload WhatsApp API — Zomate 已收到收據（學生 + 教練）
-       * Logic: On success, backend log_whatsapp → Meta Cloud API to student and coach;
-       * wa.me kept as manual resend fallback.
+       * [F004][S002]
+       * Feature: Admin Reports & Financials
+       * Step: Receipt upload is evidence only — WhatsApp after Admin 確認付款
+       * Logic: Do not send payment WhatsApp on upload; confirm button triggers once.
        */
       const res = (await api.uploadMemberReceiptById(detailRow.student_id, {
         file,
@@ -299,40 +298,19 @@ export default function PaymentRecordsTable({
           (detailRow.record_type === "installment" ? detailRow.installment_no : undefined),
         installment_plan_id:
           detailRow.record_type === "installment" ? detailRow.installment_plan_id : undefined,
-        send_whatsapp: true,
-        notify_coach: true
+        send_whatsapp: false,
+        notify_coach: false
       })) as {
         id?: number;
         file_url?: string;
         download_url?: string;
-        whatsapp?: {
-          student?: { wa_me_url?: string; message?: string; template_key?: string };
-          coach?: { wa_me_url?: string; template_key?: string };
-        };
       };
-      console.log("[F005][S003] Success: Receipt uploaded; WhatsApp API notified student/coach", {
+      console.log("[F004][S002] Success: Receipt uploaded; awaiting Admin confirm for WhatsApp", {
         receiptId: res.id,
-        renewalId: detailRow.record_type === "renewal" ? detailRow.ref_id : null,
-        studentTemplate: res.whatsapp?.student?.template_key,
-        coachTemplate: res.whatsapp?.coach?.template_key
+        renewalId: detailRow.record_type === "renewal" ? detailRow.ref_id : null
       });
-      const studentWa = res.whatsapp?.student?.wa_me_url;
-      const coachWa = res.whatsapp?.coach?.wa_me_url;
-      setPostUploadWhatsapp({
-        studentWaUrl: studentWa,
-        coachWaUrl: coachWa,
-        studentMessage: res.whatsapp?.student?.message
-      });
-      if (studentWa || coachWa) {
-        setUploadStatus(
-          coachWa
-            ? "上傳成功；已透過 WhatsApp API 通知學生「Zomate 已收到收據」，並通知教練。"
-            : "上傳成功；已透過 WhatsApp API 通知學生「Zomate 已收到收據」。（未有教練電話可通知）"
-        );
-      } else {
-        setUploadStatus("上傳成功，已寫入資料庫。（未能產生 WhatsApp 通知，請檢查學員電話／同意接收）");
-        console.error("[F005][S003] Error: Receipt upload returned no WhatsApp payload.");
-      }
+      setPostUploadWhatsapp(null);
+      setUploadStatus("上傳成功。請按「Admin 確認付款」後先會發出 WhatsApp（只發一次）。");
       if (onReceiptUploaded) await onReceiptUploaded();
       // Optimistically update modal — upload is evidence only; Admin confirm still required.
       if (res.id) {

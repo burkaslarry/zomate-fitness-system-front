@@ -36,6 +36,8 @@ type Props = {
   onClose: () => void;
   onPickPending: (row: PendingRow) => void;
   onPickStudent: (studentId: number) => void;
+  /** [F003][S003] Private calendar mark — no student lesson. */
+  onPickPersonal?: () => void;
 };
 
 export default function CoachScheduleStudentPickerSheet({
@@ -45,7 +47,8 @@ export default function CoachScheduleStudentPickerSheet({
   busy = false,
   onClose,
   onPickPending,
-  onPickStudent
+  onPickStudent,
+  onPickPersonal
 }: Props) {
   return (
     <CoachBottomSheet
@@ -57,6 +60,18 @@ export default function CoachScheduleStudentPickerSheet({
     >
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         {busy ? <p className="mb-3 text-xs text-primary">載入學員課程…</p> : null}
+
+        {onPickPersonal ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onPickPersonal}
+            className="mb-4 w-full rounded-xl border border-ink/20 bg-canvas px-3 py-3 text-left text-sm font-medium text-ink transition hover:border-primary/40 disabled:opacity-50"
+          >
+            <div className="font-semibold">其他事項</div>
+            <div className="mt-0.5 text-xs font-normal text-ink/55">私人事項標記入日曆（唔係學生課堂）</div>
+          </button>
+        ) : null}
 
         {pending.length > 0 ? (
           <div className="mb-4">

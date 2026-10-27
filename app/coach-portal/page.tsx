@@ -33,7 +33,7 @@ import {
   type CoachSessionRow,
   sessionsToDayCourses
 } from "../../lib/coach-sessions";
-import { alertApiError, api } from "../../lib/api";
+import { alertApiError, api, formatApiError } from "../../lib/api";
 import { getAuthSession } from "../../lib/auth";
 import type { CoachStudentBriefDto, CoachStudentRecordDto, CoachRemindPaymentDto } from "../../types/api";
 
@@ -185,6 +185,8 @@ export default function CoachDashboardPage() {
   } | null>(null);
   const [remindBusy, setRemindBusy] = useState<number | null>(null);
   const [scheduleStudentId, setScheduleStudentId] = useState<number | null>(null);
+  /** [F003][S003] FAB「其他事項」— private calendar block, no student enrollment. */
+  const [personalBlockMode, setPersonalBlockMode] = useState(false);
   const [pickBusy, setPickBusy] = useState(false);
   const [scheduleSuccess, setScheduleSuccess] = useState<{
     studentName: string;
@@ -238,18 +240,64 @@ export default function CoachDashboardPage() {
   );
 
 
+  const personalBlocksAsSessions = useCallback(
+    async (coachId: number, params: { day?: string; fromDate?: string; toDate?: string }) => {
+      try {
+        const blocks = (await api.coachListPersonalBlocks({
+          coach_id: coachId,
+          day: params.day,
+          from_date: params.fromDate,
+          to_date: params.toDate
+        })) as Array<{
+          id: number;
+          title: string;
+          start_at: string;
+          end_at: string;
+        }>;
+        return (blocks ?? []).map((b): CoachSessionRow => {
+          const start = new Date(b.start_at);
+          const end = new Date(b.end_at);
+          const pad = (n: number) => String(n).padStart(2, "0");
+          const y = start.getFullYear();
+          const m = pad(start.getMonth() + 1);
+          const d = pad(start.getDate());
+          return {
+            enrollment_id: -b.id,
+            student_id: 0,
+            student_name: "其他事項",
+            student_phone: "",
+            category_id: null,
+            category_name: "其他事項",
+            session_date: `${y}-${m}-${d}`,
+            start_time: `${pad(start.getHours())}:${pad(start.getMinutes())}`,
+            end_time: `${pad(end.getHours())}:${pad(end.getMinutes())}`,
+            branch_name: "",
+            checkin_pin: "",
+            coach_time_confirmed: true,
+            attendance_status: "personal",
+            course_title: b.title || "其他事項"
+          };
+        });
+      } catch {
+        return [];
+      }
+    },
+    []
+  );
+
   const reloadAll = useCallback(async (coachId: number) => {
-    const [pList, payList, sList, studentsList] = await Promise.all([
+    const [pList, payList, sList, studentsList, personal] = await Promise.all([
       api.coachPendingStudents(coachId) as Promise<PendingRow[]>,
       api.coachStudentPayments(coachId) as Promise<PaymentRow[]>,
       api.coachSessions(coachId, { day: selectedDay }) as Promise<CoachSessionRow[]>,
-      api.coachStudents(coachId) as Promise<CoachStudentBriefDto[]>
+      api.coachStudents(coachId) as Promise<CoachStudentBriefDto[]>,
+      personalBlocksAsSessions(coachId, { day: selectedDay })
     ]);
     setPending(pList ?? []);
     setPayments(payList ?? []);
-    setDaySessions(sList ?? []);
+    setDaySessions([...(sList ?? []), ...personal]);
     setStudents(studentsList ?? []);
-  }, [selectedDay]);
+  }, [selectedDay, personalBlocksAsSessions]);
 
   useEffect(() => {
     const session = getAuthSession();
@@ -273,11 +321,13 @@ export default function CoachDashboardPage() {
 
   useEffect(() => {
     if (!coach) return;
-    void api
-      .coachSessions(coach.id, { day: selectedDay })
-      .then((rows) => setDaySessions((rows ?? []) as CoachSessionRow[]))
+    void Promise.all([
+      api.coachSessions(coach.id, { day: selectedDay }) as Promise<CoachSessionRow[]>,
+      personalBlocksAsSessions(coach.id, { day: selectedDay })
+    ])
+      .then(([rows, personal]) => setDaySessions([...(rows ?? []), ...personal]))
       .catch((e) => setStatus(String(e)));
-  }, [coach, selectedDay]);
+  }, [coach, selectedDay, personalBlocksAsSessions]);
 
   useEffect(() => {
     if (!coach || bookingEnrollmentId == null) {
@@ -297,12 +347,20 @@ export default function CoachDashboardPage() {
     const visible = calendarMode === "week" ? weekRange(selectedDay) : { from: selectedDay, to: calendarMode === "three-day" ? shiftDay(selectedDay, 2) : selectedDay };
     const range = { from: month.from < visible.from ? month.from : visible.from, to: month.to > visible.to ? month.to : visible.to };
     let active = true;
-    void api
-      .coachSessions(coach.id, { fromDate: range.from, toDate: range.to })
-      .then((rows) => { if (active) setRangeSessions((rows ?? []) as CoachSessionRow[]); })
-      .catch(() => { if (active) setRangeSessions([]); });
-    return () => { active = false; };
-  }, [coach, calendarMode, selectedDay]);
+    void Promise.all([
+      api.coachSessions(coach.id, { fromDate: range.from, toDate: range.to }) as Promise<CoachSessionRow[]>,
+      personalBlocksAsSessions(coach.id, { fromDate: range.from, toDate: range.to })
+    ])
+      .then(([rows, personal]) => {
+        if (active) setRangeSessions([...(rows ?? []), ...personal]);
+      })
+      .catch(() => {
+        if (active) setRangeSessions([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [coach, calendarMode, selectedDay, personalBlocksAsSessions]);
 
   const pickStudentForSchedule = useCallback(
     async (studentId: number) => {
@@ -358,6 +416,7 @@ export default function CoachDashboardPage() {
   }, []);
 
   const handleSelectPendingRow = useCallback((row: PendingRow) => {
+    setPersonalBlockMode(false);
     setSelectedPending(row);
     setScheduleStudentId(row.student_id);
     setScheduleSheetOpen(false);
@@ -372,13 +431,27 @@ export default function CoachDashboardPage() {
       setStatus("不能排期到過去日期，請選今日或未來。");
       return;
     }
-    if (selectedPending) {
-      if (selectedDay < bookingMinDateKey()) setSelectedDay(bookingMinDateKey());
-      setScheduleSheetOpen(true);
-      return;
-    }
+    // [F003][S003] Always let coach pick student / 其他事項 after + .
+    setScheduleSheetOpen(false);
     setStudentPickerOpen(true);
-  }, [selectedDay, selectedPending]);
+  }, [selectedDay]);
+
+  const openChangeSelection = useCallback(() => {
+    setScheduleSheetOpen(false);
+    setStudentPickerOpen(true);
+  }, []);
+
+  const handlePickPersonal = useCallback(() => {
+    setPersonalBlockMode(true);
+    setSelectedPending(null);
+    setScheduleStudentId(null);
+    setStudentPickerOpen(false);
+    if (selectedDay < bookingMinDateKey()) setSelectedDay(bookingMinDateKey());
+    setStartHour(9);
+    setStartMinute(0);
+    setDurationHours(1);
+    setScheduleSheetOpen(true);
+  }, [selectedDay]);
 
   const handlePickerPending = useCallback(
     (row: PendingRow) => {
@@ -400,7 +473,7 @@ export default function CoachDashboardPage() {
   );
 
   async function confirmSchedule() {
-    if (!coach || !selectedPending) return;
+    if (!coach) return;
     if (isPastDay(selectedDay)) {
       setStatus("不能排期到過去日期，請選今日或未來。");
       return;
@@ -424,15 +497,31 @@ export default function CoachDashboardPage() {
     }
     setScheduling(true);
     setStatus("");
-    const booked = {
-      studentName: selectedPending.student_name,
-      courseTitle: selectedPending.course_title,
-      day: selectedDay,
-      startHour: startSlotDecimal(startHour, startMinute),
-      startMinute,
-      durationHours
-    };
     try {
+      if (personalBlockMode) {
+        await api.coachCreatePersonalBlock({
+          day: selectedDay,
+          start_hour: startHour,
+          start_minute: startMinute,
+          duration_hours: durationHours,
+          title: "其他事項",
+          coach_id: coach.id
+        });
+        setPersonalBlockMode(false);
+        setScheduleSheetOpen(false);
+        await reloadAll(coach.id);
+        setStatus("已加入其他事項到日曆。");
+        return;
+      }
+      if (!selectedPending) return;
+      const booked = {
+        studentName: selectedPending.student_name,
+        courseTitle: selectedPending.course_title,
+        day: selectedDay,
+        startHour: startSlotDecimal(startHour, startMinute),
+        startMinute,
+        durationHours
+      };
       await api.coachBookSession({
         enrollment_id: selectedPending.enrollment_id,
         day: selectedDay,
@@ -447,11 +536,11 @@ export default function CoachDashboardPage() {
       await reloadAll(coach.id);
       setScheduleSuccess(booked);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = formatApiError(e, { context: "general" });
       if (/conflict|409|佔用/i.test(msg)) {
         setStatus("此時段已被佔用，請另選時間。");
       } else {
-        alertApiError(e);
+        window.alert(msg);
         setStatus(msg);
       }
     } finally {
@@ -690,11 +779,11 @@ export default function CoachDashboardPage() {
 
       </section>
 
-      {selectedPending ? (
+      {scheduleSheetOpen && (selectedPending || personalBlockMode) ? (
         <CoachScheduleBottomSheet
           open={scheduleSheetOpen}
-          studentName={selectedPending.student_name}
-          courseTitle={selectedPending.course_title}
+          studentName={personalBlockMode ? "其他事項" : selectedPending?.student_name || ""}
+          courseTitle={personalBlockMode ? "私人日曆標記" : selectedPending?.course_title || ""}
           selectedDay={selectedDay}
           minDate={bookingMinDateKey()}
           dayCourses={dayCoursesForPanel}
@@ -703,7 +792,11 @@ export default function CoachDashboardPage() {
           startMinute={startMinute}
           durationHours={durationHours}
           scheduling={scheduling}
-          onClose={() => setScheduleSheetOpen(false)}
+          confirmLabel={personalBlockMode ? "加入其他事項" : "確認排程"}
+          onClose={() => {
+            setScheduleSheetOpen(false);
+            setPersonalBlockMode(false);
+          }}
           onDayChange={setSelectedDay}
           onStartTimeChange={(h, m) => {
             setStartHour(h);
@@ -711,6 +804,7 @@ export default function CoachDashboardPage() {
           }}
           onDurationChange={setDurationHours}
           onConfirm={() => void confirmSchedule()}
+          onChangeSelection={openChangeSelection}
         />
       ) : null}
 
@@ -734,6 +828,7 @@ export default function CoachDashboardPage() {
           })
         }
         onPickStudent={handlePickerStudent}
+        onPickPersonal={handlePickPersonal}
       />
 
       <CoachScheduleFab onClick={handleFabClick} disabled={isPastDay(selectedDay)} />
@@ -973,22 +1068,7 @@ export default function CoachDashboardPage() {
                     >
                       {enr.coach_time_confirmed ? "排下一堂" : "排程 0.5–2h"}
                     </button>
-                    <button
-                      type="button"
-                      disabled={cancelBusy === `course:${enr.enrollment_id}`}
-                      onClick={() =>
-                        setCancelDialog({
-                          scope: "course",
-                          enrollmentId: enr.enrollment_id,
-                          studentId: studentRecords.student_id,
-                          studentName: studentRecords.full_name,
-                          courseTitle: enr.course_title
-                        })
-                      }
-                      className="min-h-11 rounded-md border border-red-300/70 bg-red-50 px-3 py-2 text-xs font-medium text-red-900 disabled:opacity-50"
-                    >
-                      {cancelBusy === `course:${enr.enrollment_id}` ? "…" : "取消整個課程"}
-                    </button>
+                    {/* [F003][S009] Whole-course cancel is Admin/Master only — hidden for coach portal. */}
                   </div>
                   {bookingEnrollmentId === enr.enrollment_id ? (
                     <div className="mt-3 space-y-3 border-t border-ink/10 pt-3">
