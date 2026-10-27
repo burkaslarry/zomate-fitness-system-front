@@ -63,9 +63,10 @@ function buildEnrollmentWhatsAppText(courseTitle: string, rows: CourseEnrollment
 }
 
 function whatsappMeUrl(phone: string, body: string): string {
+  // Country code lives on student.phone in DB (+852…); do not invent here.
   const digits = phone.replace(/\D/g, "");
-  const n = digits.length === 8 ? `852${digits}` : digits;
-  return `https://wa.me/${n}?text=${encodeURIComponent(body)}`;
+  if (digits.length < 10) return "";
+  return `https://wa.me/${digits}?text=${encodeURIComponent(body)}`;
 }
 
 export default function AdminCourseSetPage() {

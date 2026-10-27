@@ -89,12 +89,13 @@ function localSlotIso(day: string, hour: number, minute: number): string {
 
 /** [F003][S003] Build wa.me link with polite payment reminder. */
 function remindPayWaLink(phone: string, name: string, courseTitle: string): string {
+  // Country code lives on student.phone in DB (+852…); do not invent here.
   const digits = phone.replace(/\D/g, "");
-  const hk = digits.startsWith("852") ? digits : `852${digits.replace(/^0+/, "")}`;
+  if (digits.length < 10) return "";
   const text = encodeURIComponent(
     `【Zomate Fitness】${name} 你好，溫馨提醒：你的課程「${courseTitle}」尚有款項待付，請盡快安排付款。如有疑問請聯絡我們，謝謝！`
   );
-  return `https://wa.me/${hk}?text=${text}`;
+  return `https://wa.me/${digits}?text=${text}`;
 }
 
 function slotConflictForDay(
