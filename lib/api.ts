@@ -184,25 +184,37 @@ export function isTransportNetworkError(err: unknown): boolean {
   );
 }
 
+/** Map English FastAPI/Pydantic failures to user-facing Chinese. */
+function friendlyApiMessage(message: string): string | null {
+  const m = message.trim();
+  if (!m) return null;
+  if (m === "Request validation failed.") return "資料格式有誤，請檢查必填欄位後再試。";
+  if (/^String should have at most \d+ characters/i.test(m)) return "部分欄位過長，請縮短後再試。";
+  if (m === "Field required") return "有必填欄位未填妥，請返回上一步檢查。";
+  if (/valid date/i.test(m)) return "日期格式不正確，請重新選擇。";
+  if (/request entity too large|payload too large|413/i.test(m)) return "上載內容過大（上限 25MB）。";
+  return null;
+}
+
 /** Normalized message from API throws (already parsed by `errorFromApiBody` where applicable). */
 export function formatApiError(err: unknown, opts?: { context?: "onboarding" | "general" }): string {
   const message = err instanceof Error ? err.message : String(err);
   if (isTransportNetworkError(err)) {
     if (opts?.context === "onboarding") {
-      return "網絡連線失敗，請稍後再試。簽名若未能上載，職員可於學員檔案候補簽署。";
+      return "網絡連線失敗，請稍後再試。如持續失敗，請通知職員協助完成登記。";
     }
     return "網絡連線失敗，請稍後再試。";
   }
   if (isNetworkFetchError(err) && opts?.context === "onboarding") {
-    return "網絡連線失敗，請稍後再試。簽名若未能上載，職員可於學員檔案候補簽署。";
+    return "簽名或檔案未能上載，請再試一次；如持續失敗，請通知職員協助。";
   }
-  return message;
+  return friendlyApiMessage(message) ?? message;
 }
 
 /** Native popup — use for backend errors so users never only see raw JSON. */
-export function alertApiError(err: unknown): void {
+export function alertApiError(err: unknown, opts?: { context?: "onboarding" | "general" }): void {
   if (typeof window === "undefined") return;
-  window.alert(formatApiError(err));
+  window.alert(formatApiError(err, opts));
 }
 
 /**
@@ -267,7 +279,7 @@ async function request(path: string, options?: RequestInit) {
       if (!res.ok) {
         const text = await res.text();
         redirectOnStaleAuth(path, res.status, text);
-        const err = errorFromApiBody(text, "Request failed");
+        const err = errorFromApiBody(text, "系統未能完成請求，請再試一次。");
         if (res.status < 500) {
           throw err;
         }
@@ -655,7 +667,7 @@ export const api = {
     const qs = sp.toString();
     return request(`/api/admin/payment-records${qs ? `?${qs}` : ""}`);
   },
-  /** [F004][S003] 分期付款學生 board — course + category installments in one ledger. */
+  /** [F004][S008] 分期付款學生 board — course + category installments in one ledger. */
   installments: (query?: { only_unpaid?: boolean }) =>
     request(`/api/admin/installments${query?.only_unpaid ? "?only_unpaid=true" : ""}`),
   deletePaymentRecord: (

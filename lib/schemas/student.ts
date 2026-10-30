@@ -93,8 +93,8 @@ export const studentRegistrationPayloadSchema = z
     cooling_off_acknowledged: z.boolean(),
     disclaimer_accepted: z.boolean(),
     whatsapp_reminder_opt_in: z.boolean(),
-    // Optional (empty OK) — staff can 候補簽署 later from admin student detail.
-    digital_signature: z.string(),
+    // Required — client insists on a signed application; staff can only re-sign from admin detail.
+    digital_signature: z.string().min(20, "請先於第 3 步簽署，方可提交登記。"),
     // [F001][S001] Legacy defaults kept for form state; onboarding only requires a coach.
     branch_id: z.number().int().min(0),
     coach_username: z.string().min(1, "請先選擇教練"),

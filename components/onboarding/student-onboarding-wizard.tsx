@@ -18,7 +18,7 @@ import {
   studentRegistrationPayloadSchema,
   type StudentRegistrationPayload
 } from "../../lib/schemas/student";
-import { alertApiError, api, isNetworkFetchError } from "../../lib/api";
+import { alertApiError, api, isTransportNetworkError } from "../../lib/api";
 import { SignaturePad, type SignaturePadHandle } from "./signature-pad";
 
 type CoachOption = { id: number; full_name: string; login_username?: string | null };
@@ -125,8 +125,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   const signatureRef = useRef<SignaturePadHandle | null>(null);
   const [parqUploadError, setParqUploadError] = useState("");
   const [coaches, setCoaches] = useState<CoachOption[]>([]);
-  /** True when member was created without signature (staff 候補 later). */
-  const [signatureDeferred, setSignatureDeferred] = useState(false);
+  const [coachesError, setCoachesError] = useState("");
   /** [F001][S001] Live phone duplicate feedback shown beside the phone field. */
   const [phoneDup, setPhoneDup] = useState<{ digits: string; message: string | null } | null>(null);
   const [phoneChecking, setPhoneChecking] = useState(false);
@@ -152,6 +151,9 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   const whatsappOptInWatch = form.watch("whatsapp_reminder_opt_in");
   const phoneWatch = form.watch("phone");
   const phoneDigits = useMemo(() => /^\+852(\d{8})$/.exec(phoneWatch || "")?.[1] ?? "", [phoneWatch]);
+  // [F001][S004] Client requires the e-signature before the application can be submitted.
+  const signatureWatch = form.watch("digital_signature");
+  const hasSignature = (signatureWatch || "").trim().length >= 20;
   const step1Watch = form.watch([
     "chinese_name",
     "full_name",
@@ -208,7 +210,8 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     Boolean(coolingOffWatch) &&
     Boolean(disclaimerWatch) &&
     Boolean((selectedCoachUsername || "").trim()) &&
-    selectedCoachId >= 1;
+    selectedCoachId >= 1 &&
+    hasSignature;
 
   /**
    * [F001][S002]
@@ -292,8 +295,12 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
             )
           : [];
         setCoaches(list);
+        setCoachesError(list.length === 0 ? "未有任何可選教練，請聯絡職員開通教練帳戶。" : "");
       })
-      .catch(() => setCoaches([]));
+      .catch(() => {
+        setCoaches([]);
+        setCoachesError("未能載入教練名單，請檢查網絡後重新整理；如仍空白請聯絡職員。");
+      });
   }, [step]);
 
   /**
@@ -403,7 +410,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         setPhoneDup(null);
         setStep(2);
       } catch (err) {
-        alertApiError(err);
+        alertApiError(err, { context: "onboarding" });
       }
       return;
     }
@@ -432,13 +439,17 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         ? signatureRef.current?.getDataUrl() ?? values.digital_signature
         : values.digital_signature
     )?.trim() ?? "";
+    if (!signatureData || signatureData.length < 20) {
+      form.setError("digital_signature", { message: "請先於上方簽署，方可提交登記。" });
+      setStatus("");
+      return;
+    }
     if (!values.coach_username?.trim() || !values.coach_id || values.coach_id < 1) {
       form.setError("coach_username", { message: "請先選擇教練" });
       return;
     }
     setStatus("提交中…");
     setShowSuccessDialog(false);
-    setSignatureDeferred(false);
     form.clearErrors("digital_signature");
 
     const basePayload = {
@@ -463,18 +474,18 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
       coach_id: values.coach_id
     };
 
-    const finishSuccess = (
-      res: { member?: { hkid?: string; full_name?: string } },
-      deferredSignature: boolean
-    ) => {
+    const finishSuccess = (res: { member?: { hkid?: string; full_name?: string } }) => {
       const createdHkid = res.member?.hkid ?? values.hkid;
       const createdName = res.member?.full_name ?? values.full_name;
-      window.sessionStorage.setItem(
-        "zomate_register_context",
-        JSON.stringify({ hkid: createdHkid, full_name: createdName, signature_deferred: deferredSignature })
-      );
-      setSignatureDeferred(deferredSignature);
-      setStatus(deferredSignature ? "申請成功（簽名請職員候補）。" : "申請成功。");
+      try {
+        window.sessionStorage.setItem(
+          "zomate_register_context",
+          JSON.stringify({ hkid: createdHkid, full_name: createdName, signature_deferred: false })
+        );
+      } catch {
+        /* [F001][S004] Private mode / quota: never report a created member as a failure. */
+      }
+      setStatus("申請成功。");
       setShowSuccessDialog(true);
     };
 
@@ -483,27 +494,41 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         ...basePayload,
         digital_signature: signatureData
       })) as { member?: { hkid?: string; full_name?: string } };
-      finishSuccess(res, !signatureData);
+      finishSuccess(res);
     } catch (err) {
-      // formatApiError / Safari "Load failed" — still create member without signature.
-      if (signatureData && isNetworkFetchError(err)) {
+      /**
+       * [F001][S004]
+       * Transport blip after signing: the member may already be committed (phone index rejects a
+       * second insert), so confirm via phone-check first, then retry once with the signature.
+       */
+      if (isTransportNetworkError(err)) {
+        if (phoneDigits) {
+          try {
+            const check = await api.memberPhoneCheck(phoneDigits);
+            if (check.registered) {
+              finishSuccess({ member: { hkid: values.hkid, full_name: values.full_name } });
+              return;
+            }
+          } catch {
+            /* fall through to a signed retry */
+          }
+        }
         try {
-          setStatus("簽名上載失敗，改以無簽名提交（職員可候補）…");
+          setStatus("網絡不穩，正在重新提交（簽名一併上載）…");
           const res = (await api.createMember({
             ...basePayload,
-            digital_signature: "",
-            medical_clearance_file: parqClearanceFileRef.current
+            digital_signature: signatureData
           })) as { member?: { hkid?: string; full_name?: string } };
-          finishSuccess(res, true);
+          finishSuccess(res);
           return;
         } catch (retryErr) {
           setStatus("");
-          alertApiError(retryErr);
+          alertApiError(retryErr, { context: "onboarding" });
           return;
         }
       }
       setStatus("");
-      alertApiError(err);
+      alertApiError(err, { context: "onboarding" });
     }
   }
 
@@ -771,6 +796,11 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                 {form.formState.errors.coach_username ? (
                   <p className="text-xs text-rose-400">{String(form.formState.errors.coach_username.message)}</p>
                 ) : null}
+                {coachesError ? (
+                  <p className="text-xs font-medium text-rose-600" role="alert">
+                    {coachesError}
+                  </p>
+                ) : null}
               </label>
             </div>
             <div className="space-y-3 rounded-lg border border-ink/10 bg-canvas p-4 text-xs leading-relaxed text-ink/85">
@@ -893,13 +923,16 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
             )}
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-ink">電子簽署 Signature（可選）</p>
+                <p className="text-sm font-medium text-ink">
+                  電子簽署 Signature（必填）<span className="ml-1 text-rose-500">*</span>
+                </p>
                 <button
                   type="button"
                   className="rounded-md border border-ink/15 bg-surface px-3 py-1.5 text-xs font-medium text-ink hover:bg-canvas"
                   onClick={() => {
                     signatureRef.current?.clear();
                     form.setValue("digital_signature", "");
+                    form.setError("digital_signature", { message: "請先於上方簽署，方可提交登記。" });
                   }}
                 >
                   清除
@@ -910,12 +943,20 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                   ref={signatureRef}
                   onChange={(data) => {
                     form.setValue("digital_signature", data, { shouldDirty: true, shouldValidate: true });
+                    if (data) form.clearErrors("digital_signature");
                   }}
                 />
               </div>
               <p className="text-xs text-ink/55">
-                可先不簽；提交後職員可於學員檔案候補簽署。若簽名上載失敗，系統亦會照常新增會員。
+                請於上方方格簽署；未簽署無法提交登記。如簽名上載失敗，請再試一次或通知職員協助。
               </p>
+              {form.formState.errors.digital_signature ? (
+                <p className="text-xs font-medium text-rose-600" role="alert">
+                  {String(form.formState.errors.digital_signature.message)}
+                </p>
+              ) : !hasSignature ? (
+                <p className="text-xs text-ink/45">尚未簽署</p>
+              ) : null}
             </div>
             <textarea
               className={`${fieldClass} min-h-[4rem] resize-y`}
@@ -970,11 +1011,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
             <h2 id="register-success-title" className="text-xl font-semibold tracking-tight text-emerald-900">
               提交成功
             </h2>
-            <p className="text-sm text-ink/80">
-              {signatureDeferred
-                ? "多謝你嘅登記，祝健身愉快！電子簽署可稍後由職員於學員檔案頁候補。"
-                : "多謝你嘅登記，祝健身愉快！"}
-            </p>
+            <p className="text-sm text-ink/80">多謝你嘅登記，祝健身愉快！</p>
             <button
               type="button"
               className="w-full rounded-md border border-ink/15 bg-primary/90 px-4 py-3 text-sm font-semibold text-black shadow-sm hover:bg-primary"
