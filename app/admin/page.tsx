@@ -12,14 +12,16 @@ import { useEffect, useState } from "react";
 import BackendShell from "../../components/backend-shell";
 import { api } from "../../lib/api";
 
-type Summary = Record<string, number>;
+type Summary = Record<string, unknown>;
 
 function summaryValue(summary: Summary, keys: string[]) {
   for (const key of keys) {
-    if (typeof summary[key] === "number") return summary[key];
+    if (typeof summary[key] === "number") return summary[key] as number;
   }
   return 0;
 }
+
+type CheckinDay = { date: string; count: number };
 
 type DashboardCard =
   | { kind: "number"; label: string; value: number; href?: string; linkLabel?: string }
@@ -61,10 +63,18 @@ export default function AdminPage() {
     }
   }, []);
 
-  const installmentUnpaid = summaryValue(summary, ["installment_students_unpaid", "students_installment_pending"]);
-  const installmentTotal = summaryValue(summary, ["installment_students_total", "students_installment_active"]);
+  const installmentUnpaid = summaryValue(summary, ["installment_periods_unpaid", "installment_students_unpaid"]);
+  const installmentTotal = summaryValue(summary, ["installment_periods_total", "installment_students_total"]);
   const medicalPending = summaryValue(summary, ["medical_clearance_pending"]);
   const missingReceipts = summaryValue(summary, ["missing_receipt_registrations"]);
+  const checkinsToday = summaryValue(summary, ["checkins_today"]);
+  const checkinsMonth = summaryValue(summary, ["checkins_this_month"]);
+  const checkinsTotal = summaryValue(summary, ["total_checkins", "checkins_total", "checkins", "checkins_count"]);
+  const checkinDays = Array.isArray(summary.checkins_last_7_days)
+    ? (summary.checkins_last_7_days as CheckinDay[])
+    : [];
+  const checkinWeekTotal = checkinDays.reduce((sum, day) => sum + (Number(day.count) || 0), 0);
+  const checkinWeekMax = Math.max(1, ...checkinDays.map((day) => Number(day.count) || 0));
 
   const cards: DashboardCard[] = [
     {
@@ -79,16 +89,16 @@ export default function AdminPage() {
     },
     {
       kind: "number",
-      label: "簽到次數",
-      value: summaryValue(summary, ["checkins_total", "checkins", "checkins_count"])
+      label: "簽到總數",
+      value: checkinsTotal
     },
     {
       kind: "ratio",
       label: "跟進分期付款",
-      detail: "類別報名 installment（進行中） · 按此去銷售與分期",
+      detail: "與付款紀錄同步 · 按此去銷售與分期",
       unpaid: installmentUnpaid,
       total: installmentTotal,
-      ratioHint: "左：仲有分期未俾清 · 右：做緊分期學生人數",
+      ratioHint: "左：未跟進（未付款）期數 · 右：分期總期數",
       href: "/admin/finance/sales?installment_enrollment=1"
     },
     {
@@ -207,6 +217,70 @@ export default function AdminPage() {
               </article>
             );
           })}
+        </section>
+
+        <section className="rounded-2xl border-2 border-sky-200/70 bg-surface p-5 shadow-sm md:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-[22px] font-semibold leading-tight tracking-[-0.02em] text-ink">簽到次數</h2>
+              <p className="mt-1 text-[13px] leading-5 text-ink/70">
+                QR 簽到紀錄，按香港時間計算每日／每月次數。
+              </p>
+            </div>
+            <Link
+              href="/admin/attendance/qr-console"
+              className="rounded-lg border border-sky-300/60 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-ink hover:bg-sky-100"
+            >
+              QR 簽到中心 →
+            </Link>
+          </div>
+          <dl className="mt-4 grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+            <div className="rounded-xl border border-ink/10 bg-canvas p-3 sm:p-4">
+              <dt className="text-[11px] text-ink/55 sm:text-xs">每日（今日）</dt>
+              <dd className="mt-1 text-[22px] font-semibold tabular-nums leading-none text-ink sm:text-[28px]">
+                {checkinsToday}
+              </dd>
+            </div>
+            <div className="rounded-xl border border-ink/10 bg-canvas p-3 sm:p-4">
+              <dt className="text-[11px] text-ink/55 sm:text-xs">每月（本月）</dt>
+              <dd className="mt-1 text-[22px] font-semibold tabular-nums leading-none text-ink sm:text-[28px]">
+                {checkinsMonth}
+              </dd>
+            </div>
+            <div className="rounded-xl border border-ink/10 bg-canvas p-3 sm:p-4">
+              <dt className="text-[11px] text-ink/55 sm:text-xs">過去 7 日</dt>
+              <dd className="mt-1 text-[22px] font-semibold tabular-nums leading-none text-ink sm:text-[28px]">
+                {checkinWeekTotal}
+              </dd>
+            </div>
+            <div className="rounded-xl border border-ink/10 bg-canvas p-3 sm:p-4">
+              <dt className="text-[11px] text-ink/55 sm:text-xs">累計簽到</dt>
+              <dd className="mt-1 text-[22px] font-semibold tabular-nums leading-none text-ink sm:text-[28px]">
+                {checkinsTotal}
+              </dd>
+            </div>
+          </dl>
+          {checkinDays.length > 0 ? (
+            <div className="mt-4">
+              <p className="text-[11px] text-ink/50">過去 7 日每日簽到</p>
+              <ul className="mt-2 grid grid-cols-7 items-end gap-1.5 sm:gap-2">
+                {checkinDays.map((day) => {
+                  const count = Number(day.count) || 0;
+                  return (
+                    <li key={day.date} className="flex min-w-0 flex-col items-center gap-1">
+                      <span className="text-[10px] font-medium tabular-nums text-ink/70 sm:text-[11px]">{count}</span>
+                      <div
+                        className="w-full rounded-t bg-sky-400/80"
+                        style={{ height: `${Math.max(4, (count / checkinWeekMax) * 56)}px` }}
+                        title={`${day.date} · ${count} 次`}
+                      />
+                      <span className="text-[9px] text-ink/45 sm:text-[10px]">{day.date.slice(5)}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
         </section>
 
         <section

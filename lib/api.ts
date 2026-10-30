@@ -655,6 +655,9 @@ export const api = {
     const qs = sp.toString();
     return request(`/api/admin/payment-records${qs ? `?${qs}` : ""}`);
   },
+  /** [F004][S003] 分期付款學生 board — course + category installments in one ledger. */
+  installments: (query?: { only_unpaid?: boolean }) =>
+    request(`/api/admin/installments${query?.only_unpaid ? "?only_unpaid=true" : ""}`),
   deletePaymentRecord: (
     recordType: "renewal" | "receipt",
     refId: number,

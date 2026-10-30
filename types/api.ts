@@ -221,6 +221,59 @@ export type CategoryEnrollmentRow = {
   installment_plans?: InstallmentPlanRow[];
 };
 
+/** [F004][S003] One due period inside a course or category installment plan. */
+export type InstallmentLedgerPeriod = {
+  installment_no: number;
+  amount: number | null;
+  paid: boolean;
+  paid_at?: string | null;
+  due_date?: string | null;
+  lesson_from?: number | null;
+  lesson_to?: number | null;
+};
+
+/** [F004][S003] GET /api/admin/installments row — one enrollment/plan per student. */
+export type InstallmentLedgerRow = {
+  id: string;
+  source: "course" | "category";
+  source_id: number;
+  student_id: number;
+  student_name: string;
+  student_phone: string;
+  label: string;
+  coach_name?: string | null;
+  branch_id?: number | null;
+  branch_name?: string | null;
+  branch_code?: string | null;
+  total_installments: number;
+  paid_installments: number;
+  unpaid_installments: number;
+  total_amount: number | null;
+  paid_amount: number | null;
+  outstanding_amount: number | null;
+  next_installment_no?: number | null;
+  next_due_date?: string | null;
+  status: "active" | "completed";
+  course_enrollment_id?: number | null;
+  category_enrollment_id?: number | null;
+  installment_plan_id?: number | null;
+  periods: InstallmentLedgerPeriod[];
+};
+
+export type InstallmentLedgerSummary = {
+  students_total: number;
+  students_unpaid: number;
+  periods_total: number;
+  periods_unpaid: number;
+  periods_paid: number;
+  outstanding_amount: number;
+};
+
+export type InstallmentLedgerResponse = {
+  rows: InstallmentLedgerRow[];
+  summary: InstallmentLedgerSummary;
+};
+
 export type PaymentRecordRow = {
   note?: string | null;
   id: string;
