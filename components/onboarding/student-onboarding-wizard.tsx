@@ -781,9 +781,11 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                   value={selectedCoachUsername || ""}
                   onChange={(e) => {
                     const username = e.target.value;
-                    form.setValue("coach_username", username, { shouldValidate: true });
                     const coach = coaches.find((c) => coachUsernameValue(c) === username);
+                    // [F001][S004] Set id first: validation keeps `coach_id >= 1`, so validating the
+                    // username before the id lands would flash 「請先選擇教練」 under a valid pick.
                     form.setValue("coach_id", coach?.id ?? 0);
+                    form.setValue("coach_username", username, { shouldValidate: true });
                   }}
                 >
                   <option value="">請先選擇教練</option>
