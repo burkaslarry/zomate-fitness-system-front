@@ -19,7 +19,6 @@ import {
   type StudentRegistrationPayload
 } from "../../lib/schemas/student";
 import { alertApiError, api, isNetworkFetchError } from "../../lib/api";
-import { memberBranchLabel, memberHomeBranches, type BranchLike } from "../../lib/branches";
 import { SignaturePad, type SignaturePadHandle } from "./signature-pad";
 
 type CoachOption = { id: number; full_name: string; login_username?: string | null };
@@ -126,11 +125,11 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   const signatureRef = useRef<SignaturePadHandle | null>(null);
   const [parqUploadError, setParqUploadError] = useState("");
   const [coaches, setCoaches] = useState<CoachOption[]>([]);
-  const [branches, setBranches] = useState<BranchLike[]>([]);
-  const [coachCategories, setCoachCategories] = useState<{ id: number; name: string }[]>([]);
-  const [coachCategoriesLoading, setCoachCategoriesLoading] = useState(false);
   /** True when member was created without signature (staff 候補 later). */
   const [signatureDeferred, setSignatureDeferred] = useState(false);
+  /** [F001][S001] Live phone duplicate feedback shown beside the phone field. */
+  const [phoneDup, setPhoneDup] = useState<{ digits: string; message: string | null } | null>(null);
+  const [phoneChecking, setPhoneChecking] = useState(false);
 
   /**
    * [F001][S001]
@@ -146,13 +145,13 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
 
   const selectedCoachId = form.watch("coach_id");
   const selectedCoachUsername = form.watch("coach_username");
-  const selectedBranchId = form.watch("branch_id");
   const pdpoWatch = form.watch("pdpo_acknowledged");
   const coolingOffWatch = form.watch("cooling_off_acknowledged");
   const disclaimerWatch = form.watch("disclaimer_accepted");
   // [F001][S001] Explicit consent gates submission, rather than relying only on schema errors.
   const whatsappOptInWatch = form.watch("whatsapp_reminder_opt_in");
-  const courseCategoryWatch = form.watch("course_category_id");
+  const phoneWatch = form.watch("phone");
+  const phoneDigits = useMemo(() => /^\+852(\d{8})$/.exec(phoneWatch || "")?.[1] ?? "", [phoneWatch]);
   const step1Watch = form.watch([
     "chinese_name",
     "full_name",
@@ -202,15 +201,14 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
     }).success;
   }, [step1Watch]);
 
+  /** [F001][S001] Step 3 only needs a coach — branch and course category were dropped from onboarding. */
   const step3SubmitEnabled =
     Boolean(whatsappOptInWatch) &&
     Boolean(pdpoWatch) &&
     Boolean(coolingOffWatch) &&
     Boolean(disclaimerWatch) &&
-    selectedBranchId >= 1 &&
     Boolean((selectedCoachUsername || "").trim()) &&
-    selectedCoachId >= 1 &&
-    courseCategoryWatch >= 1;
+    selectedCoachId >= 1;
 
   /**
    * [F001][S002]
@@ -239,6 +237,40 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   /**
    * [F001][S001]
    * Feature: Student Onboarding
+   * Step: Live phone pre-check once 8 digits are entered
+   * Logic: Debounced public `GET /api/members/phone-check`; show 「已登記」 beside the field.
+   */
+  useEffect(() => {
+    if (!phoneDigits) {
+      setPhoneDup(null);
+      setPhoneChecking(false);
+      return;
+    }
+    let cancelled = false;
+    setPhoneChecking(true);
+    const timer = window.setTimeout(() => {
+      void api
+        .memberPhoneCheck(phoneDigits)
+        .then((res) => {
+          if (cancelled) return;
+          setPhoneDup({ digits: phoneDigits, message: res.registered ? res.message ?? "此電話號碼已登記。" : null });
+        })
+        .catch(() => {
+          if (!cancelled) setPhoneDup(null);
+        })
+        .finally(() => {
+          if (!cancelled) setPhoneChecking(false);
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [phoneDigits]);
+
+  /**
+   * [F001][S001]
+   * Feature: Student Onboarding
    * Step: Duplicate-member toast lifecycle.
    * Logic: Auto-hide after 6.5s so user can retry step 1.
    */
@@ -262,43 +294,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         setCoaches(list);
       })
       .catch(() => setCoaches([]));
-    void api
-      .publicBranches()
-      .then((rows) => {
-        const list = Array.isArray(rows)
-          ? memberHomeBranches(
-              rows.filter(
-                (r): r is BranchLike =>
-                  Boolean(r && typeof r === "object" && "id" in r && typeof (r as BranchLike).id === "number")
-              )
-            )
-          : [];
-        setBranches(list);
-      })
-      .catch(() => setBranches([]));
   }, [step]);
-
-  useEffect(() => {
-    if (step !== 3 || !selectedCoachId || selectedCoachId < 1) {
-      setCoachCategories([]);
-      form.setValue("course_category_id", 0);
-      return;
-    }
-    setCoachCategoriesLoading(true);
-    void api
-      .publicCourseCategories(selectedCoachId)
-      .then((rows) => {
-        const list = Array.isArray(rows)
-          ? rows.filter((r): r is { id: number; name: string } =>
-              Boolean(r && typeof r === "object" && "id" in r && "name" in r)
-            )
-          : [];
-        setCoachCategories(list);
-        form.setValue("course_category_id", list[0]?.id ?? 0);
-      })
-      .catch(() => setCoachCategories([]))
-      .finally(() => setCoachCategoriesLoading(false));
-  }, [step, selectedCoachId, form]);
 
   /**
    * [F001][S002]
@@ -399,9 +395,12 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
           phone: step1Payload.phone
         })) as { blocked?: boolean; message?: string | null };
         if (res.blocked) {
+          const digits = /^\+852(\d{8})$/.exec(step1Payload.phone)?.[1] ?? "";
+          if (digits) setPhoneDup({ digits, message: res.message ?? "此電話號碼已登記。" });
           setDupToastMsg(res.message ?? "系統已有相同會員紀錄，請改用續會或聯絡櫃台。");
           return;
         }
+        setPhoneDup(null);
         setStep(2);
       } catch (err) {
         alertApiError(err);
@@ -433,16 +432,8 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         ? signatureRef.current?.getDataUrl() ?? values.digital_signature
         : values.digital_signature
     )?.trim() ?? "";
-    if (!values.branch_id || values.branch_id < 1) {
-      form.setError("branch_id", { message: "請選擇分店（尖沙咀 TST 或上環 SW）" });
-      return;
-    }
     if (!values.coach_username?.trim() || !values.coach_id || values.coach_id < 1) {
       form.setError("coach_username", { message: "請先選擇教練" });
-      return;
-    }
-    if (!values.course_category_id || values.course_category_id < 1) {
-      form.setError("course_category_id", { message: "請選擇課程種類" });
       return;
     }
     setStatus("提交中…");
@@ -468,10 +459,8 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
       cooling_off_acknowledged: values.cooling_off_acknowledged,
       disclaimer_accepted: values.disclaimer_accepted,
       whatsapp_reminder_opt_in: values.whatsapp_reminder_opt_in,
-      branch_id: values.branch_id,
       coach_username: values.coach_username.trim(),
-      coach_id: values.coach_id,
-      course_category_id: values.course_category_id
+      coach_id: values.coach_id
     };
 
     const finishSuccess = (
@@ -623,6 +612,13 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
               {form.formState.errors.phone && (
                 <p className="text-xs text-rose-400">{form.formState.errors.phone.message}</p>
               )}
+              {phoneDup?.digits === phoneDigits && phoneDup.message ? (
+                <p className="text-xs font-medium text-rose-600" role="alert">
+                  {phoneDup.message}
+                </p>
+              ) : phoneChecking ? (
+                <p className="text-xs text-ink/45">檢查電話中…</p>
+              ) : null}
             </div>
             <label className="block space-y-1 text-sm">
               <span className="text-ink/70">出生日期 Date of Birth *</span>
@@ -750,31 +746,9 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         {/* [F001][S004] Step 3 — cooling-off + disclaimer + e-signature + optional renewal notes */}
         {step === 3 && (
           <div className="space-y-4">
+            {/* [F001][S004] Coach only — branch and course category are handled after payment, not at onboarding. */}
             <div className="space-y-3 rounded-lg border border-primary/25 bg-primary/5 p-4">
-              <p className="text-sm font-semibold text-ink">Step 0 · 分店（必選）</p>
-              <label className="block space-y-1 text-sm">
-                <span className="text-ink/70">主要上課分店</span>
-                <select
-                  className={fieldClass}
-                  value={selectedBranchId || ""}
-                  onChange={(e) =>
-                    form.setValue("branch_id", e.target.value ? Number(e.target.value) : 0, {
-                      shouldValidate: true
-                    })
-                  }
-                >
-                  <option value="">請選擇分店（SW / TST）</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {memberBranchLabel(b)}
-                    </option>
-                  ))}
-                </select>
-                {form.formState.errors.branch_id ? (
-                  <p className="text-xs text-rose-400">{String(form.formState.errors.branch_id.message)}</p>
-                ) : null}
-              </label>
-              <p className="text-sm font-semibold text-ink">Step 1 · 選擇教練（必選）</p>
+              <p className="text-sm font-semibold text-ink">選擇教練（必選）</p>
               <label className="block space-y-1 text-sm">
                 <span className="text-ink/70">負責教練</span>
                 <select
@@ -785,7 +759,6 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                     form.setValue("coach_username", username, { shouldValidate: true });
                     const coach = coaches.find((c) => coachUsernameValue(c) === username);
                     form.setValue("coach_id", coach?.id ?? 0);
-                    form.setValue("course_category_id", 0);
                   }}
                 >
                   <option value="">請先選擇教練</option>
@@ -797,35 +770,6 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                 </select>
                 {form.formState.errors.coach_username ? (
                   <p className="text-xs text-rose-400">{String(form.formState.errors.coach_username.message)}</p>
-                ) : null}
-              </label>
-              <label className="block space-y-1 text-sm">
-                <span className="text-ink/70">Step 2 · 課程種類（依教練權限過濾）</span>
-                <select
-                  className={fieldClass}
-                  disabled={!selectedCoachId || selectedCoachId < 1 || coachCategoriesLoading}
-                  value={form.watch("course_category_id") || ""}
-                  onChange={(e) =>
-                    form.setValue("course_category_id", e.target.value ? Number(e.target.value) : 0, {
-                      shouldValidate: true
-                    })
-                  }
-                >
-                  <option value="">
-                    {coachCategoriesLoading
-                      ? "載入中…"
-                      : !selectedCoachId
-                        ? "請先選擇教練"
-                        : "請選擇課程種類"}
-                  </option>
-                  {coachCategories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
-                {form.formState.errors.course_category_id ? (
-                  <p className="text-xs text-rose-400">{String(form.formState.errors.course_category_id.message)}</p>
                 ) : null}
               </label>
             </div>

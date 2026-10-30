@@ -33,7 +33,7 @@ import {
   type CoachSessionRow,
   sessionsToDayCourses
 } from "../../lib/coach-sessions";
-import { alertApiError, api, formatApiError } from "../../lib/api";
+import { alertApiError, api, downloadBlobFile, formatApiError } from "../../lib/api";
 import { getAuthSession } from "../../lib/auth";
 import { formatHktDateTime } from "../../lib/format-hkt";
 import type { CoachStudentBriefDto, CoachStudentRecordDto, CoachRemindPaymentDto } from "../../types/api";
@@ -61,6 +61,7 @@ type PaymentRow = {
   next_installment_no?: number | null;
   next_reminder_lesson?: number | null;
   signature_image_url: string | null;
+  receipt_available?: boolean;
 };
 type Tab = "schedule" | "students" | "payments";
 
@@ -155,6 +156,7 @@ export default function CoachDashboardPage() {
   const [studentPickerOpen, setStudentPickerOpen] = useState(false);
   const [pending, setPending] = useState<PendingRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
+  const [receiptPdfBusyCourseId, setReceiptPdfBusyCourseId] = useState<number | null>(null);
   const [daySessions, setDaySessions] = useState<CoachSessionRow[]>([]);
   const [selectedDay, setSelectedDay] = useState(todayKey);
   const [selectedPending, setSelectedPending] = useState<PendingRow | null>(null);
@@ -725,6 +727,29 @@ export default function CoachDashboardPage() {
     }
   }
 
+  /**
+   * [F004][S002]
+   * Feature: Admin Reports & Financials
+   * Step: Coach workbench 已付 — official receipt PDF download
+   * Logic: GET receipt.pdf for a fully paid enrollment; shown only when receipt_available.
+   */
+  async function downloadEnrollmentReceipt(row: PaymentRow) {
+    if (!row.receipt_available) return;
+    setReceiptPdfBusyCourseId(row.course_id);
+    setStatus("");
+    try {
+      await downloadBlobFile(
+        `/api/coach/enrollments/${row.course_id}/receipt.pdf`,
+        `receipt-course-${row.course_id}.pdf`
+      );
+    } catch (e) {
+      alertApiError(e);
+      setStatus(String(e));
+    } finally {
+      setReceiptPdfBusyCourseId(null);
+    }
+  }
+
   if (roleDenied) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-canvas p-6 text-ink">
@@ -903,6 +928,16 @@ export default function CoachDashboardPage() {
                   <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800">Paid</span>
                   <span className="text-ink/70">{row.installment_status}</span>
                 </div>
+                {row.receipt_available ? (
+                  <button
+                    type="button"
+                    disabled={receiptPdfBusyCourseId === row.course_id}
+                    onClick={() => void downloadEnrollmentReceipt(row)}
+                    className="mt-3 rounded-lg border border-ink/15 px-3 py-1.5 text-xs font-medium text-ink hover:bg-ink/5 disabled:opacity-50"
+                  >
+                    {receiptPdfBusyCourseId === row.course_id ? "產生中…" : "收據 PDF"}
+                  </button>
+                ) : null}
               </article>
             ))}
           </div>
@@ -961,12 +996,13 @@ export default function CoachDashboardPage() {
                 <th className="px-2 py-2 font-medium">課程</th>
                 <th className="px-2 py-2 font-medium">付款</th>
                 <th className="px-2 py-2 font-medium">分期</th>
+                <th className="px-2 py-2 font-medium">收據</th>
               </tr>
             </thead>
             <tbody>
               {paidPayments.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-2 py-4 text-center text-ink/50">
+                  <td colSpan={5} className="px-2 py-4 text-center text-ink/50">
                     暫無已付款記錄。
                   </td>
                 </tr>
@@ -982,6 +1018,20 @@ export default function CoachDashboardPage() {
                       <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Paid</span>
                     </td>
                     <td className="px-2 py-2.5 text-xs text-ink/70">{row.installment_status}</td>
+                    <td className="px-2 py-2.5">
+                      {row.receipt_available ? (
+                        <button
+                          type="button"
+                          disabled={receiptPdfBusyCourseId === row.course_id}
+                          onClick={() => void downloadEnrollmentReceipt(row)}
+                          className="rounded-lg border border-ink/15 px-2.5 py-1 text-xs font-medium text-ink hover:bg-ink/5 disabled:opacity-50"
+                        >
+                          {receiptPdfBusyCourseId === row.course_id ? "產生中…" : "收據 PDF"}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-ink/40">—</span>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}

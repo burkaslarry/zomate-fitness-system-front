@@ -422,10 +422,11 @@ export const api = {
     disclaimer_accepted: boolean;
     whatsapp_reminder_opt_in: boolean;
     digital_signature: string;
-    branch_id: number;
+    /** Optional — onboarding no longer asks for branch/course category; payment flow sets them later. */
+    branch_id?: number;
     coach_username: string;
     coach_id: number;
-    course_category_id: number;
+    course_category_id?: number;
   }) => {
     const form = new FormData();
     form.append("chinese_name", payload.chinese_name);
@@ -445,10 +446,12 @@ export const api = {
     form.append("disclaimer_accepted", payload.disclaimer_accepted ? "true" : "false");
     form.append("whatsapp_reminder_opt_in", payload.whatsapp_reminder_opt_in ? "true" : "false");
     form.append("digital_signature", payload.digital_signature);
-    form.append("branch_id", String(payload.branch_id));
+    if (payload.branch_id && payload.branch_id >= 1) form.append("branch_id", String(payload.branch_id));
     form.append("coach_username", payload.coach_username);
     form.append("coach_id", String(payload.coach_id));
-    form.append("course_category_id", String(payload.course_category_id));
+    if (payload.course_category_id && payload.course_category_id >= 1) {
+      form.append("course_category_id", String(payload.course_category_id));
+    }
     if (payload.medical_clearance_file) {
       form.append("medical_clearance", payload.medical_clearance_file);
     }
@@ -457,6 +460,13 @@ export const api = {
   /** F01 步驟 1 — 檢查姓名／簡填 HKID／電話是否已有紀錄（公開，毋須 Bearer）。 */
   memberDuplicateCheck: (payload: { full_name: string; hkid: string; phone: string }) =>
     request("/api/members/duplicate-check", { method: "POST", body: JSON.stringify(payload) }),
+  /** [F001][S001] 電話即時預檢（公開；只回 boolean，不帶會員個人資料）。 */
+  memberPhoneCheck: (phone: string) =>
+    request(`/api/members/phone-check?phone=${encodeURIComponent(phone)}`) as Promise<{
+      registered: boolean;
+      deleted: boolean;
+      message: string | null;
+    }>,
   member: (hkid: string) => request(`/api/members/${encodeURIComponent(hkid)}`),
   memberFull: (hkid: string) => request(`/api/members/${encodeURIComponent(hkid)}/full`),
   memberFullById: (studentId: number | string) => request(`/api/members/by-id/${encodeURIComponent(String(studentId))}/full`),

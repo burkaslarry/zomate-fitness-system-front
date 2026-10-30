@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Eye, Upload, X } from "lucide-react";
 import type { PaymentRecordRow } from "../types/api";
-import { alertApiError, api, apiAssetUrl, downloadReceiptFile } from "../lib/api";
+import { alertApiError, api, apiAssetUrl, downloadBlobFile, downloadReceiptFile } from "../lib/api";
 import { formatHktDateTime } from "../lib/format-hkt";
 import { memberBranchLabel, memberHomeBranches, type BranchLike } from "../lib/branches";
 import WhatsAppButton from "./whatsapp-button";
@@ -214,6 +214,7 @@ export default function PaymentRecordsTable({
   const [uploadStatus, setUploadStatus] = useState("");
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
+  const [receiptPdfBusyId, setReceiptPdfBusyId] = useState<string | null>(null);
   /** [F005][S003] After receipt upload, surface wa.me confirmation (Meta auto-send skipped to avoid multi-course 400). */
   const [postUploadWhatsapp, setPostUploadWhatsapp] = useState<{
     studentWaUrl?: string;
@@ -304,6 +305,27 @@ export default function PaymentRecordsTable({
       else alertApiError(e);
     } finally {
       setDownloadingId(null);
+    }
+  }
+
+  /**
+   * [F004][S002]
+   * Feature: Admin Reports & Financials
+   * Step: Generate official receipt PDF from a confirmed payment record
+   * Logic: GET receipt.pdf (admin-only) → browser download; no WhatsApp attachment.
+   */
+  async function handleReceiptPdf(row: PaymentRecordRow) {
+    setReceiptPdfBusyId(row.id);
+    try {
+      await downloadBlobFile(
+        `/api/admin/payment-records/${row.record_type}/${row.ref_id}/receipt.pdf`,
+        `receipt-${row.record_type}-${row.ref_id}.pdf`
+      );
+    } catch (e) {
+      alertApiError(e);
+      console.error("[F004][S002] Error: Official receipt PDF generation failed.");
+    } finally {
+      setReceiptPdfBusyId(null);
     }
   }
 
@@ -617,6 +639,16 @@ export default function PaymentRecordsTable({
                     className="rounded-lg border border-rose-200 px-3 py-2 text-sm font-medium text-rose-700"
                   >
                     刪除
+                  </button>
+                ) : null}
+                {detailRow.status === "paid" ? (
+                  <button
+                    type="button"
+                    disabled={receiptPdfBusyId === detailRow.id}
+                    onClick={() => void handleReceiptPdf(detailRow)}
+                    className="rounded-lg border border-ink/15 px-3 py-2 text-sm font-medium text-ink hover:bg-ink/5 disabled:opacity-50"
+                  >
+                    {receiptPdfBusyId === detailRow.id ? "產生中…" : "收據 PDF"}
                   </button>
                 ) : null}
                 <button
