@@ -95,11 +95,11 @@ export default function AdminPage() {
     {
       kind: "ratio",
       label: "跟進分期付款",
-      detail: "與付款紀錄同步 · 按此去銷售與分期",
+      detail: "與付款紀錄同步 · 按此查看分期付款學生",
       unpaid: installmentUnpaid,
       total: installmentTotal,
       ratioHint: "左：未跟進（未付款）期數 · 右：分期總期數",
-      href: "/admin/finance/sales?installment_enrollment=1"
+      href: "/admin/installments"
     },
     {
       kind: "number",
@@ -175,7 +175,7 @@ export default function AdminPage() {
                     <p className="mt-1.5 hidden text-[11px] leading-4 text-ink/55 sm:block">{card.ratioHint}</p>
                     <p className="mt-1 hidden text-[11px] leading-4 text-ink/45 sm:block">{card.detail}</p>
                     <p className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary sm:mt-2 sm:text-[11px]">
-                      <span aria-hidden>→</span> 銷售與分期
+                      <span aria-hidden>→</span> 分期付款學生
                     </p>
                   </>
                 )}

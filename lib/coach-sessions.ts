@@ -100,7 +100,9 @@ export const CALENDAR_CHIP_PALETTE = [
   "border-cyan-200/80 bg-cyan-50 text-cyan-950"
 ] as const;
 
-export function calendarChipClass(studentId: number): string {
+export function calendarChipClass(studentId: number, attendanceStatus?: string): string {
+  // [F003][S003] 新學生試堂 always renders red so it stands apart from enrolled lessons.
+  if (attendanceStatus === "試堂") return "border-red-300/80 bg-red-100 text-red-950";
   return CALENDAR_CHIP_PALETTE[Math.abs(studentId) % CALENDAR_CHIP_PALETTE.length] ?? CALENDAR_CHIP_PALETTE[0];
 }
 

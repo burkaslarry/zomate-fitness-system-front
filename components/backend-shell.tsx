@@ -33,7 +33,8 @@ const MENU_SECTIONS: { frameClass: string; items: NavItem[] }[] = [
     items: [
       { href: "/admin/students", label: "學生名單" },
       { href: "/admin/coaches", label: "教練" },
-      { href: "/admin/payments", label: "付款紀錄" }
+      { href: "/admin/payments", label: "付款紀錄" },
+      { href: "/admin/installments", label: "分期付款學生" }
     ]
   },
   {
@@ -42,6 +43,7 @@ const MENU_SECTIONS: { frameClass: string; items: NavItem[] }[] = [
       { href: "/admin/branches", label: "分店/課堂類別管理" },
       { href: "/coach/calendar", label: "學生上堂" },
       { href: "/coach", label: "教練上堂" },
+      { href: "/admin/coach-schedule", label: "教練課堂排程" },
       { href: "/admin/attendance/qr-console", label: "QR 簽到中心" },
       { href: "/student", label: "學生入口" }
     ]

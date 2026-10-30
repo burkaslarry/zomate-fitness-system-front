@@ -119,6 +119,19 @@ export type CoachSkillsDto = {
   course_category_ids: number[];
 };
 
+export type CoachStudentPackageDto = {
+  enrollment_id: number;
+  course_title: string;
+  branch_name: string | null;
+  branch_code: string | null;
+  total_lessons: number;
+  used_lessons: number;
+  remaining_lessons: number;
+  coach_time_confirmed: boolean;
+  payment_status: string;
+  installment_status: string;
+};
+
 export type CoachStudentBriefDto = {
   student_id: number;
   full_name: string;
@@ -126,6 +139,7 @@ export type CoachStudentBriefDto = {
   lesson_balance: number;
   enrollment_count: number;
   pending_schedule: boolean;
+  packages?: CoachStudentPackageDto[];
 };
 
 export type CoachStudentRecordDto = {
@@ -221,7 +235,7 @@ export type CategoryEnrollmentRow = {
   installment_plans?: InstallmentPlanRow[];
 };
 
-/** [F004][S003] One due period inside a course or category installment plan. */
+/** [F004][S008] One due period inside a course or category installment plan. */
 export type InstallmentLedgerPeriod = {
   installment_no: number;
   amount: number | null;
@@ -232,7 +246,7 @@ export type InstallmentLedgerPeriod = {
   lesson_to?: number | null;
 };
 
-/** [F004][S003] GET /api/admin/installments row — one enrollment/plan per student. */
+/** [F004][S008] GET /api/admin/installments row — one enrollment/plan per student. */
 export type InstallmentLedgerRow = {
   id: string;
   source: "course" | "category";

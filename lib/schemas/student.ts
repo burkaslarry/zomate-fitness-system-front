@@ -100,8 +100,7 @@ export const studentRegistrationPayloadSchema = z
     coach_username: z.string().min(1, "請先選擇教練"),
     coach_id: z.number().int().min(0),
     course_category_id: z.number().int().min(0),
-    package_sessions: z.union([z.literal(10), z.literal(30)]).optional(),
-    renewal_notes: z.string().optional()
+    package_sessions: z.union([z.literal(10), z.literal(30)]).optional()
   })
   .refine((d) => d.coach_id >= 1, { message: "請先選擇教練", path: ["coach_username"] })
   .refine((d) => d.pdpo_acknowledged, {

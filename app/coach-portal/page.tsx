@@ -25,7 +25,6 @@ import { monthRange, weekRange, shiftDay, isPastDay, todayDateKey } from "../../
 import {
   type CoachSlotDuration,
   type CoachStartMinute,
-  rangesForDayFromSessions,
   slotWouldConflict,
   startSlotDecimal
 } from "../../lib/coach-schedule-duration";
@@ -99,21 +98,6 @@ function remindPayWaLink(phone: string, name: string, courseTitle: string): stri
   return `https://wa.me/${digits}?text=${text}`;
 }
 
-function slotConflictForDay(
-  sessions: CoachSessionRow[],
-  day: string,
-  excludeEnrollmentIds: Set<number>,
-  startHour: number,
-  startMinute: number,
-  durationHours: number
-): boolean {
-  return slotWouldConflict(
-    rangesForDayFromSessions(sessions, day, excludeEnrollmentIds, { confirmedOnly: true }),
-    startSlotDecimal(startHour, startMinute),
-    durationHours
-  );
-}
-
 function pendingFromEnrollment(
   studentId: number,
   studentName: string,
@@ -172,7 +156,6 @@ export default function CoachDashboardPage() {
   const [bookingEnrollmentId, setBookingEnrollmentId] = useState<number | null>(null);
   const [bookingOriginalDate, setBookingOriginalDate] = useState<string | null>(null);
   const [bookDay, setBookDay] = useState(todayKey);
-  const [bookDaySessions, setBookDaySessions] = useState<CoachSessionRow[]>([]);
   const [bookStartHour, setBookStartHour] = useState(9);
   const [bookStartMinute, setBookStartMinute] = useState<CoachStartMinute>(0);
   const [bookDuration, setBookDuration] = useState<CoachSlotDuration>(1);
@@ -191,6 +174,8 @@ export default function CoachDashboardPage() {
   const [scheduleStudentId, setScheduleStudentId] = useState<number | null>(null);
   /** [F003][S003] FAB「其他事項」— private calendar block, no student enrollment. */
   const [personalBlockMode, setPersonalBlockMode] = useState(false);
+  /** [F003][S003] FAB「新增學生試堂」— new student name + phone + optional note. */
+  const [trialDraft, setTrialDraft] = useState<{ name: string; phone: string; notes: string } | null>(null);
   const [pickBusy, setPickBusy] = useState(false);
   const [scheduleSuccess, setScheduleSuccess] = useState<{
     studentName: string;
@@ -207,11 +192,6 @@ export default function CoachDashboardPage() {
     if (selectedPending) ids.add(selectedPending.enrollment_id);
     return ids;
   }, [pendingCourseIds, selectedPending]);
-  const occupiedRanges = useMemo(
-    () => rangesForDayFromSessions(daySessions, selectedDay, excludeCourseIds, { confirmedOnly: true }),
-    [daySessions, selectedDay, excludeCourseIds]
-  );
-
   const dayCoursesForPanel = useMemo(
     () =>
       sessionsToDayCourses(
@@ -237,13 +217,6 @@ export default function CoachDashboardPage() {
 
   const paidPayments = useMemo(() => payments.filter((p) => p.payment_status === "Paid"), [payments]);
 
-  const bookExcludeIds = useMemo(
-    () =>
-      bookingEnrollmentId ? new Set([...pendingCourseIds, bookingEnrollmentId]) : pendingCourseIds,
-    [pendingCourseIds, bookingEnrollmentId]
-  );
-
-
   const personalBlocksAsSessions = useCallback(
     async (coachId: number, params: { day?: string; fromDate?: string; toDate?: string }) => {
       try {
@@ -255,6 +228,9 @@ export default function CoachDashboardPage() {
         })) as Array<{
           id: number;
           title: string;
+          notes?: string | null;
+          kind?: string;
+          student_phone?: string | null;
           start_at: string;
           end_at: string;
         }>;
@@ -265,21 +241,22 @@ export default function CoachDashboardPage() {
           const y = start.getFullYear();
           const m = pad(start.getMonth() + 1);
           const d = pad(start.getDate());
+          const isTrial = b.kind === "trial";
           return {
             enrollment_id: -b.id,
             student_id: 0,
-            student_name: "其他事項",
-            student_phone: "",
+            student_name: isTrial ? b.title : "其他事項",
+            student_phone: b.student_phone ?? "",
             category_id: null,
-            category_name: "其他事項",
+            category_name: isTrial ? "試堂" : "其他事項",
             session_date: `${y}-${m}-${d}`,
             start_time: `${pad(start.getHours())}:${pad(start.getMinutes())}`,
             end_time: `${pad(end.getHours())}:${pad(end.getMinutes())}`,
             branch_name: "",
             checkin_pin: "",
             coach_time_confirmed: true,
-            attendance_status: "personal",
-            course_title: b.title || "其他事項"
+            attendance_status: isTrial ? "試堂" : "personal",
+            course_title: isTrial ? b.notes || "新學生試堂" : b.title || "其他事項"
           };
         });
       } catch {
@@ -354,17 +331,6 @@ export default function CoachDashboardPage() {
       .then(([rows, personal]) => setDaySessions([...(rows ?? []), ...personal]))
       .catch((e) => setStatus(String(e)));
   }, [coach, selectedDay, personalBlocksAsSessions]);
-
-  useEffect(() => {
-    if (!coach || bookingEnrollmentId == null) {
-      setBookDaySessions([]);
-      return;
-    }
-    void api
-      .coachSessions(coach.id, { day: bookDay })
-      .then((rows) => setBookDaySessions((rows ?? []) as CoachSessionRow[]))
-      .catch(() => setBookDaySessions([]));
-  }, [coach, bookDay, bookingEnrollmentId]);
 
   useEffect(() => {
     if (!coach) return;
@@ -469,6 +435,7 @@ export default function CoachDashboardPage() {
 
   const handlePickPersonal = useCallback(() => {
     setPersonalBlockMode(true);
+    setTrialDraft(null);
     setSelectedPending(null);
     setScheduleStudentId(null);
     setStudentPickerOpen(false);
@@ -478,6 +445,22 @@ export default function CoachDashboardPage() {
     setDurationHours(1);
     setScheduleSheetOpen(true);
   }, [selectedDay]);
+
+  const handlePickTrial = useCallback(
+    (trial: { name: string; phone: string; notes: string }) => {
+      setTrialDraft(trial);
+      setPersonalBlockMode(false);
+      setSelectedPending(null);
+      setScheduleStudentId(null);
+      setStudentPickerOpen(false);
+      if (selectedDay < bookingMinDateKey()) setSelectedDay(bookingMinDateKey());
+      setStartHour(9);
+      setStartMinute(0);
+      setDurationHours(1);
+      setScheduleSheetOpen(true);
+    },
+    [selectedDay]
+  );
 
   const handlePickerPending = useCallback(
     (row: PendingRow) => {
@@ -509,16 +492,9 @@ export default function CoachDashboardPage() {
       return;
     }
     if (
-      slotConflictForDay(
-        daySessions,
-        selectedDay,
-        excludeCourseIds,
-        startHour,
-        startMinute,
-        durationHours
-      )
+      slotWouldConflict([], startSlotDecimal(startHour, startMinute), durationHours)
     ) {
-      setStatus("此時段已被佔用或超出當日 24:00，請另選。");
+      setStatus("排程不可超過當日 24:00，請另選。");
       return;
     }
     setScheduling(true);
@@ -537,6 +513,24 @@ export default function CoachDashboardPage() {
         setScheduleSheetOpen(false);
         await reloadAll(coach.id);
         setStatus("已加入其他事項到日曆。");
+        return;
+      }
+      if (trialDraft) {
+        await api.coachCreatePersonalBlock({
+          day: selectedDay,
+          start_hour: startHour,
+          start_minute: startMinute,
+          duration_hours: durationHours,
+          title: trialDraft.name,
+          notes: trialDraft.notes || undefined,
+          kind: "trial",
+          student_phone: trialDraft.phone,
+          coach_id: coach.id
+        });
+        setTrialDraft(null);
+        setScheduleSheetOpen(false);
+        await reloadAll(coach.id);
+        setStatus(`已加入試堂：${trialDraft.name}。`);
         return;
       }
       if (!selectedPending) return;
@@ -612,22 +606,13 @@ export default function CoachDashboardPage() {
       setStatus("不能排期到過去日期，請選今日或未來。");
       return;
     }
-    const bookExclude = new Set([...pendingCourseIds, enrollmentId]);
-    if (
-      slotConflictForDay(
-        bookDaySessions,
-        bookDay,
-        bookExclude,
-        bookStartHour,
-        bookStartMinute,
-        bookDuration
-      )
-    ) {
-      setStatus("此時段已被佔用或超出當日 24:00，請另選。");
-      return;
-    }
     setBookBusy(true);
     setStatus("");
+    if (slotWouldConflict([], startSlotDecimal(bookStartHour, bookStartMinute), bookDuration)) {
+      setBookBusy(false);
+      setStatus("排程不可超過當日 24:00，請另選。");
+      return;
+    }
     try {
       if (bookingOriginalDate) {
         const start = new Date(localSlotIso(bookDay, bookStartHour, bookStartMinute));
@@ -730,7 +715,7 @@ export default function CoachDashboardPage() {
   /**
    * [F004][S002]
    * Feature: Admin Reports & Financials
-   * Step: Coach workbench 已付 — official receipt PDF download
+   * Step: Coach workbench 付款紀錄 — official receipt PDF download
    * Logic: GET receipt.pdf for a fully paid enrollment; shown only when receipt_available.
    */
   async function downloadEnrollmentReceipt(row: PaymentRow) {
@@ -831,23 +816,32 @@ export default function CoachDashboardPage() {
 
       </section>
 
-      {scheduleSheetOpen && (selectedPending || personalBlockMode) ? (
+      {scheduleSheetOpen && (selectedPending || personalBlockMode || trialDraft) ? (
         <CoachScheduleBottomSheet
           open={scheduleSheetOpen}
-          studentName={personalBlockMode ? "其他事項" : selectedPending?.student_name || ""}
-          courseTitle={personalBlockMode ? "私人日曆標記" : selectedPending?.course_title || ""}
+          studentName={
+            trialDraft ? trialDraft.name : personalBlockMode ? "其他事項" : selectedPending?.student_name || ""
+          }
+          courseTitle={
+            trialDraft
+              ? trialDraft.notes || "新學生試堂"
+              : personalBlockMode
+                ? "私人日曆標記"
+                : selectedPending?.course_title || ""
+          }
           selectedDay={selectedDay}
           minDate={bookingMinDateKey()}
           dayCourses={dayCoursesForPanel}
-          occupiedRanges={occupiedRanges}
+          occupiedRanges={[]}
           startHour={startHour}
           startMinute={startMinute}
           durationHours={durationHours}
           scheduling={scheduling}
-          confirmLabel={personalBlockMode ? "加入其他事項" : "確認排程"}
+          confirmLabel={trialDraft ? "加入試堂" : personalBlockMode ? "加入其他事項" : "確認排程"}
           onClose={() => {
             setScheduleSheetOpen(false);
             setPersonalBlockMode(false);
+            setTrialDraft(null);
           }}
           onDayChange={setSelectedDay}
           onStartTimeChange={(h, m) => {
@@ -881,6 +875,7 @@ export default function CoachDashboardPage() {
         }
         onPickStudent={handlePickerStudent}
         onPickPersonal={handlePickPersonal}
+        onPickTrial={handlePickTrial}
       />
 
       <CoachScheduleFab onClick={handleFabClick} disabled={isPastDay(selectedDay)} />
@@ -912,10 +907,10 @@ export default function CoachDashboardPage() {
         )}
       </section>
       <section>
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/50">已付款</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/50">付款紀錄</h3>
         {paidPayments.length === 0 ? (
           <p className="mt-2 rounded-xl border border-ink/10 bg-surface px-4 py-4 text-center text-sm text-ink/50">
-            暫無已付款記錄。
+            暫無付款紀錄。
           </p>
         ) : (
           <div className="mt-2 space-y-2">
@@ -987,7 +982,7 @@ export default function CoachDashboardPage() {
         </div>
       </section>
       <section>
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/50">已付款</h3>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/50">付款紀錄</h3>
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead>
@@ -1003,7 +998,7 @@ export default function CoachDashboardPage() {
               {paidPayments.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-2 py-4 text-center text-ink/50">
-                    暫無已付款記錄。
+                    暫無付款紀錄。
                   </td>
                 </tr>
               ) : (
@@ -1062,22 +1057,59 @@ export default function CoachDashboardPage() {
         ) : (
           <ul className="mt-3 space-y-2">
             {students.map((s) => (
-              <li key={s.student_id}>
+              <li
+                key={s.student_id}
+                className={`overflow-hidden rounded-lg border transition ${
+                  selectedStudentId === s.student_id
+                    ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                    : "border-ink/10 bg-canvas"
+                }`}
+              >
                 <button
                   type="button"
                   onClick={() => void loadStudentRecords(s.student_id)}
-                  className={`w-full rounded-lg border px-3 py-2.5 text-left text-sm transition ${
-                    selectedStudentId === s.student_id
-                      ? "border-primary bg-primary/10 ring-1 ring-primary/30"
-                      : "border-ink/10 bg-canvas hover:border-primary/40"
-                  }`}
+                  className="w-full px-3 py-2.5 text-left text-sm hover:bg-primary/5"
                 >
-                  <div className="font-medium text-ink">{s.full_name}</div>
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                    <span className="font-medium text-ink">{s.full_name}</span>
+                    <span className="text-xs tabular-nums text-ink/60">{s.phone}</span>
+                  </div>
                   <div className="mt-0.5 text-xs text-ink/60">
-                    餘 {s.lesson_balance} 堂 · {s.enrollment_count} 課程
+                    餘 {s.lesson_balance} 堂 · {s.enrollment_count} 個 package
                     {s.pending_schedule ? " · 待排程" : ""}
                   </div>
                 </button>
+                {s.packages && s.packages.length > 0 ? (
+                  <ul className="divide-y divide-ink/[0.06] border-t border-ink/[0.08] bg-surface/70">
+                    {s.packages.map((p) => (
+                      <li key={p.enrollment_id} className="px-3 py-2 text-xs">
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+                          <span className="font-medium text-ink">{p.course_title}</span>
+                          <span className="text-ink/60">{p.branch_name ?? "—"}</span>
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 tabular-nums text-ink/60">
+                          <span>總 {p.total_lessons} 堂</span>
+                          <span>已上 {p.used_lessons} 堂</span>
+                          <span
+                            className={
+                              p.remaining_lessons > 0
+                                ? "font-medium text-emerald-700"
+                                : "text-ink/45"
+                            }
+                          >
+                            剩 {p.remaining_lessons} 堂
+                          </span>
+                          {!p.coach_time_confirmed ? (
+                            <span className="font-medium text-amber-700">待排程</span>
+                          ) : null}
+                          {p.payment_status && p.payment_status !== "Paid" ? (
+                            <span className="text-amber-700">{p.installment_status || p.payment_status}</span>
+                          ) : null}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -1157,9 +1189,7 @@ export default function CoachDashboardPage() {
                         startHour={bookStartHour}
                         startMinute={bookStartMinute}
                         durationHours={bookDuration}
-                        occupiedRanges={rangesForDayFromSessions(bookDaySessions, bookDay, bookExcludeIds, {
-                          confirmedOnly: true
-                        })}
+                        occupiedRanges={[]}
                         onChange={(h, m) => {
                           setBookStartHour(h);
                           setBookStartMinute(m);
@@ -1173,23 +1203,14 @@ export default function CoachDashboardPage() {
                         name={`book-duration-${enr.enrollment_id}`}
                         startHour={startSlotDecimal(bookStartHour, bookStartMinute)}
                         durationHours={bookDuration}
-                        occupiedRanges={rangesForDayFromSessions(bookDaySessions, bookDay, bookExcludeIds, {
-                          confirmedOnly: true
-                        })}
+                        occupiedRanges={[]}
                         onChange={setBookDuration}
                       />
                       <button
                         type="button"
                         disabled={
                           bookBusy ||
-                          slotConflictForDay(
-                            bookDaySessions,
-                            bookDay,
-                            bookExcludeIds,
-                            bookStartHour,
-                            bookStartMinute,
-                            bookDuration
-                          )
+                          slotWouldConflict([], startSlotDecimal(bookStartHour, bookStartMinute), bookDuration)
                         }
                         onClick={() => void bookEnrollment(enr.enrollment_id, enr.coach_time_confirmed)}
                         className="w-full rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-black disabled:opacity-50 sm:w-auto"
@@ -1250,7 +1271,7 @@ export default function CoachDashboardPage() {
             </p>
             <div className="mt-2 flex flex-wrap gap-3 text-xs font-semibold">
               <Link href="/coach-portal?tab=payments" className="text-amber-900 underline">
-                前往已付分頁 →
+                前往付款紀錄 →
               </Link>
               <Link href="/coach-portal?tab=students" className="text-amber-900 underline">
                 學員 · WhatsApp 催款 →

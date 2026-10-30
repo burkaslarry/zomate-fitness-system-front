@@ -25,6 +25,7 @@ export const ACCESS_FEATURES: AccessFeature[] = [
   { key: "branches", label_zh: "分店/課堂類別管理", href: "/admin/branches", roles: ["MASTER_ADMIN"] },
   { key: "coach_schedule_checkin", label_zh: "教練日程 · 簽到", href: "/coach/calendar", roles: ["MASTER_ADMIN", "COACH", "CLERK"] },
   { key: "coach_sessions", label_zh: "教練課表", href: "/coach", roles: ["MASTER_ADMIN"] },
+  { key: "coach_schedule_board", label_zh: "教練課堂排程", href: "/admin/coach-schedule", roles: ["MASTER_ADMIN", "CLERK"] },
   { key: "qr_checkin_console", label_zh: "QR 簽到中心", href: "/admin/attendance/qr-console", roles: ["MASTER_ADMIN"] },
   { key: "session_ledger", label_zh: "Session Ledger · 扣堂原因", href: "/admin/students", roles: ["MASTER_ADMIN"] },
   { key: "student_portal", label_zh: "學生入口", href: "/student", roles: ["MASTER_ADMIN"] },
@@ -32,7 +33,8 @@ export const ACCESS_FEATURES: AccessFeature[] = [
   { key: "whatsapp_settings", label_zh: "Whatsapp 設定", href: "/admin/settings/whatsapp", roles: ["MASTER_ADMIN"] },
   { key: "system_users", label_zh: "系統帳號", href: "/admin/system-users", roles: ["MASTER_ADMIN"] },
   { key: "admin_dashboard", label_zh: "後台面板", href: "/admin", roles: ["MASTER_ADMIN", "CLERK"] },
-  { key: "payments", label_zh: "付款紀錄", href: "/admin/payments", roles: ["MASTER_ADMIN", "CLERK"] }
+  { key: "payments", label_zh: "付款紀錄", href: "/admin/payments", roles: ["MASTER_ADMIN", "CLERK"] },
+  { key: "installments", label_zh: "分期付款學生", href: "/admin/installments", roles: ["MASTER_ADMIN", "CLERK"] }
 ];
 
 export function normalizeAccessRole(role: string, username: string): AccessRole {

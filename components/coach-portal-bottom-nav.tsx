@@ -34,7 +34,7 @@ const TABS: {
   },
   {
     id: "payments",
-    label: "已付",
+    label: "付款紀錄",
     href: "/coach-portal?tab=payments",
     icon: CreditCard,
     match: (path, tab) => path === "/coach-portal" && tab === "payments"

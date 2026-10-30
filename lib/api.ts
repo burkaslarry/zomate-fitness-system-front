@@ -967,6 +967,8 @@ export const api = {
     duration_hours: number;
     title?: string;
     notes?: string;
+    kind?: "personal" | "trial";
+    student_phone?: string;
     coach_id?: number;
   }) =>
     request("/api/coach/personal-blocks", {

@@ -13,12 +13,13 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Loader2, X } from "lucide-react";
 import { alertApiError, api } from "../lib/api";
 import {
   type CoachAttendanceIncomeRow,
+  type CoachAttendanceIncomeStudentRow,
   type StudentAttendanceDetail,
-  collectAttendedDatesInPeriod,
-  collectBranchesInPeriod,
   defaultCoachIncomeDateRange,
   downloadCoachAttendanceIncomeCsv,
+  downloadCoachAttendanceIncomeExcel,
   fetchCoachAttendanceIncomeRows,
+  flattenCoachAttendanceIncomeStudentRows,
   formatStudentLessonLabel,
   formatStudentSessionDateTime,
   isNextUpcomingLesson,
@@ -42,39 +43,6 @@ function groupLabel(name: string): string {
   if (name.includes("一對二") || name.includes("1-2") || name.includes("1:2")) return "1-2";
   if (name.includes("一對一") || name.includes("1-1") || name.includes("1:1")) return "1-1";
   return "其他";
-}
-
-function StudentNamesCell({
-  row,
-  onSelect
-}: {
-  row: CoachAttendanceIncomeRow;
-  onSelect: (detail: StudentAttendanceDetail) => void;
-}) {
-  if (row.studentNames.length === 0) return <>—</>;
-  return (
-    <>
-      {row.studentNames.map((name, index) => {
-        const detail = row.studentDetails.find((d) => d.studentName === name);
-        return (
-          <span key={name}>
-            {index > 0 ? ", " : null}
-            {detail ? (
-              <button
-                type="button"
-                className="font-medium text-primary underline-offset-2 hover:underline"
-                onClick={() => onSelect(detail)}
-              >
-                {name}
-              </button>
-            ) : (
-              name
-            )}
-          </span>
-        );
-      })}
-    </>
-  );
 }
 
 function SortHeader({
@@ -123,7 +91,7 @@ export default function CoachAttendanceIncomeExport() {
   const [categories, setCategories] = useState<CourseCategoryOption[]>([]);
   const [rows, setRows] = useState<CoachAttendanceIncomeRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [exporting, setExporting] = useState<"csv" | "xlsx" | null>(null);
   const [status, setStatus] = useState("");
   const [rangeError, setRangeError] = useState("");
   const [studentModal, setStudentModal] = useState<StudentDetailModalState | null>(null);
@@ -162,38 +130,27 @@ export default function CoachAttendanceIncomeExport() {
     return m;
   }, [categories]);
 
+  const studentRows = useMemo(
+    () => flattenCoachAttendanceIncomeStudentRows(rows, fromDate, toDate),
+    [rows, fromDate, toDate]
+  );
+
   const sortedRows = useMemo(() => {
-    const decorated = rows.map((r) => ({
-      row: r,
-      branchName: collectBranchesInPeriod(r.studentDetails, fromDate, toDate),
-      attendanceDates: collectAttendedDatesInPeriod(r.studentDetails, fromDate, toDate) || r.attendanceDates
-    }));
     const mul = sortDir === "asc" ? 1 : -1;
-    decorated.sort((a, b) => {
-      const av =
-        sortKey === "coachName"
-          ? a.row.coachName
-          : sortKey === "courseName"
-            ? a.row.courseName
-            : sortKey === "branchName"
-              ? a.branchName
-              : sortKey === "students"
-                ? a.row.students
-                : a.attendanceDates;
-      const bv =
-        sortKey === "coachName"
-          ? b.row.coachName
-          : sortKey === "courseName"
-            ? b.row.courseName
-            : sortKey === "branchName"
-              ? b.branchName
-              : sortKey === "students"
-                ? b.row.students
-                : b.attendanceDates;
-      return mul * String(av).localeCompare(String(bv), "zh-Hant");
-    });
-    return decorated;
-  }, [rows, fromDate, toDate, sortKey, sortDir]);
+    const value = (r: CoachAttendanceIncomeStudentRow) =>
+      sortKey === "coachName"
+        ? r.coachName
+        : sortKey === "courseName"
+          ? r.courseName
+          : sortKey === "branchName"
+            ? r.branchName
+            : sortKey === "students"
+              ? r.studentName
+              : r.attendanceDates;
+    return [...studentRows].sort(
+      (a, b) => mul * String(value(a)).localeCompare(String(value(b)), "zh-Hant")
+    );
+  }, [studentRows, sortKey, sortDir]);
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
@@ -244,36 +201,45 @@ export default function CoachAttendanceIncomeExport() {
     setCategoryIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
-  function openStudentModal(row: CoachAttendanceIncomeRow, detail: StudentAttendanceDetail) {
+  function openStudentModal(row: CoachAttendanceIncomeStudentRow) {
     setStudentModal({
       coachName: row.coachName,
       courseName: row.courseName,
-      detail
+      detail: row.detail
     });
   }
 
-  async function handleExport() {
+  async function handleExport(format: "csv" | "xlsx") {
     if (fromDate > toDate) {
       setRangeError("開始日期不可晚於結束日期。");
       return;
     }
-    if (rows.length === 0) {
+    if (studentRows.length === 0) {
       setStatus("所選日期範圍內沒有符合條件的出勤紀錄，未匯出檔案。");
       return;
     }
-    setExporting(true);
+    setExporting(format);
     setStatus("");
     try {
       const coachName =
         coachId !== "" ? coaches.find((c) => c.id === coachId)?.full_name : undefined;
-      downloadCoachAttendanceIncomeCsv(rows, fromDate, toDate, coachName);
-      console.log("[F004][S005] Success: CSV exported", { fromDate, toDate, rows: rows.length });
+      if (format === "csv") {
+        downloadCoachAttendanceIncomeCsv(studentRows, fromDate, toDate, coachName);
+      } else {
+        await downloadCoachAttendanceIncomeExcel(studentRows, fromDate, toDate, coachName);
+      }
+      console.log("[F004][S005] Success: Export generated", {
+        format,
+        fromDate,
+        toDate,
+        rows: studentRows.length
+      });
     } catch (e) {
       alertApiError(e);
       setStatus(String(e));
-      console.error("[F004][S005] Error: CSV export failed.");
+      console.error("[F004][S005] Error: Export failed.", { format });
     } finally {
-      setExporting(false);
+      setExporting(null);
     }
   }
 
@@ -283,18 +249,28 @@ export default function CoachAttendanceIncomeExport() {
         <div className="min-w-0">
           <h1 className="text-lg font-bold tracking-tight text-ink sm:text-xl">教練出勤收入匯出</h1>
           <p className="mt-1 text-sm text-ink/55">
-            Coach Attendance Income Export — 依教練與課程匯出出勤與學員名單，供 Excel 手動計算佣金。
-            點擊學員姓名可查看 package 堂數與上堂時間。CSV 每堂一行（同一學生可有多行），含「分店」欄；「學員」欄顯示姓名與堂數（例如 Jessie Yeung (第2堂)），「總堂數」為 1。「金額 (HKD)」欄位留空。
+            Coach Attendance Income Export — 依教練、課程與學員匯出出勤與學員名單，供 Excel 手動計算佣金。
+            點擊學員姓名可查看 package 堂數與上堂時間。CSV／Excel 每學員一行，「學員」欄只列一位學員；「總堂數」為該學員在所選期間的已簽到堂數，「金額 (HKD)」欄位留空。
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void handleExport()}
-          disabled={exporting || loading || rows.length === 0 || Boolean(rangeError)}
-          className="w-full shrink-0 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-black disabled:opacity-40 sm:w-auto"
-        >
-          {exporting ? "匯出中…" : "匯出 CSV"}
-        </button>
+        <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row">
+          <button
+            type="button"
+            onClick={() => void handleExport("csv")}
+            disabled={exporting !== null || loading || studentRows.length === 0 || Boolean(rangeError)}
+            className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-black disabled:opacity-40 sm:w-auto"
+          >
+            {exporting === "csv" ? "匯出中…" : "匯出 CSV"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleExport("xlsx")}
+            disabled={exporting !== null || loading || studentRows.length === 0 || Boolean(rangeError)}
+            className="w-full rounded-lg border border-primary bg-primary/10 px-4 py-2.5 text-sm font-semibold text-ink disabled:opacity-40 sm:w-auto"
+          >
+            {exporting === "xlsx" ? "匯出中…" : "匯出 Excel"}
+          </button>
+        </div>
       </div>
 
       <section className="rounded-xl border border-ink/10 bg-surface p-3 shadow-sm sm:p-4">
@@ -377,7 +353,7 @@ export default function CoachAttendanceIncomeExport() {
             <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
             載入出勤資料…
           </div>
-        ) : rows.length === 0 ? (
+        ) : studentRows.length === 0 ? (
           <p className="px-4 py-16 text-center text-sm text-ink/50">
             {rangeError
               ? "請修正日期範圍。"
@@ -388,8 +364,8 @@ export default function CoachAttendanceIncomeExport() {
         ) : (
           <>
             <p className="border-b border-ink/10 px-4 py-2.5 text-xs text-ink/55">
-              預覽 {rows.length} 列（每列 = 一位教練 × 一種課程）。點學員姓名查看堂數與上堂時間。匯出 CSV
-              每堂一行含「分店」、「學員」附堂數、「總堂數」=1，同空白「金額 (HKD)」欄。
+              預覽 {studentRows.length} 列（每列 = 一位教練 × 一種課程 × 一位學員）。點學員姓名查看堂數與上堂時間。匯出
+              CSV／Excel 每學員一行；「學員」欄只列一位學員，「總堂數」為該學員已簽到堂數，空白「金額 (HKD)」欄。
             </p>
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
@@ -433,21 +409,24 @@ export default function CoachAttendanceIncomeExport() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedRows.map(({ row: r, branchName, attendanceDates }) => (
+                  {sortedRows.map((r) => (
                     <tr
-                      key={`${r.coachName}-${r.courseName}-${r.students}`}
+                      key={`${r.coachName}-${r.courseName}-${r.studentName}`}
                       className="border-t border-ink/[0.06] align-top"
                     >
                       <td className="px-3 py-2.5 font-medium text-ink">{r.coachName}</td>
                       <td className="px-3 py-2.5 text-ink/85">{r.courseName}</td>
-                      <td className="px-3 py-2.5 text-ink/85">{branchName || "—"}</td>
+                      <td className="px-3 py-2.5 text-ink/85">{r.branchName || "—"}</td>
                       <td className="px-3 py-2.5 text-ink/85">
-                        <StudentNamesCell
-                          row={r}
-                          onSelect={(detail) => openStudentModal(r, detail)}
-                        />
+                        <button
+                          type="button"
+                          className="font-medium text-primary underline-offset-2 hover:underline"
+                          onClick={() => openStudentModal(r)}
+                        >
+                          {r.studentName}
+                        </button>
                       </td>
-                      <td className="px-3 py-2.5 text-ink/85">{attendanceDates || "—"}</td>
+                      <td className="px-3 py-2.5 text-ink/85">{r.attendanceDates || "—"}</td>
                     </tr>
                   ))}
                 </tbody>

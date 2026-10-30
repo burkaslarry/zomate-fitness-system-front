@@ -22,11 +22,29 @@ export type CoachAttendanceLedgerRow = {
   remarks: string;
 };
 
+export type CoachAttendanceLedgerPackage = {
+  enrollment_id: number;
+  student_name: string;
+  course_title: string;
+  branch_name: string | null;
+  total_lessons: number;
+  used_lessons: number;
+  remaining_lessons: number;
+};
+
+export type CoachAttendanceLedgerSummary = {
+  month_checkins: number;
+  cumulative_checkins: number;
+  month_lessons: number;
+};
+
 export type CoachAttendanceLedgerPayload = {
   month: string;
   from_date: string;
   to_date: string;
   rows: CoachAttendanceLedgerRow[];
+  summary?: CoachAttendanceLedgerSummary;
+  packages?: CoachAttendanceLedgerPackage[];
 };
 
 export const LEDGER_STATUS_LABEL: Record<string, string> = {

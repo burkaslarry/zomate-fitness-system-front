@@ -1,13 +1,14 @@
 /**
  * [F004][S005]
  * Feature: Admin Reports & Financials
- * Step: Coach Attendance Income Export — aggregate sessions for admin CSV
- * Logic: Single source `GET /api/coach/sessions`; group by coach + course; blank HKD column.
+ * Step: Coach Attendance Income Export — aggregate sessions for admin CSV/Excel
+ * Logic: Single source `GET /api/coach/sessions`; group by coach + course, export one row per student; blank HKD column.
  */
 
 import { api } from "./api";
 import { buildCsvContent, downloadUtf8CsvBom } from "./csv-rfc4180";
 import type { CoachSessionRow } from "./coach-sessions";
+import { exportRowsToExcelSheet } from "./excel-export";
 import { todayHktDate } from "./format-hkt";
 
 export type StudentAttendanceSession = {
@@ -30,8 +31,6 @@ export type StudentAttendanceDetail = {
 export type CoachAttendanceIncomeRow = {
   coachName: string;
   courseName: string;
-  studentNames: string[];
-  students: string;
   attendanceDates: string;
   studentDetails: StudentAttendanceDetail[];
 };
@@ -107,108 +106,58 @@ export function formatStudentLessonLabel(session: StudentAttendanceSession): str
   return "—";
 }
 
-/** CSV 學員欄（單堂）：`Jessie Yeung (第2堂)` */
-export function formatStudentLessonCsvLabel(
-  studentName: string,
-  session: StudentAttendanceSession
-): string {
-  if (session.lessonNo != null) return `${studentName} (第${session.lessonNo}堂)`;
-  return studentName;
-}
-
-export type CoachAttendanceIncomeCsvLessonRow = {
+export type CoachAttendanceIncomeStudentRow = {
   coachName: string;
   courseName: string;
   studentName: string;
-  session: StudentAttendanceSession;
+  studentId: number;
+  detail: StudentAttendanceDetail;
+  attendedSessions: StudentAttendanceSession[];
+  branchName: string;
+  attendanceDates: string;
+  lessonCount: number;
 };
 
-/** One CSV row per checked-in lesson within the selected date range. */
-export function flattenCoachAttendanceIncomeCsvRows(
+/** One export row per student (coach × course × student) within the selected range. */
+export function flattenCoachAttendanceIncomeStudentRows(
   rows: CoachAttendanceIncomeRow[],
   fromDate: string,
   toDate: string
-): CoachAttendanceIncomeCsvLessonRow[] {
-  const out: CoachAttendanceIncomeCsvLessonRow[] = [];
+): CoachAttendanceIncomeStudentRow[] {
+  const out: CoachAttendanceIncomeStudentRow[] = [];
   for (const row of rows) {
     for (const detail of row.studentDetails) {
-      for (const session of detail.sessions) {
-        if (session.isAttended && sessionInRange(session.sessionDate, fromDate, toDate)) {
-          out.push({
-            coachName: row.coachName,
-            courseName: row.courseName,
-            studentName: detail.studentName,
-            session
-          });
-        }
-      }
+      const attendedSessions = detail.sessions
+        .filter((s) => s.isAttended && sessionInRange(s.sessionDate, fromDate, toDate))
+        .sort(
+          (a, b) =>
+            a.sessionDate.localeCompare(b.sessionDate) ||
+            a.startTime.localeCompare(b.startTime)
+        );
+      if (attendedSessions.length === 0) continue;
+      const branches = [...new Set(attendedSessions.map((s) => s.branchName).filter(Boolean))].sort(
+        (a, b) => a.localeCompare(b, "zh-Hant")
+      );
+      const dates = [...new Set(attendedSessions.map((s) => s.sessionDate))].sort();
+      out.push({
+        coachName: row.coachName,
+        courseName: row.courseName,
+        studentName: detail.studentName,
+        studentId: detail.studentId,
+        detail,
+        attendedSessions,
+        branchName: branches.join(", "),
+        attendanceDates: dates.join(","),
+        lessonCount: attendedSessions.length
+      });
     }
   }
   return out.sort(
     (a, b) =>
       a.coachName.localeCompare(b.coachName, "zh-Hant") ||
       a.courseName.localeCompare(b.courseName, "zh-Hant") ||
-      a.session.branchName.localeCompare(b.session.branchName, "zh-Hant") ||
-      a.studentName.localeCompare(b.studentName, "zh-Hant") ||
-      a.session.sessionDate.localeCompare(b.session.sessionDate) ||
-      a.session.startTime.localeCompare(b.session.startTime) ||
-      (a.session.lessonNo ?? 999) - (b.session.lessonNo ?? 999)
+      a.studentName.localeCompare(b.studentName, "zh-Hant")
   );
-}
-
-/** Checked-in dates within the selected export range. */
-export function collectAttendedDatesInPeriod(
-  details: StudentAttendanceDetail[],
-  fromDate: string,
-  toDate: string
-): string {
-  const dates = new Set<string>();
-  for (const detail of details) {
-    for (const session of detail.sessions) {
-      if (session.isAttended && sessionInRange(session.sessionDate, fromDate, toDate)) {
-        dates.add(session.sessionDate);
-      }
-    }
-  }
-  return [...dates].sort().join(",");
-}
-
-/** Distinct branch names for checked-in sessions within the selected export range. */
-export function collectBranchesInPeriod(
-  details: StudentAttendanceDetail[],
-  fromDate: string,
-  toDate: string
-): string {
-  const branches = new Set<string>();
-  for (const detail of details) {
-    for (const session of detail.sessions) {
-      if (
-        session.isAttended &&
-        sessionInRange(session.sessionDate, fromDate, toDate) &&
-        session.branchName
-      ) {
-        branches.add(session.branchName);
-      }
-    }
-  }
-  return [...branches].sort((a, b) => a.localeCompare(b, "zh-Hant")).join(", ");
-}
-
-/** Total completed sessions for the row within the selected export range. */
-export function countAttendedSessionsInPeriod(
-  details: StudentAttendanceDetail[],
-  fromDate: string,
-  toDate: string
-): number {
-  let count = 0;
-  for (const detail of details) {
-    for (const session of detail.sessions) {
-      if (session.isAttended && sessionInRange(session.sessionDate, fromDate, toDate)) {
-        count += 1;
-      }
-    }
-  }
-  return count;
 }
 
 /** 已簽到 · 待上堂 (future) · 未簽到 (past, not checked in). */
@@ -404,13 +353,10 @@ function aggregateCoachCourseRows(
             )
           };
         });
-      const studentNames = studentDetails.map((d) => d.studentName);
       const attendanceDates = collectAttendedDates(studentDetails);
       return {
         coachName: b.coachName,
         courseName: b.courseName,
-        studentNames,
-        students: studentNames.join(","),
         attendanceDates,
         studentDetails
       };
@@ -475,38 +421,89 @@ export async function fetchCoachAttendanceIncomeRows(params: {
   );
 }
 
+function studentAttendanceTimeLabel(sessions: StudentAttendanceSession[]): string {
+  return sessions.map(formatStudentSessionDateTime).join(" / ");
+}
+
 export function coachAttendanceIncomeRowsToCsv(
-  rows: CoachAttendanceIncomeRow[],
-  fromDate: string,
-  toDate: string
+  studentRows: CoachAttendanceIncomeStudentRow[]
 ): string {
-  const lessonRows = flattenCoachAttendanceIncomeCsvRows(rows, fromDate, toDate);
   return buildCsvContent(
     [...COACH_INCOME_CSV_HEADERS],
-    lessonRows.map(({ coachName, courseName, studentName, session }) => [
-      coachName,
-      courseName,
-      session.branchName || "—",
-      formatStudentLessonCsvLabel(studentName, session),
-      formatStudentSessionDateTime(session),
-      "1",
+    studentRows.map((row) => [
+      row.coachName,
+      row.courseName,
+      row.branchName || "—",
+      row.studentName,
+      studentAttendanceTimeLabel(row.attendedSessions),
+      String(row.lessonCount),
       ""
     ])
   );
 }
 
+function resolveCoachIncomeSlug(
+  studentRows: CoachAttendanceIncomeStudentRow[],
+  coachName?: string
+): string | undefined {
+  return coachName && studentRows.length > 0 && studentRows.every((r) => r.coachName === coachName)
+    ? slugifyCoachName(coachName)
+    : undefined;
+}
+
 export function downloadCoachAttendanceIncomeCsv(
-  rows: CoachAttendanceIncomeRow[],
+  studentRows: CoachAttendanceIncomeStudentRow[],
   fromDate: string,
   toDate: string,
   coachName?: string
 ): void {
-  const slug =
-    coachName && rows.length > 0 && rows.every((r) => r.coachName === coachName)
-      ? slugifyCoachName(coachName)
-      : undefined;
   downloadUtf8CsvBom(
-    coachIncomeExportFilename(fromDate, toDate, slug),
-    coachAttendanceIncomeRowsToCsv(rows, fromDate, toDate)
+    coachIncomeExportFilename(fromDate, toDate, resolveCoachIncomeSlug(studentRows, coachName)),
+    coachAttendanceIncomeRowsToCsv(studentRows)
   );
+}
+
+type CoachIncomeExcelRow = {
+  coachName: string;
+  courseName: string;
+  branchName: string;
+  studentName: string;
+  attendanceTime: string;
+  lessonCount: number;
+  amount: string;
+};
+
+export async function downloadCoachAttendanceIncomeExcel(
+  studentRows: CoachAttendanceIncomeStudentRow[],
+  fromDate: string,
+  toDate: string,
+  coachName?: string
+): Promise<void> {
+  const filename = coachIncomeExportFilename(
+    fromDate,
+    toDate,
+    resolveCoachIncomeSlug(studentRows, coachName)
+  ).replace(/\.csv$/i, ".xlsx");
+  await exportRowsToExcelSheet<CoachIncomeExcelRow>({
+    filename,
+    sheetName: "教練出勤收入",
+    columns: [
+      { header: "教練", key: "coachName" },
+      { header: "課程", key: "courseName" },
+      { header: "分店", key: "branchName" },
+      { header: "學員", key: "studentName" },
+      { header: "出勤時間", key: "attendanceTime" },
+      { header: "總堂數", key: "lessonCount" },
+      { header: "金額 (HKD)", key: "amount" }
+    ],
+    rows: studentRows.map((row) => ({
+      coachName: row.coachName,
+      courseName: row.courseName,
+      branchName: row.branchName || "—",
+      studentName: row.studentName,
+      attendanceTime: studentAttendanceTimeLabel(row.attendedSessions),
+      lessonCount: row.lessonCount,
+      amount: ""
+    }))
+  });
 }

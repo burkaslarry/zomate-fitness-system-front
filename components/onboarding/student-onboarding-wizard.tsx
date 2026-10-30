@@ -104,7 +104,6 @@ const defaults: Partial<StudentRegistrationPayload> = {
   coach_username: "",
   coach_id: 0,
   course_category_id: 0,
-  renewal_notes: "",
   medical_clearance_file_name: ""
 };
 
@@ -960,12 +959,6 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
                 <p className="text-xs text-ink/45">尚未簽署</p>
               ) : null}
             </div>
-            <textarea
-              className={`${fieldClass} min-h-[4rem] resize-y`}
-              placeholder="備註（可選）"
-              rows={2}
-              {...form.register("renewal_notes")}
-            />
           </div>
         )}
 

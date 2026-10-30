@@ -73,7 +73,7 @@ export default function CoachScheduleDayAgenda({
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span
-                    className={`inline-flex max-w-full truncate rounded-md border px-2 py-0.5 text-[11px] font-semibold ${calendarChipClass(s.student_id)}`}
+                    className={`inline-flex max-w-full truncate rounded-md border px-2 py-0.5 text-[11px] font-semibold ${calendarChipClass(s.student_id, s.attendance_status)}`}
                   >
                     {s.student_name}
                   </span>

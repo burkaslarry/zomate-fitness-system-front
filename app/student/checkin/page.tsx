@@ -26,6 +26,7 @@ type Ack = {
   lesson_balance: number;
   created_at: string;
   course_title?: string | null;
+  branch_name?: string | null;
 };
 
 type SearchRow = {
@@ -40,6 +41,8 @@ type TodayLesson = {
   course_id: number;
   title: string;
   coach_name: string;
+  branch_name?: string | null;
+  branch_code?: string | null;
   scheduled_start: string;
   scheduled_end: string;
 };
@@ -81,6 +84,7 @@ export default function StudentCheckinPage() {
   const [status, setStatus] = useState("");
   const [acks, setAcks] = useState<Ack[]>([]);
   const [lastBalance, setLastBalance] = useState<number | null>(null);
+  const [lastBranch, setLastBranch] = useState<string | null>(null);
   const [showPhoneFallback, setShowPhoneFallback] = useState(false);
   const [fbPhone, setFbPhone] = useState("");
   const [fbPin, setFbPin] = useState("");
@@ -167,19 +171,23 @@ export default function StudentCheckinPage() {
     const lessonLabel = selectedLesson.title;
     setStatus("扣堂中…");
     setLastBalance(null);
+    setLastBranch(null);
     setPinPadError(false);
     setInstallmentPrompt("");
     try {
       const res = (await api.checkin({
         student_id: selected.id,
         pin_code: pin.trim()
-      })) as { student?: { lesson_balance?: number } };
+      })) as { student?: { lesson_balance?: number }; branch_name?: string | null };
       const bal = res.student?.lesson_balance;
       if (typeof bal === "number") setLastBalance(bal);
+      const branch = res.branch_name?.trim() || selectedLesson.branch_name?.trim() || null;
+      setLastBranch(branch);
       const balText = typeof bal === "number" ? `，餘下 ${bal} 堂` : "";
+      const branchText = branch ? `，分店：${branch}` : "";
       // [F003][S001] Clear success toast — never surface machine channel codes (qr_pin).
-      setStatus(`✅ 簽到成功！${studentLabel} · ${lessonLabel} 已扣 1 堂${balText}`);
-      window.alert(`簽到成功！\n\n${studentLabel}\n${lessonLabel}\n已扣 1 堂${balText}`);
+      setStatus(`✅ 簽到成功！${studentLabel} · ${lessonLabel} 已扣 1 堂${balText}${branchText}`);
+      window.alert(`簽到成功！\n\n${studentLabel}\n${lessonLabel}${branch ? `\n分店：${branch}` : ""}\n已扣 1 堂${balText}`);
       setPin("");
       setSelectedLesson(null);
       setSelected(null);
@@ -209,13 +217,20 @@ export default function StudentCheckinPage() {
       const res = (await api.checkin({
         phone: fbPhone.trim(),
         pin_code: fbPin.trim()
-      })) as { student?: { lesson_balance?: number; full_name?: string } };
+      })) as {
+        student?: { lesson_balance?: number; full_name?: string };
+        branch_name?: string | null;
+        course_title?: string | null;
+      };
       const bal = res.student?.lesson_balance;
       const name = res.student?.full_name || fbPhone.trim();
       if (typeof bal === "number") setLastBalance(bal);
+      const branch = res.branch_name?.trim() || null;
+      setLastBranch(branch);
       const balText = typeof bal === "number" ? `，餘下 ${bal} 堂` : "";
-      setStatus(`✅ 簽到成功！${name} 已扣 1 堂${balText}`);
-      window.alert(`簽到成功！\n\n${name}\n已扣 1 堂${balText}`);
+      const branchText = branch ? `，分店：${branch}` : "";
+      setStatus(`✅ 簽到成功！${name} 已扣 1 堂${balText}${branchText}`);
+      window.alert(`簽到成功！\n\n${name}${branch ? `\n分店：${branch}` : ""}\n已扣 1 堂${balText}`);
       setFbPin("");
       setFbPhone("");
     } catch (err) {
@@ -370,6 +385,9 @@ export default function StudentCheckinPage() {
                           <span className="block text-xs text-slate-600">
                             {lesson.coach_name} · {formatLessonWindow(lesson.scheduled_start, lesson.scheduled_end)}
                           </span>
+                          {lesson.branch_name ? (
+                            <span className="block text-xs font-medium text-sky-800">分店：{lesson.branch_name}</span>
+                          ) : null}
                         </button>
                       </li>
                     ))}
@@ -386,6 +404,9 @@ export default function StudentCheckinPage() {
                 扣堂：<span className="font-medium">{selected.full_name}</span> · {selectedLesson.title}（
                 {formatLessonWindow(selectedLesson.scheduled_start, selectedLesson.scheduled_end)}）
               </p>
+              {selectedLesson.branch_name ? (
+                <p className="text-sm font-medium text-sky-900">分店：{selectedLesson.branch_name}</p>
+              ) : null}
               <form onSubmit={redeem} className="space-y-3">
                 <input
                   inputMode="numeric"
@@ -495,6 +516,9 @@ export default function StudentCheckinPage() {
         >
           <h2 className="mb-1 text-sm font-semibold">簽到成功</h2>
           <p className="text-sm">{status.startsWith("✅") ? status.replace(/^✅\s*/, "") : status || "已扣 1 堂"}</p>
+          {lastBranch ? (
+            <p className="mt-1 text-xs font-medium text-emerald-900">分店：{lastBranch}</p>
+          ) : null}
           {lastBalance != null ? (
             <p className="mt-1 text-xs text-emerald-800/80">更新後餘額：{lastBalance} 堂</p>
           ) : null}
@@ -510,6 +534,7 @@ export default function StudentCheckinPage() {
                 {/* [F003][S001] Never show raw channel codes like qr_pin */}
                 ✅ {a.student_name} 簽到成功 · 餘 {a.lesson_balance} 堂
                 {a.course_title ? ` · ${a.course_title}` : ""}
+                {a.branch_name ? ` · ${a.branch_name}` : ""}
               </li>
             ))}
           </ul>

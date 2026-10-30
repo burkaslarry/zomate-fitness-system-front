@@ -18,8 +18,10 @@ import {
 import { ArrowDown, ArrowUp, ArrowUpDown, Loader2 } from "lucide-react";
 import { alertApiError, api } from "../lib/api";
 import {
+  type CoachAttendanceLedgerPackage,
   type CoachAttendanceLedgerPayload,
   type CoachAttendanceLedgerRow,
+  type CoachAttendanceLedgerSummary,
   ledgerStatusClass,
   ledgerStatusLabel
 } from "../lib/coach-attendance-ledger";
@@ -72,9 +74,32 @@ function CoachAttendanceLedgerInner({
     return raw.split(",").map((s) => s.trim()).filter(Boolean);
   });
   const [rows, setRows] = useState<CoachAttendanceLedgerRow[]>([]);
+  const [summary, setSummary] = useState<CoachAttendanceLedgerSummary>({
+    month_checkins: 0,
+    cumulative_checkins: 0,
+    month_lessons: 0
+  });
+  const [packages, setPackages] = useState<CoachAttendanceLedgerPackage[]>([]);
   const [rangeLabel, setRangeLabel] = useState("");
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
+
+  // [F008][S005] 年／月 dropdowns replace the native month input.
+  const selectedYear = Number(month.slice(0, 4)) || new Date().getFullYear();
+  const selectedMonthNum = Number(month.slice(5, 7)) || new Date().getMonth() + 1;
+  const yearOptions = useMemo(() => {
+    const now = new Date().getFullYear();
+    const years = new Set<number>();
+    for (let y = now - 3; y <= now + 1; y += 1) years.add(y);
+    years.add(selectedYear);
+    return Array.from(years).sort((a, b) => b - a);
+  }, [selectedYear]);
+
+  function setMonthParts(year: number, monthNum: number) {
+    const v = `${year}-${pad2(monthNum)}`;
+    setMonth(v);
+    syncUrl({ month: v });
+  }
 
   const sorting = useMemo<SortingState>(() => {
     const sort = searchParams.get("sort") || "session_date";
@@ -141,6 +166,8 @@ function CoachAttendanceLedgerInner({
         order: sortOrder
       })) as CoachAttendanceLedgerPayload;
       setRows(data.rows ?? []);
+      setSummary(data.summary ?? { month_checkins: 0, cumulative_checkins: 0, month_lessons: 0 });
+      setPackages(data.packages ?? []);
       setRangeLabel(`${data.from_date} – ${data.to_date}`);
       console.log("[F008][S005] Success: Loaded attendance ledger", {
         month: data.month,
@@ -349,17 +376,32 @@ function CoachAttendanceLedgerInner({
             </label>
           ) : null}
           <label className="block w-full text-sm text-ink sm:w-auto">
-            月份（yyyy-MM）
-            <input
-              type="month"
-              value={month}
-              onChange={(e) => {
-                const v = e.target.value || currentMonthValue();
-                setMonth(v);
-                syncUrl({ month: v });
-              }}
+            年
+            <select
+              value={selectedYear}
+              onChange={(e) => setMonthParts(Number(e.target.value), selectedMonthNum)}
               className="mt-1 block w-full rounded-lg border border-ink/15 bg-canvas px-2 py-2 text-ink"
-            />
+            >
+              {yearOptions.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block w-full text-sm text-ink sm:w-auto">
+            月
+            <select
+              value={selectedMonthNum}
+              onChange={(e) => setMonthParts(selectedYear, Number(e.target.value))}
+              className="mt-1 block w-full rounded-lg border border-ink/15 bg-canvas px-2 py-2 text-ink"
+            >
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                <option key={m} value={m}>
+                  {m} 月
+                </option>
+              ))}
+            </select>
           </label>
         </div>
 
@@ -406,6 +448,69 @@ function CoachAttendanceLedgerInner({
       </section>
 
       {status ? <p className="text-sm text-rose-600">{status}</p> : null}
+
+      <dl className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3">
+        <div className="rounded-xl border border-ink/10 bg-surface p-3 shadow-sm sm:p-4">
+          <dt className="text-[11px] text-ink/55 sm:text-xs">本月簽到</dt>
+          <dd className="mt-1 text-[22px] font-semibold tabular-nums leading-none text-ink sm:text-[28px]">
+            {summary.month_checkins}
+          </dd>
+          <p className="mt-1 text-[11px] text-ink/45">共 {summary.month_lessons} 堂已排</p>
+        </div>
+        <div className="rounded-xl border border-ink/10 bg-surface p-3 shadow-sm sm:p-4">
+          <dt className="text-[11px] text-ink/55 sm:text-xs">累計簽到</dt>
+          <dd className="mt-1 text-[22px] font-semibold tabular-nums leading-none text-ink sm:text-[28px]">
+            {summary.cumulative_checkins}
+          </dd>
+          <p className="mt-1 text-[11px] text-ink/45">所有 package 合計</p>
+        </div>
+        <div className="rounded-xl border border-ink/10 bg-surface p-3 shadow-sm sm:p-4">
+          <dt className="text-[11px] text-ink/55 sm:text-xs">Package 數</dt>
+          <dd className="mt-1 text-[22px] font-semibold tabular-nums leading-none text-ink sm:text-[28px]">
+            {packages.length}
+          </dd>
+          <p className="mt-1 text-[11px] text-ink/45">每個 package 堂數見下</p>
+        </div>
+      </dl>
+
+      {packages.length > 0 ? (
+        <section className="overflow-x-auto rounded-xl border border-ink/10 bg-surface shadow-sm">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 px-3 py-2.5 sm:px-4">
+            <h2 className="text-sm font-semibold text-ink">每個 package 堂數</h2>
+            <p className="text-[11px] text-ink/50">總堂／已上／剩餘，按學員排列</p>
+          </div>
+          <table className="min-w-full text-left text-sm">
+            <thead className="border-y border-ink/10 bg-canvas/80 text-xs text-ink/55">
+              <tr>
+                <th className="px-3 py-2 font-semibold">學員</th>
+                <th className="px-3 py-2 font-semibold">Package</th>
+                <th className="px-3 py-2 font-semibold">分店</th>
+                <th className="px-3 py-2 text-right font-semibold">總堂</th>
+                <th className="px-3 py-2 text-right font-semibold">已上</th>
+                <th className="px-3 py-2 text-right font-semibold">剩餘</th>
+              </tr>
+            </thead>
+            <tbody>
+              {packages.map((p) => (
+                <tr key={p.enrollment_id} className="border-t border-ink/[0.06]">
+                  <td className="px-3 py-2 font-medium text-ink">{p.student_name || "—"}</td>
+                  <td className="px-3 py-2 text-ink/85">{p.course_title}</td>
+                  <td className="px-3 py-2 text-ink/70">{p.branch_name ?? "—"}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{p.total_lessons}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{p.used_lessons}</td>
+                  <td
+                    className={`px-3 py-2 text-right tabular-nums ${
+                      p.remaining_lessons > 0 ? "font-semibold text-emerald-700" : "text-ink/45"
+                    }`}
+                  >
+                    {p.remaining_lessons}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ) : null}
 
       <section className="overflow-x-auto rounded-xl border border-ink/10 bg-surface shadow-sm">
         {loading ? (
