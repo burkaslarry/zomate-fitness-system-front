@@ -790,7 +790,7 @@ export default function AdminStudentDetailPage() {
                   (data.health?.medical_clearance_status ?? data.profile.medical_clearance_status) !== "received") ? (
                   <form onSubmit={(event) => void onUploadMedicalClearance(event)} className="space-y-3 border-t border-ink/10 pt-3">
                     <label className="block text-xs text-ink/55">
-                      上傳醫生證明（PDF／圖片，≤100MB）
+                      上傳醫生證明（PDF／圖片，≤3MB）
                       <input
                         name="file"
                         type="file"
