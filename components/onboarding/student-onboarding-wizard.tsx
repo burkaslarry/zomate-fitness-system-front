@@ -152,7 +152,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   const phoneDigits = useMemo(() => /^\+852(\d{8})$/.exec(phoneWatch || "")?.[1] ?? "", [phoneWatch]);
   // [F001][S004] Client requires the e-signature before the application can be submitted.
   const signatureWatch = form.watch("digital_signature");
-  const hasSignature = (signatureWatch || "").trim().length >= 20;
+  const hasSignature = (signatureWatch || "").trim().length > 0;
   const step1Watch = form.watch([
     "chinese_name",
     "full_name",
@@ -430,7 +430,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   /**
    * [F001][S004]
    * Feature: Student Onboarding
-   * Step: Final submit — signature optional; on formatApiError/Load failed, bypass signature (職員候補).
+   * Step: Final submit — any drawn stroke counts; blank signatures never submit.
    */
   async function onFinalSubmit(values: StudentRegistrationPayload) {
     const signatureData = (
@@ -438,7 +438,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
         ? signatureRef.current?.getDataUrl() ?? values.digital_signature
         : values.digital_signature
     )?.trim() ?? "";
-    if (!signatureData || signatureData.length < 20) {
+    if (!signatureData) {
       form.setError("digital_signature", { message: "請先於上方簽署，方可提交登記。" });
       setStatus("");
       return;

@@ -192,7 +192,7 @@ function friendlyApiMessage(message: string): string | null {
   if (/^String should have at most \d+ characters/i.test(m)) return "部分欄位過長，請縮短後再試。";
   if (m === "Field required") return "有必填欄位未填妥，請返回上一步檢查。";
   if (/valid date/i.test(m)) return "日期格式不正確，請重新選擇。";
-  if (/request entity too large|payload too large|413/i.test(m)) return "上載內容過大（上限 25MB）。";
+  if (/request entity too large|payload too large|413/i.test(m)) return "上載內容過大（上限 100MB）。";
   return null;
 }
 

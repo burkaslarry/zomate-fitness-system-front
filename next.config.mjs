@@ -14,7 +14,7 @@ const nextConfig = {
   typedRoutes: false,
   experimental: {
     /** [F001][S004] Registration multipart (signature + medical PDF) needs headroom through the /api rewrite. */
-    proxyClientMaxBodySize: "25mb"
+    proxyClientMaxBodySize: "100mb"
   },
   /** Playwright / LAN hits dev server as 127.0.0.1 — avoid Turbopack cross-origin HMR block */
   allowedDevOrigins: ["127.0.0.1", "localhost"],
