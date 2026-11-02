@@ -305,7 +305,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
   /**
    * [F001][S002]
    * Feature: Student Onboarding
-   * Step: Medical clearance file — PDF or image, max 3MB; stores filename for API `medical_clearance_file_name`.
+   * Step: Medical clearance file — PDF or image, max 100MB; stores filename for API `medical_clearance_file_name`.
    */
   function onParqClearanceFileChange(e: ChangeEvent<HTMLInputElement>) {
     const input = e.target;
@@ -317,9 +317,9 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
       parqClearanceFileRef.current = null;
       return;
     }
-    const maxBytes = 3 * 1024 * 1024;
+    const maxBytes = 100 * 1024 * 1024;
     if (file.size > maxBytes) {
-      setParqUploadError("檔案不可超過 3MB");
+      setParqUploadError("檔案不可超過 100MB");
       input.value = "";
       form.setValue("medical_clearance_file_name", "");
       parqClearanceFileRef.current = null;
@@ -701,7 +701,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
           </div>
         )}
 
-        {/* [F001][S002] Step 2 — PAR-Q checkboxes + conditional medical file (≤3MB) */}
+        {/* [F001][S002] Step 2 — PAR-Q checkboxes + conditional medical file (≤100MB) */}
         {step === 2 && (
           <div className="space-y-4">
             <div className="space-y-2 text-xs leading-relaxed text-ink/85">
@@ -715,7 +715,7 @@ export default function StudentOnboardingWizard({ quickName }: { quickName?: str
               </p>
               <p>普通常識是回答這些問題的最佳指引。請仔細閱讀下列問題，然後誠實回答：</p>
               <p>
-                請如實勾選。若任一項答「是」，可<strong>選擇</strong>上傳醫生證明（PDF 或圖片，上限 3MB）作候補紀錄；<strong>唔會阻礙</strong>
+                請如實勾選。若任一項答「是」，可<strong>選擇</strong>上傳醫生證明（PDF 或圖片，上限 100MB）作候補紀錄；<strong>唔會阻礙</strong>
                 進入下一步。
               </p>
             </div>

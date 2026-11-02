@@ -1,7 +1,7 @@
 /**
  * [F001][S001]
  * Feature: Student Onboarding
- * Step: Zod schemas — PAR-Q with medical file name when any answer is yes (≤3MB enforced in UI).
+ * Step: Zod schemas — PAR-Q with medical file name when any answer is yes (≤100MB enforced in UI).
  * Logic: Zod schemas shared by onboarding and forms.
  */
 
