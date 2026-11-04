@@ -3,8 +3,8 @@
 /**
  * [F002][S003]
  * Feature: Course Entry & Automation
- * Step: Shared reg-course — record payment; PIN via 開課頁 / check-in gating
- * Logic: One-click confirm; full pay vs installment checkboxes; receipt optional.
+ * Step: Shared reg-course — package size, 以上堂數, payment / installments
+ * Logic: Look up member → branch/category/lessons (+ prior lessons) → checkout + course/PIN.
  */
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
@@ -77,6 +77,7 @@ function buildAutoCoursePayload(opts: {
   coachId: number;
   studentId: number;
   totalLessons: number;
+  lessonsAlreadyTaken?: number;
   totalInstallments: number;
   installmentAmounts?: number[];
   remarks?: string;
@@ -96,6 +97,7 @@ function buildAutoCoursePayload(opts: {
     course_start_date: now.toISOString().slice(0, 10),
     lesson_weekdays: [pythonWeekdayFromDate(now)],
     total_lessons: opts.totalLessons,
+    lessons_already_taken: opts.lessonsAlreadyTaken ?? 0,
     total_installments: opts.totalInstallments,
     installment_amounts: opts.installmentAmounts,
     coach_schedule_note: opts.remarks?.trim() || undefined
@@ -161,6 +163,7 @@ export default function RegCourseWizard({
   const [installmentCount, setInstallmentCount] = useState<2 | 3>(2);
   const [installmentAmounts, setInstallmentAmounts] = useState<string[]>(["", ""]);
   const [installmentAmountsTouched, setInstallmentAmountsTouched] = useState(false);
+  const [alreadyTakenText, setAlreadyTakenText] = useState("0");
   const [remarks, setRemarks] = useState("");
 
   useEffect(() => {
@@ -267,6 +270,7 @@ export default function RegCourseWizard({
     setInstallmentCount(2);
     setInstallmentAmounts(["", ""]);
     setInstallmentAmountsTouched(false);
+    setAlreadyTakenText("0");
     setRemarks("");
     setPurchaseSummary(null);
   }
@@ -369,6 +373,7 @@ export default function RegCourseWizard({
 
   function goCategoryNext() {
     const lessons = Number(lessonsText);
+    const alreadyTaken = Number(alreadyTakenText || "0");
     if (!branchId) {
       alertApiError(new Error("請選擇上課分店"));
       return;
@@ -379,6 +384,10 @@ export default function RegCourseWizard({
     }
     if (!Number.isFinite(lessons) || lessons < 1 || lessons > 999) {
       alertApiError(new Error("請輸入堂數（1–999）"));
+      return;
+    }
+    if (!Number.isFinite(alreadyTaken) || alreadyTaken < 0 || alreadyTaken > lessons) {
+      alertApiError(new Error("以上堂數須為 0 至總堂數之間"));
       return;
     }
     setStep(3);
@@ -408,9 +417,14 @@ export default function RegCourseWizard({
       return;
     }
     const lessons = Number(lessonsText);
+    const alreadyTaken = Number(alreadyTakenText || "0");
     const resolvedBranchId = typeof branchId === "number" ? branchId : null;
     if (!resolvedBranchId) {
       alertApiError(new Error("請選擇上課分店"));
+      return;
+    }
+    if (!Number.isFinite(alreadyTaken) || alreadyTaken < 0 || alreadyTaken > lessons) {
+      alertApiError(new Error("以上堂數須為 0 至總堂數之間"));
       return;
     }
     const receipt = form.get("receipt");
@@ -421,6 +435,7 @@ export default function RegCourseWizard({
       : null;
     const noteParts = [`[${selectedKind.name}] 教練 ${selectedCoach?.full_name ?? coachId}`];
     if (remarks.trim()) noteParts.push(remarks.trim());
+    if (alreadyTaken > 0) noteParts.push(`已上 ${alreadyTaken} 堂`);
     if (installmentPay) {
       noteParts.push(`分期 ${totalInstallments} 期 · 總 HKD ${totalAmount}（${installmentBreakdown}）`);
     } else {
@@ -450,6 +465,7 @@ export default function RegCourseWizard({
         coachId: Number(coachId),
         studentId: member.id,
         totalLessons: lessons,
+        lessonsAlreadyTaken: alreadyTaken,
         totalInstallments,
         installmentAmounts: installmentPay
           ? installmentAmounts.map((raw) => parseAmount(raw) ?? 0)
@@ -636,6 +652,18 @@ export default function RegCourseWizard({
             />
           </label>
           <label className="block text-sm">
+            <span className="text-ink/70">以上堂數（紙本已上、尚未入系統）</span>
+            <input
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={alreadyTakenText}
+              onChange={(e) => setAlreadyTakenText(digitsOnlyLessons(e.target.value) || "0")}
+              placeholder="0"
+              className="mt-1 w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2.5 text-base sm:text-sm"
+            />
+            <span className="mt-1 block text-xs text-ink/50">會從餘堂扣減；剩餘 = 總堂數 − 以上堂數</span>
+          </label>
+          <label className="block text-sm">
             <span className="text-ink/70">備註（選填）</span>
             <textarea
               value={remarks}
@@ -673,6 +701,7 @@ export default function RegCourseWizard({
           </h2>
           <p className="text-xs text-ink/55">
             {filteredCategories.find((c) => c.id === categoryId)?.name} · {lessonsText} 堂
+            {Number(alreadyTakenText || "0") > 0 ? ` · 已上 ${alreadyTakenText} 堂` : ""}
           </p>
 
           <label className="block text-sm">
