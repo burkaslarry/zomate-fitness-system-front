@@ -171,6 +171,8 @@ function medicalStatusBadge(status: MemberProfile["medical_clearance_status"]) {
 export default function AdminStudentsPage() {
   const [medicalPendingOnly, setMedicalPendingOnly] = useState(false);
   const [students, setStudents] = useState<MemberProfile[]>([]);
+  const [coaches, setCoaches] = useState<{ id: number; full_name: string }[]>([]);
+  const [coachId, setCoachId] = useState<number | "">("");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -229,6 +231,18 @@ export default function AdminStudentsPage() {
     setMedicalPendingOnly(new URLSearchParams(window.location.search).get("medical_pending") === "1");
   }, []);
 
+  useEffect(() => {
+    api
+      .coaches()
+      .then((rows) => {
+        const list = Array.isArray(rows) ? (rows as { id: number; full_name: string }[]) : [];
+        setCoaches(list);
+      })
+      .catch(() => setCoaches([]));
+  }, []);
+
+  const selectedCoach = coaches.find((c) => c.id === coachId) ?? null;
+
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const rangeFrom = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const rangeTo = Math.min(page * PAGE_SIZE, total);
@@ -236,6 +250,29 @@ export default function AdminStudentsPage() {
   async function onExport() {
     try {
       await downloadCsv("/api/admin/students/export.csv", "students.csv");
+    } catch (e) {
+      alertApiError(e);
+    }
+  }
+
+  async function onExportExcel() {
+    try {
+      await downloadCsv("/api/admin/students/export.xlsx", "students.xlsx");
+      setStatus("已匯出學生名單 Excel。");
+    } catch (e) {
+      alertApiError(e);
+    }
+  }
+
+  async function onExportCoach(format: "xlsx" | "csv") {
+    if (!selectedCoach) return;
+    try {
+      const safeName = selectedCoach.full_name.replace(/[\\/:*?"<>|\s]+/g, "-");
+      await downloadCsv(
+        `/api/admin/students/export.${format}?coach_id=${selectedCoach.id}`,
+        `students-${safeName}.${format}`
+      );
+      setStatus(`已匯出教練 ${selectedCoach.full_name} 學生名單（${format.toUpperCase()}）。`);
     } catch (e) {
       alertApiError(e);
     }
@@ -338,48 +375,23 @@ export default function AdminStudentsPage() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="max-w-3xl">
             <h2 className="text-xl font-semibold text-ink sm:text-2xl">學生名單</h2>
-            <p className="mt-1 text-sm text-ink/70">
-              點姓名可用學生 ID 開啟會員詳情（毋須 HKID）。名單加入 DOB、剩餘堂數、套餐狀態、註冊日及最後簽到時間，方便即場核對。
-              預設每次載入 {PAGE_SIZE} 筆，可用下方分頁瀏覽。
-              {medicalPendingOnly ? (
-                <>
-                  {" "}
-                  <strong className="font-medium text-amber-900">目前只顯示 PAR-Q 候補（待醫生證明）學員。</strong>{" "}
-                  <Link href="/admin/students" className="text-primary underline">
-                    顯示全部
-                  </Link>
-                </>
-              ) : null}
-              <strong className="font-medium text-ink">匯出 CSV 範本（首 5 筆）</strong>
-              方便對照批次匯入欄位；完整名單請用「匯出 CSV」。
-            </p>
-            <div className="mt-3 rounded-lg border border-ink/12 bg-canvas/80 p-3 text-xs leading-relaxed text-ink/75">
-              <p className="font-semibold text-ink">CSV 批次匯入</p>
-              <ul className="mt-1 list-inside list-disc space-y-0.5">
-                <li>系統欄位：{STUDENT_CSV_HEADERS.join("、")}。性別填 male/female 或 男/女。</li>
-                <li>
-                  亦支援館方 Excel：{FUNG_STUDENT_CSV_HEADERS.join("、")}；Emergency Contact 可寫 Name
-                  (Relation)。可直接上傳 <strong>.xlsx / .xls</strong>（優先讀「學生資料」sheet；若第一頁係收錢表會報錯而非全部略過）。
-                  <strong className="text-ink">Apple Numbers 請先「輸出至 Excel 或 CSV」</strong>，唔好直接上傳
-                  .numbers。
-                </li>
-                <li>
-                  <strong className="text-ink">phone number</strong> 必須係有效香港 8 位數字；MemberCode 只係後備（例如
-                  「9266 35」唔算電話）。PT 欄目前<strong className="text-ink">唔會</strong>自動分配教練。
-                </li>
-                <li>
-                  僅當<strong className="text-ink">姓名與電話皆與現有學員吻合</strong>時才更新該筆；電話相同但姓名不同會略過。
-                </li>
-                <li>
-                  <strong className="text-ink">匯入唔會刪除現有學員</strong>，亦
-                  <strong className="text-ink">唔會改動已有堂數／套餐</strong>
-                  （只係新增／更新基本資料）。大批 Excel 唔會洗走原先名單。
-                </li>
-                <li>disclaimer_accepted＝免責聲明已確認；Excel 無此欄時新增學員預設為已接受。</li>
-              </ul>
-            </div>
+            {medicalPendingOnly ? (
+              <p className="mt-1 text-sm text-ink/70">
+                <strong className="font-medium text-amber-900">目前只顯示 PAR-Q 候補（待醫生證明）學員。</strong>{" "}
+                <Link href="/admin/students" className="text-primary underline">
+                  顯示全部
+                </Link>
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void onExportExcel()}
+              className="rounded-lg border border-ink/15 bg-canvas px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-canvas/80"
+            >
+              匯出 Excel
+            </button>
             <button
               type="button"
               onClick={() => void onExport()}
@@ -425,6 +437,43 @@ export default function AdminStudentsPage() {
               + 新會員
             </Link>
           </div>
+        </div>
+        <div className="flex flex-wrap items-end gap-3 rounded-xl border border-ink/10 bg-surface p-4 shadow-sm ring-1 ring-ink/[0.04]">
+          <label className="block text-xs text-ink/55">
+            教練
+            <select
+              className="mt-1 block min-w-56 rounded-lg border border-ink/15 bg-surface px-2 py-2 text-sm text-ink"
+              value={coachId === "" ? "" : String(coachId)}
+              onChange={(e) => setCoachId(e.target.value ? Number(e.target.value) : "")}
+            >
+              <option value="">全部教練</option>
+              {coaches.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.full_name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {selectedCoach ? (
+            <>
+              <button
+                type="button"
+                onClick={() => void onExportCoach("xlsx")}
+                className="rounded-lg bg-primary/90 px-4 py-2 text-sm font-semibold text-black shadow-sm hover:bg-primary"
+              >
+                匯出教練 {selectedCoach.full_name} Excel
+              </button>
+              <button
+                type="button"
+                onClick={() => void onExportCoach("csv")}
+                className="rounded-lg border border-ink/15 bg-canvas px-4 py-2 text-sm font-semibold text-ink shadow-sm hover:bg-canvas/80"
+              >
+                匯出教練 {selectedCoach.full_name} CSV
+              </button>
+            </>
+          ) : (
+            <p className="pb-1 text-xs text-ink/50">選擇教練後可匯出其學生名單（Excel／CSV）。</p>
+          )}
         </div>
         <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm ring-1 ring-ink/[0.04]">
