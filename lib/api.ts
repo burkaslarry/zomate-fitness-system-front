@@ -796,6 +796,16 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload)
     }),
+  /** [F004][S002] Admin 確認付款 for a coach-uploaded category installment proof. */
+  confirmCategoryInstallment: (
+    planId: number,
+    installmentNo: number,
+    payload: { amount?: number } = {}
+  ) =>
+    request(`/api/admin/installment-plans/${planId}/payments/${installmentNo}/confirm`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    }),
   updateCourseInstallmentReminder: (
     courseId: number,
     payload: { student_id: number; installment_no: number; reminder_lesson: number }
@@ -919,6 +929,7 @@ export const api = {
       note?: string;
       course_enrollment_id?: number;
       installment_no?: number;
+      installment_plan_id?: number;
       full_payment?: boolean;
       send_whatsapp?: boolean;
       coach_id?: number;
@@ -933,6 +944,9 @@ export const api = {
       form.append("course_enrollment_id", String(payload.course_enrollment_id));
     }
     if (payload.installment_no != null) form.append("installment_no", String(payload.installment_no));
+    if (payload.installment_plan_id != null) {
+      form.append("installment_plan_id", String(payload.installment_plan_id));
+    }
     form.append("full_payment", payload.full_payment ? "true" : "false");
     form.append("send_whatsapp", payload.send_whatsapp === false ? "false" : "true");
     if (payload.coach_id != null) form.append("coach_id", String(payload.coach_id));

@@ -59,6 +59,7 @@ export default function AdminInstallmentsPage() {
   const [proofNote, setProofNote] = useState("");
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofBusy, setProofBusy] = useState(false);
+  const [confirmBusyKey, setConfirmBusyKey] = useState<string | null>(null);
   const [proofNotice, setProofNotice] = useState<{ rowId: string; text: string } | null>(null);
 
   const reload = useCallback(async () => {
@@ -143,6 +144,48 @@ export default function AdminInstallmentsPage() {
       console.error("[F004][S008] Error: Installment proof upload failed.");
     } finally {
       setProofBusy(false);
+    }
+  }
+
+  /**
+   * [F004][S002]
+   * Feature: Installment Admin confirmation
+   * Step: Admin 確認付款 for a coach-uploaded 第2／第3期 proof
+   * Logic: Course segments use installment-paid; category plans use the plan payment confirm route.
+   */
+  async function confirmPeriod(row: InstallmentLedgerRow, period: InstallmentLedgerPeriod) {
+    const key = `${row.id}-${period.installment_no}`;
+    if (confirmBusyKey) return;
+    if (
+      !window.confirm(
+        `已核對第 ${period.installment_no} 期付款？確認後會發出 WhatsApp（付款狀態：付款已確認）。`
+      )
+    ) {
+      return;
+    }
+    setConfirmBusyKey(key);
+    setProofNotice(null);
+    try {
+      if (row.source === "course" && row.course_enrollment_id) {
+        await api.markCourseInstallmentPaid(row.course_enrollment_id, {
+          student_id: row.student_id,
+          installment_no: period.installment_no
+        });
+      } else if (row.installment_plan_id) {
+        await api.confirmCategoryInstallment(row.installment_plan_id, period.installment_no, {
+          amount: period.amount ?? undefined
+        });
+      } else {
+        setProofNotice({ rowId: row.id, text: "此分期計劃缺少記錄，請到付款紀錄處理。" });
+        return;
+      }
+      setProofNotice({ rowId: row.id, text: `第 ${period.installment_no} 期付款已確認。` });
+      await reload();
+    } catch (e) {
+      alertApiError(e);
+      console.error("[F004][S002] Error: Installment confirmation failed.");
+    } finally {
+      setConfirmBusyKey(null);
     }
   }
 
@@ -304,21 +347,39 @@ export default function AdminInstallmentsPage() {
                           className={`rounded-full px-2 py-0.5 text-[11px] ${
                             period.paid
                               ? "bg-emerald-50 text-emerald-700"
-                              : "bg-amber-50 text-amber-700"
+                              : period.pending_confirmation
+                                ? "bg-sky-50 text-sky-800"
+                                : "bg-amber-50 text-amber-700"
                           }`}
                         >
-                          {period.paid ? "已付款" : "未付款"}
+                          {period.paid
+                            ? "已付款"
+                            : period.pending_confirmation
+                              ? "待 Admin 確認"
+                              : "未付款"}
                         </span>
                         <span className="text-[11px] text-ink/45">
                           {period.paid
                             ? period.paid_at
                               ? formatHktDateTime(period.paid_at)
                               : "已付款"
-                            : period.due_date
-                              ? `到期 ${period.due_date}`
-                              : ""}
+                            : period.pending_confirmation
+                              ? "已上載付款證明"
+                              : period.due_date
+                                ? `到期 ${period.due_date}`
+                                : ""}
                         </span>
-                        {!period.paid ? (
+                        {!period.paid && period.pending_confirmation ? (
+                          <button
+                            type="button"
+                            disabled={confirmBusyKey != null}
+                            onClick={() => void confirmPeriod(row, period)}
+                            className="rounded-md border border-emerald-600/40 bg-emerald-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                          >
+                            {confirmBusyKey === `${row.id}-${period.installment_no}` ? "確認中…" : "Admin 確認付款"}
+                          </button>
+                        ) : null}
+                        {!period.paid && !period.pending_confirmation ? (
                           <button
                             type="button"
                             onClick={() => openProof(row, period)}

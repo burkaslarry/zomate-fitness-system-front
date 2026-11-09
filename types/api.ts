@@ -215,6 +215,9 @@ export type InstallmentPaymentRow = {
   due_date: string;
   paid_at: string | null;
   status: string;
+  /** [F004][S002] Coach-uploaded proof waiting for Admin 確認付款. */
+  proof_receipt_id?: number | null;
+  proof_uploaded_at?: string | null;
 };
 
 export type InstallmentPlanRow = {
@@ -244,6 +247,9 @@ export type InstallmentLedgerPeriod = {
   due_date?: string | null;
   lesson_from?: number | null;
   lesson_to?: number | null;
+  /** [F004][S002] Coach-uploaded proof waiting for the Admin confirmation button. */
+  proof_receipt_id?: number | null;
+  pending_confirmation?: boolean;
 };
 
 /** [F004][S008] GET /api/admin/installments row — one enrollment/plan per student. */

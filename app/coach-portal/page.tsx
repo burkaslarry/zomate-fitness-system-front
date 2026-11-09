@@ -60,10 +60,20 @@ type PaymentRow = {
   next_installment_no?: number | null;
   next_reminder_lesson?: number | null;
   unpaid_installment_nos?: number[];
+  /** [F004][S002] Category plan row; uploads use installment_plan_id instead of course_id. */
+  installment_plan_id?: number | null;
+  installment_source?: "course" | "category";
+  /** [F004][S002] Proof uploaded — waiting for Admin 確認付款. */
+  pending_installment_nos?: number[];
   signature_image_url: string | null;
   receipt_available?: boolean;
 };
 type Tab = "schedule" | "students" | "payments";
+
+/** [F004][S002] Stable row id: course rows use course_id, category plan rows use plan id. */
+function paymentRowKey(row: PaymentRow): string {
+  return row.installment_plan_id ? `plan-${row.installment_plan_id}` : `course-${row.course_id}`;
+}
 
 function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -610,21 +620,23 @@ export default function CoachDashboardPage() {
 
   /** [F004][S002] Coach uploads a specific installment receipt (第2／第3期…) from payments tab. */
   async function uploadInstallmentReceipt(row: PaymentRow, installmentNo: number, file: File) {
-    if (!coach || !row.course_id || installmentNo < 1) return;
-    const key = `${row.student_id}-${row.course_id}-${installmentNo}`;
+    if (!coach || installmentNo < 1) return;
+    if (!row.course_id && !row.installment_plan_id) return;
+    const key = `${paymentRowKey(row)}-${installmentNo}`;
     setReceiptUploadBusyKey(key);
     setStatus("");
     try {
       await api.coachUploadStudentReceipt(row.student_id, {
         file,
-        course_enrollment_id: row.course_id,
+        course_enrollment_id: row.course_id ? row.course_id : undefined,
+        installment_plan_id: row.installment_plan_id ?? undefined,
         installment_no: installmentNo,
         full_payment: false,
         send_whatsapp: true,
         coach_id: coach.id
       });
       await reloadAll(coach.id);
-      setStatus(`已上載第${installmentNo}期付款記錄：${row.student_name}`);
+      setStatus(`已上載第${installmentNo}期付款記錄：${row.student_name}（待 Admin 確認）`);
     } catch (e) {
       alertApiError(e);
       setStatus(String(e));
@@ -930,19 +942,29 @@ export default function CoachDashboardPage() {
   );
 
   function installmentUploadControl(row: PaymentRow) {
-    if (!row.course_id) return null;
-    const nos =
+    if (!row.course_id && !row.installment_plan_id) return null;
+    const pending = row.pending_installment_nos ?? [];
+    const allUnpaid =
       row.unpaid_installment_nos && row.unpaid_installment_nos.length > 0
         ? row.unpaid_installment_nos
         : row.next_installment_no
           ? [row.next_installment_no]
           : [];
-    // [F004][S002] Show 第2／第3期 (and any other unpaid) as separate labeled buttons.
-    if (nos.length === 0) return null;
+    const nos = allUnpaid.filter((n) => !pending.includes(n));
+    // [F004][S002] Show 第2／第3期 buttons; uploaded proofs wait for Admin confirmation.
+    if (nos.length === 0 && pending.length === 0) return null;
     return (
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {pending.map((n) => (
+          <span
+            key={`${paymentRowKey(row)}-pending-${n}`}
+            className="inline-flex items-center rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-900"
+          >
+            第 {n} 期待 Admin 確認
+          </span>
+        ))}
         {nos.map((n) => {
-          const key = `${row.student_id}-${row.course_id}-${n}`;
+          const key = `${paymentRowKey(row)}-${n}`;
           const busy = receiptUploadBusyKey === key;
           return (
             <label
@@ -979,7 +1001,7 @@ export default function CoachDashboardPage() {
         ) : (
           <div className="mt-2 space-y-2">
             {unpaidPayments.map((row) => (
-              <article key={`unpaid-${row.student_id}-${row.course_id}`} className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 shadow-sm">
+              <article key={`unpaid-${paymentRowKey(row)}`} className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 shadow-sm">
                 <div className="font-medium text-ink">{row.student_name}</div>
                 <div className="text-xs text-ink/50">{row.student_phone}</div>
                 <div className="mt-2 text-sm text-ink/80">{row.course_title}</div>
@@ -1002,7 +1024,7 @@ export default function CoachDashboardPage() {
         ) : (
           <div className="mt-2 space-y-2">
             {paidPayments.map((row) => (
-              <article key={`paid-${row.student_id}-${row.course_id}`} className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
+              <article key={`paid-${paymentRowKey(row)}`} className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
                 <div className="font-medium text-ink">{row.student_name}</div>
                 <div className="text-xs text-ink/50">{row.student_phone}</div>
                 <div className="mt-2 text-sm text-ink/80">{row.course_title}</div>
@@ -1052,7 +1074,7 @@ export default function CoachDashboardPage() {
                 </tr>
               ) : (
                 unpaidPayments.map((row) => (
-                  <tr key={`unpaid-${row.student_id}-${row.course_id}`} className="border-b border-ink/[0.06]">
+                  <tr key={`unpaid-${paymentRowKey(row)}`} className="border-b border-ink/[0.06]">
                     <td className="px-2 py-2.5">
                       <div className="font-medium text-ink">{row.student_name}</div>
                       <div className="text-xs text-ink/50">{row.student_phone}</div>
@@ -1092,7 +1114,7 @@ export default function CoachDashboardPage() {
                 </tr>
               ) : (
                 paidPayments.map((row) => (
-                  <tr key={`paid-${row.student_id}-${row.course_id}`} className="border-b border-ink/[0.06]">
+                  <tr key={`paid-${paymentRowKey(row)}`} className="border-b border-ink/[0.06]">
                     <td className="px-2 py-2.5">
                       <div className="font-medium text-ink">{row.student_name}</div>
                       <div className="text-xs text-ink/50">{row.student_phone}</div>

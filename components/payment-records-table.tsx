@@ -260,7 +260,10 @@ export default function PaymentRecordsTable({
    * Logic: PATCH installment-paid → WhatsApp payment_status becomes 付款已確認.
    */
   async function handleConfirmPayment() {
-    if (!detailRow?.course_enrollment_id) return;
+    if (!detailRow) return;
+    const isCategoryInstallment =
+      detailRow.record_type === "installment" && !!detailRow.installment_plan_id;
+    if (!detailRow.course_enrollment_id && !isCategoryInstallment) return;
     const installmentNo = detailRow.installment_no ?? 1;
     if (
       !window.confirm(
@@ -272,12 +275,20 @@ export default function PaymentRecordsTable({
     setConfirmBusy(true);
     setUploadStatus("");
     try {
-      await api.markCourseInstallmentPaid(detailRow.course_enrollment_id, {
-        student_id: detailRow.student_id,
-        installment_no: installmentNo
-      });
+      if (isCategoryInstallment) {
+        // [F004][S002] Category installment proof uploaded by coach — Admin confirms here.
+        await api.confirmCategoryInstallment(detailRow.installment_plan_id as number, installmentNo, {
+          amount: detailRow.amount ?? undefined
+        });
+      } else {
+        await api.markCourseInstallmentPaid(detailRow.course_enrollment_id as number, {
+          student_id: detailRow.student_id,
+          installment_no: installmentNo
+        });
+      }
       console.log("[F004][S002] Success: Admin confirmed payment from payment record", {
         courseId: detailRow.course_enrollment_id,
+        installmentPlanId: detailRow.installment_plan_id,
         installmentNo,
         recordId: detailRow.id
       });
@@ -617,7 +628,8 @@ export default function PaymentRecordsTable({
                   />
                 ) : null}
                 {canConfirmPayment &&
-                detailRow.course_enrollment_id &&
+                (detailRow.course_enrollment_id ||
+                  (detailRow.record_type === "installment" && detailRow.installment_plan_id)) &&
                 detailRow.status === "pending_confirmation" ? (
                   <button
                     type="button"

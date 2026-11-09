@@ -1373,12 +1373,22 @@ function CategoryEnrollmentCard({
                     <span>
                       第 {pay.installment_no} 期 · {installmentAmountLabel(pay.amount)} · 到期 {pay.due_date}
                     </span>
-                    <span className={pay.paid_at ? "text-emerald-700" : "text-amber-800"}>
+                    <span
+                      className={
+                        pay.paid_at
+                          ? "text-emerald-700"
+                          : pay.proof_receipt_id
+                            ? "text-sky-800"
+                            : "text-amber-800"
+                      }
+                    >
                       {pay.paid_at ? (
                         paymentStatusLabel(pay.status, pay.paid_at)
                       ) : (
                         <>
-                          {paymentStatusLabel(pay.status, pay.paid_at)}{" "}
+                          {pay.proof_receipt_id
+                            ? "待 Admin 確認（已上載收據）"
+                            : paymentStatusLabel(pay.status, pay.paid_at)}{" "}
                           <button
                             type="button"
                             className="text-primary underline decoration-primary/40 underline-offset-2 hover:opacity-90"
