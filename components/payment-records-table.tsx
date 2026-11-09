@@ -51,20 +51,20 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
 function statusBadge(status: PaymentRecordRow["status"]) {
   if (status === "paid") {
     return (
-      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+      <span className="inline-flex rounded-lg bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
         付款已確認
       </span>
     );
   }
   if (status === "pending_confirmation") {
     return (
-      <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-900">待確認</span>
+      <span className="inline-flex rounded-lg bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-900">待確認</span>
     );
   }
   if (status === "missing_receipt") {
-    return <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">缺收據</span>;
+    return <span className="inline-flex rounded-lg bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">缺收據</span>;
   }
-  return <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-800">待付</span>;
+  return <span className="inline-flex rounded-lg bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-800">待付</span>;
 }
 
 function recordTypeLabel(type: PaymentRecordRow["record_type"]): string {
@@ -765,7 +765,7 @@ export default function PaymentRecordsTable({
               <th className="px-3 py-2">項目</th>
               <th className="px-3 py-2">金額</th>
               <th className="px-3 py-2">方式</th>
-              {showStatus ? <th className="px-3 py-2">狀態</th> : null}
+              {showStatus ? <th className="w-20 px-3 py-2">狀態</th> : null}
               {showCoach ? <th className="px-3 py-2">教練</th> : null}
               {showReceipt ? <th className="px-3 py-2">收據</th> : null}
               <th className="px-3 py-2">日期 (HKT)</th>
@@ -783,12 +783,19 @@ export default function PaymentRecordsTable({
                     <div className="text-xs text-ink/50">{row.student_phone}</div>
                   </td>
                 ) : null}
-                <td className="px-3 py-2">{humanizePaymentLabel(row.label)}</td>
+                <td className="px-3 py-2">
+                  <div
+                    className="line-clamp-3 max-w-[24rem]"
+                    title={humanizePaymentLabel(row.label)}
+                  >
+                    {humanizePaymentLabel(row.label)}
+                  </div>
+                </td>
                 <td className="px-3 py-2 whitespace-nowrap font-medium tabular-nums">
                   {formatPaymentAmount(row.amount)}
                 </td>
                 <td className="px-3 py-2">{formatPaymentMethod(row.payment_method)}</td>
-                {showStatus ? <td className="px-3 py-2">{statusBadge(row.status)}</td> : null}
+                {showStatus ? <td className="w-20 px-3 py-2">{statusBadge(row.status)}</td> : null}
                 {showCoach ? <td className="px-3 py-2">{row.coach_name ?? "—"}</td> : null}
                 {showReceipt ? (
                   <td className="px-3 py-2">
