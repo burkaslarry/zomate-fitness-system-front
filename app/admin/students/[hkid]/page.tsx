@@ -121,6 +121,7 @@ export default function AdminStudentDetailPage() {
   const [categories, setCategories] = useState<CatRow[]>([]);
   const [catId, setCatId] = useState<number | "">("");
   const [lessons, setLessons] = useState(10);
+  const [priorLessons, setPriorLessons] = useState(0);
   const [installments, setInstallments] = useState(3);
   const [saving, setSaving] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -277,12 +278,17 @@ export default function AdminStudentDetailPage() {
     }
     setSaving(true);
     try {
-      await api.upsertStudentCategoryEnrollment(data.profile.id, {
+      const res = (await api.upsertStudentCategoryEnrollment(data.profile.id, {
         course_category_id: Number(catId),
         total_lessons: lessons,
-        total_installments: installments
-      });
-      setToast("已更新課程／堂數");
+        total_installments: installments,
+        lessons_already_taken: Math.min(priorLessons, lessons)
+      })) as { lesson_balance?: number };
+      setToast(
+        typeof res?.lesson_balance === "number"
+          ? `已更新課程／堂數（餘堂 ${res.lesson_balance}）`
+          : "已更新課程／堂數"
+      );
       reload();
     } catch (e) {
       alertApiError(e);
@@ -969,8 +975,9 @@ export default function AdminStudentDetailPage() {
                 <h3 className="mb-3 text-sm font-semibold text-ink">從課程種類入帳堂數（Admin）</h3>
                 <p className="mb-3 text-xs text-ink/60">
                   選擇種類及總堂數；如該種類已存在會調整堂數差額。會建立分期計劃（預設 3 期）。
+                  匯入紙本舊 package 時，請填「以上堂數」，系統會從餘堂扣減。
                 </p>
-                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
                   <label className="block text-xs text-ink/55">
                     課程種類
                     <select
@@ -993,8 +1000,28 @@ export default function AdminStudentDetailPage() {
                       min={1}
                       className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-2 py-2 text-sm"
                       value={lessons}
-                      onChange={(e) => setLessons(Number(e.target.value) || 1)}
+                      onChange={(e) => {
+                        const next = Number(e.target.value) || 1;
+                        setLessons(next);
+                        setPriorLessons((p) => Math.min(p, next));
+                      }}
                     />
+                  </label>
+                  <label className="block text-xs text-ink/55">
+                    以上堂數（紙本已上）
+                    <input
+                      type="number"
+                      min={0}
+                      max={lessons}
+                      className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-2 py-2 text-sm"
+                      value={priorLessons}
+                      onChange={(e) =>
+                        setPriorLessons(Math.min(lessons, Math.max(0, Number(e.target.value) || 0)))
+                      }
+                    />
+                    <span className="mt-1 block text-[11px] text-ink/45">
+                      剩餘 = 總堂數 − 以上堂數
+                    </span>
                   </label>
                   <label className="block text-xs text-ink/55">
                     分期數（1–5）

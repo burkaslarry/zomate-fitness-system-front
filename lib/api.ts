@@ -827,7 +827,12 @@ export const api = {
     }),
   upsertStudentCategoryEnrollment: (
     studentId: number,
-    payload: { course_category_id: number; total_lessons: number; total_installments?: number }
+    payload: {
+      course_category_id: number;
+      total_lessons: number;
+      total_installments?: number;
+      lessons_already_taken?: number;
+    }
   ) =>
     request(`/api/admin/students/${studentId}/category-enrollment`, {
       method: "POST",
