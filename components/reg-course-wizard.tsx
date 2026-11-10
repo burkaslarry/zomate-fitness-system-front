@@ -46,7 +46,7 @@ function parseAmount(raw: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
-function splitInstallmentAmounts(total: number, count: 2 | 3): string[] {
+function splitInstallmentAmounts(total: number, count: 3 | 5): string[] {
   const per = Math.floor(total / count);
   const remainder = total - per * count;
   const amounts = Array.from({ length: count }, () => per);
@@ -160,8 +160,8 @@ export default function RegCourseWizard({
   const [purchaseSummary, setPurchaseSummary] = useState<PurchaseSummary | null>(null);
   const [fullPay, setFullPay] = useState(true);
   const [installmentPay, setInstallmentPay] = useState(false);
-  const [installmentCount, setInstallmentCount] = useState<2 | 3>(2);
-  const [installmentAmounts, setInstallmentAmounts] = useState<string[]>(["", ""]);
+  const [installmentCount, setInstallmentCount] = useState<3 | 5>(3);
+  const [installmentAmounts, setInstallmentAmounts] = useState<string[]>(["", "", ""]);
   const [installmentAmountsTouched, setInstallmentAmountsTouched] = useState(false);
   const [alreadyTakenText, setAlreadyTakenText] = useState("0");
   const [remarks, setRemarks] = useState("");
@@ -267,8 +267,8 @@ export default function RegCourseWizard({
     setAmount("");
     if (lockedBranchId != null) setBranchId(lockedBranchId);
     selectFullPay();
-    setInstallmentCount(2);
-    setInstallmentAmounts(["", ""]);
+    setInstallmentCount(3);
+    setInstallmentAmounts(["", "", ""]);
     setInstallmentAmountsTouched(false);
     setAlreadyTakenText("0");
     setRemarks("");
@@ -306,8 +306,9 @@ export default function RegCourseWizard({
     setInstallmentAmountsTouched(false);
   }
 
-  function selectInstallmentCount(n: 2 | 3) {
+  function selectInstallmentCount(n: 3 | 5) {
     setInstallmentCount(n);
+    setInstallmentAmounts((prev) => Array.from({ length: n }, (_, i) => prev[i] ?? ""));
     setInstallmentAmountsTouched(false);
   }
 
@@ -415,6 +416,17 @@ export default function RegCourseWizard({
     if (!method) {
       alertApiError(new Error("請選擇付款方式"));
       return;
+    }
+    if (installmentPay) {
+      const firstReceipt = form.get("receipt");
+      if (!(firstReceipt instanceof File && firstReceipt.name)) {
+        alertApiError(new Error("分期報名必須上載第 1 期付款記錄"));
+        return;
+      }
+      if (totalInstallments > Number(lessonsText)) {
+        alertApiError(new Error("分期數不可多於總堂數"));
+        return;
+      }
     }
     const lessons = Number(lessonsText);
     const alreadyTaken = Number(alreadyTakenText || "0");
@@ -532,7 +544,7 @@ export default function RegCourseWizard({
       <p className="text-sm text-ink/65">
         {mode === "coach"
           ? "記錄付款並替學員開課。課堂 PIN 只顯示俾學生；教練完成後可返學員頁跟進排程。"
-          : "確認付款後即時開課並顯示 PIN；學生詳情「已開課程」亦會見到。分期第 2／3 期須收款後才可簽到。"}
+          : "確認付款後即時開課並顯示 PIN；學生詳情「已開課程」亦會見到。分期第 2 期起須上載該期付款記錄，經 Admin 確認後才可簽到。"}
       </p>
 
       <ol className="flex flex-wrap gap-1.5 text-[11px] sm:gap-2 sm:text-xs">
@@ -744,7 +756,7 @@ export default function RegCourseWizard({
             {installmentPay ? (
               <div className="ml-1 space-y-3 border-l-2 border-amber-200 pl-4 pt-1">
                 <div className="flex flex-wrap gap-4">
-                  {([2, 3] as const).map((n) => (
+                  {([3, 5] as const).map((n) => (
                     <label key={n} className="flex cursor-pointer items-center gap-2 text-xs sm:text-sm">
                       <input
                         type="radio"
@@ -784,7 +796,7 @@ export default function RegCourseWizard({
                   </p>
                 </div>
                 <p className="text-xs text-amber-900/85">
-                  第 1 期付款後可開課；第 2／3 期須收款後才可簽到（屆時再 full pay 並上載收據）。
+                  第 1 期付款後可開課；第 2 期起每次收款都要上載該期付款記錄（教練工作台 → 付款紀錄），經 Admin 確認後才可簽到。
                 </p>
               </div>
             ) : null}
@@ -793,8 +805,8 @@ export default function RegCourseWizard({
           <PaymentMethodRadio />
           {installmentPay ? (
             <div className="space-y-2">
-              <FileUpload name="receipt" label="第 1 期收據（PDF / PNG，選填）" />
-              <p className="text-xs text-ink/55">第 2、3 期收款時再補上載收據。</p>
+              <FileUpload name="receipt" label="第 1 期付款記錄（必填，PDF / PNG）" required />
+              <p className="text-xs text-ink/55">第 2 期起每次收款時，到教練工作台「付款紀錄」上載該期付款記錄，經 Admin 確認後才可簽到。</p>
             </div>
           ) : (
             <FileUpload name="receipt" label="收據上傳（選填，可候補）" />
@@ -844,7 +856,7 @@ export default function RegCourseWizard({
               </p>
               {purchaseSummary.totalInstallments > 1 ? (
                 <p className="mt-2 text-xs text-amber-900">
-                  分期 {purchaseSummary.totalInstallments} 期 — 第 1 期 PIN 可簽到；第 2／3 期須收款後由櫃台標記已付。
+                  分期 {purchaseSummary.totalInstallments} 期 — 第 1 期 PIN 可簽到；第 2 期起須上載付款記錄並經 Admin 確認後才可簽到。
                 </p>
               ) : (
                 <p className="mt-2 text-xs text-emerald-800">一次付清 — 此 PIN 可立即用於簽到。</p>

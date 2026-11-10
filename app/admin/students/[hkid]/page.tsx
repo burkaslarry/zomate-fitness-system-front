@@ -974,7 +974,7 @@ export default function AdminStudentDetailPage() {
               <div className="rounded-xl border border-primary/35 bg-primary/5 p-4">
                 <h3 className="mb-3 text-sm font-semibold text-ink">從課程種類入帳堂數（Admin）</h3>
                 <p className="mb-3 text-xs text-ink/60">
-                  選擇種類及總堂數；如該種類已存在會調整堂數差額。會建立分期計劃（預設 3 期）。
+                  選擇種類及總堂數；如該種類已存在會調整堂數差額。會建立分期計劃（只可選 3 或 5 期）。
                   匯入紙本舊 package 時，請填「以上堂數」，系統會從餘堂扣減。
                 </p>
                 <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
@@ -1024,15 +1024,15 @@ export default function AdminStudentDetailPage() {
                     </span>
                   </label>
                   <label className="block text-xs text-ink/55">
-                    分期數（1–5）
-                    <input
-                      type="number"
-                      min={1}
-                      max={5}
-                      className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-2 py-2 text-sm"
+                    分期數（3 或 5 期）
+                    <select
+                      className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-2 py-2 text-sm text-ink"
                       value={installments}
-                      onChange={(e) => setInstallments(Math.min(5, Math.max(1, Number(e.target.value) || 3)))}
-                    />
+                      onChange={(e) => setInstallments(Number(e.target.value))}
+                    >
+                      <option value={3}>3 期</option>
+                      <option value={5}>5 期</option>
+                    </select>
                   </label>
                   <div className="flex items-end">
                     <button

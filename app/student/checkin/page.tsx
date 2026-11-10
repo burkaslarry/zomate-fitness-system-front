@@ -199,7 +199,7 @@ export default function StudentCheckinPage() {
       setStatus("");
       if (msg.includes("分期 PIN 尚未啟用") || msg.includes("該期付款")) {
         setInstallmentPrompt(
-          "此 PIN 對應的分期尚未付款。請先完成第 2 / 第 3 期付款，並由櫃台確認收款後再試簽到。"
+          "此 PIN 對應的分期尚未付款。請先完成該期付款；教練上載付款記錄並經 Admin 確認收款後再試簽到。"
         );
       } else {
         setInstallmentPrompt("");
@@ -239,7 +239,7 @@ export default function StudentCheckinPage() {
       setStatus("");
       if (msg.includes("分期 PIN 尚未啟用") || msg.includes("該期付款")) {
         setInstallmentPrompt(
-          "此 PIN 對應的分期尚未付款。請先完成第 2 / 第 3 期付款，並由櫃台確認收款後再試簽到。"
+          "此 PIN 對應的分期尚未付款。請先完成該期付款；教練上載付款記錄並經 Admin 確認收款後再試簽到。"
         );
       } else {
         setInstallmentPrompt("");
