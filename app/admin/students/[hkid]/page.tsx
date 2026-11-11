@@ -277,6 +277,10 @@ export default function AdminStudentDetailPage() {
       return;
     }
     const installments = Number(installmentsText);
+    if (installments > 12) {
+      alertApiError(new Error("最多分12期"));
+      return;
+    }
     if (!Number.isInteger(installments) || installments < 1 || installments > lessons) {
       alertApiError(new Error("分期數必須介乎 1 至總堂數"));
       return;
@@ -1040,7 +1044,7 @@ export default function AdminStudentDetailPage() {
                       onChange={(e) => setInstallmentsText(e.target.value.replace(/\D/g, ""))}
                     />
                     <span className="mt-1 block text-[11px] text-ink/45">
-                      不可多於總堂數；儲存後逐期出現「上傳收據」
+                      不可多於總堂數；儲存後逐期出現「上傳收據」（最多分12期）
                     </span>
                   </label>
                   <div className="flex items-end">
