@@ -122,7 +122,7 @@ export default function AdminStudentDetailPage() {
   const [catId, setCatId] = useState<number | "">("");
   const [lessons, setLessons] = useState(10);
   const [priorLessons, setPriorLessons] = useState(0);
-  const [installments, setInstallments] = useState(3);
+  const [installmentsText, setInstallmentsText] = useState("3");
   const [saving, setSaving] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -276,7 +276,8 @@ export default function AdminStudentDetailPage() {
       alertApiError(new Error("請選擇課程種類"));
       return;
     }
-    if (installments < 1 || installments > lessons) {
+    const installments = Number(installmentsText);
+    if (!Number.isInteger(installments) || installments < 1 || installments > lessons) {
       alertApiError(new Error("分期數必須介乎 1 至總堂數"));
       return;
     }
@@ -1008,7 +1009,6 @@ export default function AdminStudentDetailPage() {
                         const next = Number(e.target.value) || 1;
                         setLessons(next);
                         setPriorLessons((p) => Math.min(p, next));
-                        setInstallments((n) => Math.min(n, next));
                       }}
                     />
                   </label>
@@ -1031,14 +1031,13 @@ export default function AdminStudentDetailPage() {
                   <label className="block text-xs text-ink/55">
                     分期數（可自由填寫）
                     <input
-                      type="number"
-                      min={1}
-                      max={lessons}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="例如 7"
                       className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-2 py-2 text-sm"
-                      value={installments}
-                      onChange={(e) =>
-                        setInstallments(Math.min(lessons, Math.max(1, Number(e.target.value) || 1)))
-                      }
+                      value={installmentsText}
+                      onChange={(e) => setInstallmentsText(e.target.value.replace(/\D/g, ""))}
                     />
                     <span className="mt-1 block text-[11px] text-ink/45">
                       不可多於總堂數；儲存後逐期出現「上傳收據」
