@@ -276,6 +276,10 @@ export default function AdminStudentDetailPage() {
       alertApiError(new Error("請選擇課程種類"));
       return;
     }
+    if (installments < 1 || installments > lessons) {
+      alertApiError(new Error("分期數必須介乎 1 至總堂數"));
+      return;
+    }
     setSaving(true);
     try {
       const res = (await api.upsertStudentCategoryEnrollment(data.profile.id, {
@@ -974,7 +978,7 @@ export default function AdminStudentDetailPage() {
               <div className="rounded-xl border border-primary/35 bg-primary/5 p-4">
                 <h3 className="mb-3 text-sm font-semibold text-ink">從課程種類入帳堂數（Admin）</h3>
                 <p className="mb-3 text-xs text-ink/60">
-                  選擇種類及總堂數；如該種類已存在會調整堂數差額。會建立分期計劃（只可選 3 或 5 期）。
+                  選擇種類及總堂數；如該種類已存在會調整堂數差額。會建立分期計劃（期數可自由填寫，不可多於總堂數）。
                   匯入紙本舊 package 時，請填「以上堂數」，系統會從餘堂扣減。
                 </p>
                 <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
@@ -1004,6 +1008,7 @@ export default function AdminStudentDetailPage() {
                         const next = Number(e.target.value) || 1;
                         setLessons(next);
                         setPriorLessons((p) => Math.min(p, next));
+                        setInstallments((n) => Math.min(n, next));
                       }}
                     />
                   </label>
@@ -1024,15 +1029,20 @@ export default function AdminStudentDetailPage() {
                     </span>
                   </label>
                   <label className="block text-xs text-ink/55">
-                    分期數（3 或 5 期）
-                    <select
-                      className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-2 py-2 text-sm text-ink"
+                    分期數（可自由填寫）
+                    <input
+                      type="number"
+                      min={1}
+                      max={lessons}
+                      className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-2 py-2 text-sm"
                       value={installments}
-                      onChange={(e) => setInstallments(Number(e.target.value))}
-                    >
-                      <option value={3}>3 期</option>
-                      <option value={5}>5 期</option>
-                    </select>
+                      onChange={(e) =>
+                        setInstallments(Math.min(lessons, Math.max(1, Number(e.target.value) || 1)))
+                      }
+                    />
+                    <span className="mt-1 block text-[11px] text-ink/45">
+                      不可多於總堂數；儲存後逐期出現「上傳收據」
+                    </span>
                   </label>
                   <div className="flex items-end">
                     <button
