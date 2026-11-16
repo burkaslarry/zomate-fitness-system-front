@@ -54,6 +54,8 @@ export type InstallmentSegmentPinDto = {
   reminder_lesson?: number | null;
   /** HKD due for this installment tranche (when staff split total across periods). */
   amount_hkd?: number | null;
+  /** [F004][S002] Uploaded receipt exists in pending state — Admin 確認付款 is allowed. */
+  has_pending_payment?: boolean;
 };
 
 export type CourseCheckinPinRow = {
@@ -66,6 +68,10 @@ export type CourseCheckinPinRow = {
   series_end_date?: string | null;
   checkin_pin: string;
   installment_segments?: InstallmentSegmentPinDto[];
+  /** [F004][S002] Periods ticked 「唔需要上傳文件」 by Admin. */
+  no_upload_installment_nos?: number[];
+  /** [F004][S002] Total check-ins — gates the no-upload tick per period (lessons attended). */
+  lessons_attended?: number;
 };
 
 /** Response from POST /api/trial-classes */
@@ -218,6 +224,8 @@ export type InstallmentPaymentRow = {
   /** [F004][S002] Coach-uploaded proof waiting for Admin 確認付款. */
   proof_receipt_id?: number | null;
   proof_uploaded_at?: string | null;
+  /** [F004][S002] Admin ticked 「唔需要上傳文件」 — confirm allowed without a proof. */
+  no_document_required?: boolean;
 };
 
 export type InstallmentPlanRow = {

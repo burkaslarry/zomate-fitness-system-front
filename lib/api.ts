@@ -806,6 +806,25 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload)
     }),
+  /** [F004][S002] Admin ticks 「唔需要上傳文件」 for one course installment period. */
+  setCourseInstallmentNoUpload: (
+    courseId: number,
+    payload: { student_id: number; installment_no: number; no_upload: boolean }
+  ) =>
+    request(`/api/admin/courses/${courseId}/installment-no-upload`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    }),
+  /** [F004][S002] Admin ticks 「唔需要上傳文件」 for one category installment period. */
+  setCategoryInstallmentNoDocument: (
+    planId: number,
+    installmentNo: number,
+    payload: { no_document_required: boolean } = { no_document_required: true }
+  ) =>
+    request(`/api/admin/installment-plans/${planId}/payments/${installmentNo}/no-document`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    }),
   updateCourseInstallmentReminder: (
     courseId: number,
     payload: { student_id: number; installment_no: number; reminder_lesson: number }
