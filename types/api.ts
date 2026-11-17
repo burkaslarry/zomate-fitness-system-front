@@ -125,6 +125,14 @@ export type CoachSkillsDto = {
   course_category_ids: number[];
 };
 
+export type CoachInstallmentPeriodDto = {
+  installment_no: number;
+  lesson_from: number;
+  lesson_to: number;
+  paid: boolean;
+  reminder_lesson: number | null;
+};
+
 export type CoachStudentPackageDto = {
   enrollment_id: number;
   course_title: string;
@@ -136,6 +144,9 @@ export type CoachStudentPackageDto = {
   coach_time_confirmed: boolean;
   payment_status: string;
   installment_status: string;
+  installment_periods?: CoachInstallmentPeriodDto[];
+  next_installment_no?: number | null;
+  next_reminder_lesson?: number | null;
 };
 
 export type CoachStudentBriefDto = {
@@ -153,6 +164,10 @@ export type CoachStudentRecordDto = {
   full_name: string;
   phone: string;
   lesson_balance: number;
+  date_of_birth?: string | null;
+  emergency_contact_name?: string | null;
+  emergency_contact_relationship?: string | null;
+  emergency_contact_phone?: string | null;
   enrollments: {
     enrollment_id: number;
     course_title: string;
@@ -167,6 +182,7 @@ export type CoachStudentRecordDto = {
     installment_status: string;
     next_installment_no?: number | null;
     next_reminder_lesson?: number | null;
+    installment_periods?: CoachInstallmentPeriodDto[];
   }[];
   checkins: { id: number; channel: string; remarks: string | null; created_at: string }[];
   attendance: {
@@ -175,6 +191,15 @@ export type CoachStudentRecordDto = {
     course_title: string | null;
     session_calendar_date: string;
     attended_at: string;
+  }[];
+  receipts?: {
+    id: number;
+    source: string;
+    amount: number | null;
+    payment_method: string | null;
+    note: string | null;
+    file_url: string;
+    created_at: string;
   }[];
 };
 

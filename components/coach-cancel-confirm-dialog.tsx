@@ -13,6 +13,8 @@ type Props = {
   studentName: string;
   courseTitle: string;
   sessionLabel?: string;
+  /** [F003][S009] Q4/Q4.1 — package was never scheduled; deleting it is not a calendar change. */
+  pending?: boolean;
   busy?: boolean;
   onClose: () => void;
   onConfirm: () => void;
@@ -24,6 +26,7 @@ export default function CoachCancelConfirmDialog({
   studentName,
   courseTitle,
   sessionLabel,
+  pending = false,
   busy = false,
   onClose,
   onConfirm
@@ -40,19 +43,21 @@ export default function CoachCancelConfirmDialog({
     >
       <div className="w-full max-w-md rounded-2xl border border-red-200 bg-surface p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-2xl">
         <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
-          {wholeCourse ? "高風險操作" : "取消今堂"}
+          {pending ? "刪除 package" : wholeCourse ? "高風險操作" : "取消今堂"}
         </p>
         <h2 id="coach-cancel-dialog-title" className="mt-2 text-lg font-semibold text-ink">
-          {wholeCourse ? "確定取消整個課程？" : "確定只取消這一堂？"}
+          {pending ? "確定刪除這個 package？" : wholeCourse ? "確定取消整個課程？" : "確定只取消這一堂？"}
         </h2>
         <div className="mt-3 rounded-xl border border-ink/10 bg-canvas p-3 text-sm text-ink/75">
           <p className="font-medium text-ink">{studentName} · {courseTitle}</p>
           {sessionLabel ? <p className="mt-1">{sessionLabel}</p> : null}
         </div>
         <p className="mt-3 text-sm leading-6 text-ink/70">
-          {wholeCourse
-            ? "整個 enrollment 的全部堂數會從日曆移除。學生、付款及已簽到紀錄不會刪除，但成套課程會停止顯示。"
-            : "只有這一堂會從日曆移除；其他堂數、課堂 PIN、付款及之後課堂全部保留。"}
+          {pending
+            ? "此 package 從未排堂，刪除後會由待排期及學員課程中移除。學員、付款及簽到紀錄會保留。"
+            : wholeCourse
+              ? "整個 enrollment 的全部堂數會從日曆移除。學生、付款及已簽到紀錄不會刪除，但成套課程會停止顯示。"
+              : "只有這一堂會從日曆移除；其他堂數、課堂 PIN、付款及之後課堂全部保留。"}
         </p>
         <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-950">
           改期或取消須最少於課堂開始前 24 小時處理。
@@ -72,7 +77,7 @@ export default function CoachCancelConfirmDialog({
             disabled={busy}
             className="min-h-11 rounded-xl border border-red-700 bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800"
           >
-            {busy ? "處理中…" : wholeCourse ? "取消整個課程" : "只取消今堂"}
+            {busy ? "處理中…" : pending ? "刪除 package" : wholeCourse ? "取消整個課程" : "只取消今堂"}
           </button>
         </div>
       </div>

@@ -15,6 +15,9 @@ import CoachScheduleBottomSheet from "../../components/coach-schedule-bottom-she
 import CoachScheduleDayAgenda from "../../components/coach-schedule-day-agenda";
 import CoachScheduleFab from "../../components/coach-schedule-fab";
 import CoachScheduleStudentPickerSheet from "../../components/coach-schedule-student-picker-sheet";
+import CoachSchedulePackagePickerSheet, {
+  type PackagePickRow
+} from "../../components/coach-schedule-package-picker-sheet";
 import CoachScheduleSuccessDialog from "../../components/coach-schedule-success-dialog";
 import CoachCancelConfirmDialog from "../../components/coach-cancel-confirm-dialog";
 import CoachDateStepper from "../../components/coach-date-stepper";
@@ -32,7 +35,7 @@ import {
   type CoachSessionRow,
   sessionsToDayCourses
 } from "../../lib/coach-sessions";
-import { alertApiError, api, downloadBlobFile, formatApiError } from "../../lib/api";
+import { alertApiError, api, apiAssetUrl, downloadBlobFile, formatApiError } from "../../lib/api";
 import { getAuthSession } from "../../lib/auth";
 import { formatHktDateTime } from "../../lib/format-hkt";
 import type { CoachStudentBriefDto, CoachStudentRecordDto, CoachRemindPaymentDto } from "../../types/api";
@@ -109,6 +112,35 @@ function remindPayWaLink(phone: string, name: string, courseTitle: string): stri
   return `https://wa.me/${digits}?text=${text}`;
 }
 
+/** [F003][S005] Q4.2 — re-open receipt / proof files uploaded by coach or student. */
+function CoachReceiptPreview({ fileUrl, label }: { fileUrl: string; label: string }) {
+  const [failed, setFailed] = useState(false);
+  const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(fileUrl.split("?")[0].toLowerCase());
+  if (!isImage || failed) {
+    return (
+      <a
+        href={fileUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-1 inline-block text-xs font-medium text-primary underline"
+      >
+        {failed ? "預覽失敗，開啟檔案" : "開啟檔案（PDF／其他）"}
+      </a>
+    );
+  }
+  return (
+    <a href={fileUrl} target="_blank" rel="noreferrer" className="mt-1 block">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={fileUrl}
+        alt={label}
+        className="max-h-40 w-full rounded border border-ink/10 object-contain"
+        onError={() => setFailed(true)}
+      />
+    </a>
+  );
+}
+
 function pendingFromEnrollment(
   studentId: number,
   studentName: string,
@@ -149,6 +181,13 @@ export default function CoachDashboardPage() {
   const [rangeSessions, setRangeSessions] = useState<CoachSessionRow[]>([]);
   const [scheduleSheetOpen, setScheduleSheetOpen] = useState(false);
   const [studentPickerOpen, setStudentPickerOpen] = useState(false);
+  /** [F003][S003] Student holds several packages — coach picks one before the time sheet. */
+  const [packagePick, setPackagePick] = useState<{
+    studentId: number;
+    studentName: string;
+    studentPhone: string;
+    packages: PackagePickRow[];
+  } | null>(null);
   const [pending, setPending] = useState<PendingRow[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [receiptPdfBusyCourseId, setReceiptPdfBusyCourseId] = useState<number | null>(null);
@@ -162,6 +201,7 @@ export default function CoachDashboardPage() {
   const [status, setStatus] = useState("");
   const [students, setStudents] = useState<CoachStudentBriefDto[]>([]);
   const [studentSearch, setStudentSearch] = useState("");
+  const [paymentSearch, setPaymentSearch] = useState("");
   const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
   const [studentRecords, setStudentRecords] = useState<CoachStudentRecordDto | null>(null);
   const [recordsLoading, setRecordsLoading] = useState(false);
@@ -182,6 +222,8 @@ export default function CoachDashboardPage() {
     courseTitle: string;
     originalDate?: string;
     sessionLabel?: string;
+    /** [F003][S009] Q4/Q4.1 — never-scheduled package being deleted. */
+    pending?: boolean;
   } | null>(null);
   const [remindBusy, setRemindBusy] = useState<number | null>(null);
   const [scheduleStudentId, setScheduleStudentId] = useState<number | null>(null);
@@ -229,6 +271,31 @@ export default function CoachDashboardPage() {
   const paymentUrgent = unpaidPayments;
 
   const paidPayments = useMemo(() => payments.filter((p) => p.payment_status === "Paid"), [payments]);
+
+  /** [F008][S005] Payments tab search — same behaviour as the students tab search. */
+  const paymentMatches = useCallback((row: PaymentRow, q: string) => {
+    const name = (row.student_name || "").toLowerCase();
+    const phone = (row.student_phone || "").replace(/\D/g, "");
+    const title = (row.course_title || "").toLowerCase();
+    const qDigits = q.replace(/\D/g, "");
+    return (
+      name.includes(q) ||
+      title.includes(q) ||
+      (qDigits.length > 0 && phone.includes(qDigits))
+    );
+  }, []);
+
+  const filteredUnpaidPayments = useMemo(() => {
+    const q = paymentSearch.trim().toLowerCase();
+    if (!q) return unpaidPayments;
+    return unpaidPayments.filter((p) => paymentMatches(p, q));
+  }, [unpaidPayments, paymentSearch, paymentMatches]);
+
+  const filteredPaidPayments = useMemo(() => {
+    const q = paymentSearch.trim().toLowerCase();
+    if (!q) return paidPayments;
+    return paidPayments.filter((p) => paymentMatches(p, q));
+  }, [paidPayments, paymentSearch, paymentMatches]);
 
   const filteredStudents = useMemo(() => {
     const q = studentSearch.trim().toLowerCase();
@@ -379,19 +446,44 @@ export default function CoachDashboardPage() {
   }, [coach, calendarMode, selectedDay, personalBlocksAsSessions]);
 
   const pickStudentForSchedule = useCallback(
-    async (studentId: number) => {
-      if (!coach) return;
+    async (studentId: number): Promise<"sheet" | "packages" | null> => {
+      if (!coach) return null;
       setScheduleStudentId(studentId);
       setPickBusy(true);
       setStatus("");
       try {
         const rec = (await api.coachStudentRecords(studentId, coach.id)) as CoachStudentRecordDto;
-        const target = rec.enrollments.find((e) => !e.coach_time_confirmed) ?? rec.enrollments[0];
-        if (!target) {
+        if (rec.enrollments.length === 0) {
           setScheduleStudentId(null);
           setStatus("此學員暫無可排程課程。");
-          return;
+          return null;
         }
+        if (rec.enrollments.length > 1) {
+          // [F003][S003] One student can hold several packages — coach picks which one first.
+          const brief = students.find((s) => s.student_id === studentId);
+          const byId = new Map((brief?.packages ?? []).map((p) => [p.enrollment_id, p]));
+          setScheduleStudentId(null);
+          setPackagePick({
+            studentId,
+            studentName: rec.full_name,
+            studentPhone: rec.phone,
+            packages: rec.enrollments.map((e) => {
+              const p = byId.get(e.enrollment_id);
+              return {
+                enrollment_id: e.enrollment_id,
+                course_title: e.course_title,
+                branch_name: e.branch_name ?? null,
+                total_lessons: e.total_lessons,
+                remaining_lessons: p ? p.remaining_lessons : e.total_lessons,
+                coach_time_confirmed: e.coach_time_confirmed,
+                installment_status: e.installment_status,
+                periods: e.installment_periods ?? p?.installment_periods ?? []
+              };
+            })
+          });
+          return "packages";
+        }
+        const target = rec.enrollments.find((e) => !e.coach_time_confirmed) ?? rec.enrollments[0];
         setSelectedPending(
           pendingFromEnrollment(studentId, rec.full_name, rec.phone, {
             enrollment_id: target.enrollment_id,
@@ -406,15 +498,43 @@ export default function CoachDashboardPage() {
         setStartMinute(0);
         setDurationHours(1);
         setScheduleSheetOpen(false);
+        return "sheet";
       } catch (e) {
         setScheduleStudentId(null);
         alertApiError(e);
         setStatus(String(e));
+        return null;
       } finally {
         setPickBusy(false);
       }
     },
-    [coach, selectedDay]
+    [coach, selectedDay, students]
+  );
+
+  const handlePickPackage = useCallback(
+    (row: PackagePickRow) => {
+      if (!packagePick) return;
+      setPackagePick(null);
+      setPersonalBlockMode(false);
+      setTrialDraft(null);
+      setSelectedPending({
+        enrollment_id: row.enrollment_id,
+        course_id: row.enrollment_id,
+        student_id: packagePick.studentId,
+        student_name: packagePick.studentName,
+        student_phone: packagePick.studentPhone,
+        course_title: row.course_title,
+        branch_name: row.branch_name ?? "",
+        total_lessons: row.total_lessons,
+        placeholder_start: ""
+      });
+      if (isPastDay(selectedDay) || selectedDay < bookingMinDateKey()) setSelectedDay(bookingMinDateKey());
+      setStartHour(9);
+      setStartMinute(0);
+      setDurationHours(1);
+      setScheduleSheetOpen(true);
+    },
+    [packagePick, selectedDay]
   );
 
   useEffect(() => {
@@ -498,8 +618,8 @@ export default function CoachDashboardPage() {
   const handlePickerStudent = useCallback(
     (studentId: number) => {
       setStudentPickerOpen(false);
-      void pickStudentForSchedule(studentId).then(() => {
-        setScheduleSheetOpen(true);
+      void pickStudentForSchedule(studentId).then((next) => {
+        if (next === "sheet") setScheduleSheetOpen(true);
       });
     },
     [pickStudentForSchedule]
@@ -736,7 +856,13 @@ export default function CoachDashboardPage() {
       }
       await reloadAll(coach.id);
       if (selectedStudentId === cancelDialog.studentId) await loadStudentRecords(cancelDialog.studentId);
-      setStatus(cancelDialog.scope === "session" ? "已取消這一堂；其餘課堂不變。" : "已取消整個課程。所有未來課堂已移除。");
+      setStatus(
+        cancelDialog.scope === "session"
+          ? "已取消這一堂；其餘課堂不變。"
+          : cancelDialog.pending
+            ? "已刪除待排期 package。"
+            : "已取消整個課程。所有未來課堂已移除。"
+      );
       setCancelDialog(null);
     } catch (e) {
       alertApiError(e);
@@ -820,17 +946,40 @@ export default function CoachDashboardPage() {
           </p>
           <ul className="mt-2 flex gap-2 overflow-x-auto pb-1">
             {pending.map((p) => (
-              <li key={p.enrollment_id} className="shrink-0">
+              <li
+                key={p.enrollment_id}
+                className={`flex shrink-0 items-center overflow-hidden rounded-full border transition ${
+                  selectedPending?.enrollment_id === p.enrollment_id
+                    ? "border-primary bg-primary/20"
+                    : "border-ink/15 bg-surface hover:border-primary/35"
+                }`}
+              >
                 <button
                   type="button"
                   onClick={() => handlePickerPending(p)}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                    selectedPending?.enrollment_id === p.enrollment_id
-                      ? "border-primary bg-primary/20 text-black"
-                      : "border-ink/15 bg-surface text-ink hover:border-primary/35"
+                  className={`px-3 py-1.5 text-xs font-medium ${
+                    selectedPending?.enrollment_id === p.enrollment_id ? "text-black" : "text-ink"
                   }`}
                 >
                   {p.student_name}
+                </button>
+                {/* [F003][S009] Q4 — coach may drop a 待排期 package before it is ever scheduled. */}
+                <button
+                  type="button"
+                  aria-label={`刪除 ${p.student_name} 的待排期 package`}
+                  onClick={() =>
+                    setCancelDialog({
+                      scope: "course",
+                      enrollmentId: p.enrollment_id,
+                      studentId: p.student_id,
+                      studentName: p.student_name,
+                      courseTitle: p.course_title,
+                      pending: true
+                    })
+                  }
+                  className="border-l border-ink/15 px-2 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
+                >
+                  ✕
                 </button>
               </li>
             ))}
@@ -937,6 +1086,14 @@ export default function CoachDashboardPage() {
         onPickTrial={handlePickTrial}
       />
 
+      <CoachSchedulePackagePickerSheet
+        open={packagePick != null}
+        studentName={packagePick?.studentName ?? ""}
+        packages={packagePick?.packages ?? []}
+        onClose={() => setPackagePick(null)}
+        onPick={handlePickPackage}
+      />
+
       <CoachScheduleFab onClick={handleFabClick} disabled={isPastDay(selectedDay)} />
     </div>
   );
@@ -992,15 +1149,31 @@ export default function CoachDashboardPage() {
 
   const paymentsPanel = (
     <div className="space-y-4 md:hidden">
+      <section className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-ink">付款紀錄</h2>
+        <p className="mt-1 text-xs text-ink/55">待付款及已收款項；可搜索學員或課程。</p>
+        {payments.length > 0 ? (
+          <label className="mt-3 block text-sm">
+            <span className="sr-only">搜索付款紀錄</span>
+            <input
+              type="search"
+              value={paymentSearch}
+              onChange={(e) => setPaymentSearch(e.target.value)}
+              placeholder="搜索學員姓名、電話或課程"
+              className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2.5 text-sm text-ink placeholder:text-ink/40"
+            />
+          </label>
+        ) : null}
+      </section>
       <section>
         <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/50">待跟進</h3>
-        {unpaidPayments.length === 0 ? (
+        {filteredUnpaidPayments.length === 0 ? (
           <p className="mt-2 rounded-xl border border-ink/10 bg-surface px-4 py-4 text-center text-sm text-ink/50">
-            暫無待付款／缺收據記錄。
+            {paymentSearch ? `找不到符合「${paymentSearch}」的待付款記錄。` : "暫無待付款／缺收據記錄。"}
           </p>
         ) : (
           <div className="mt-2 space-y-2">
-            {unpaidPayments.map((row) => (
+            {filteredUnpaidPayments.map((row) => (
               <article key={`unpaid-${paymentRowKey(row)}`} className="rounded-xl border border-amber-200 bg-amber-50/80 p-4 shadow-sm">
                 <div className="font-medium text-ink">{row.student_name}</div>
                 <div className="text-xs text-ink/50">{row.student_phone}</div>
@@ -1017,13 +1190,13 @@ export default function CoachDashboardPage() {
       </section>
       <section>
         <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/50">付款紀錄</h3>
-        {paidPayments.length === 0 ? (
+        {filteredPaidPayments.length === 0 ? (
           <p className="mt-2 rounded-xl border border-ink/10 bg-surface px-4 py-4 text-center text-sm text-ink/50">
-            暫無付款紀錄。
+            {paymentSearch ? `找不到符合「${paymentSearch}」的付款記錄。` : "暫無付款紀錄。"}
           </p>
         ) : (
           <div className="mt-2 space-y-2">
-            {paidPayments.map((row) => (
+            {filteredPaidPayments.map((row) => (
               <article key={`paid-${paymentRowKey(row)}`} className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
                 <div className="font-medium text-ink">{row.student_name}</div>
                 <div className="text-xs text-ink/50">{row.student_phone}</div>
@@ -1051,7 +1224,23 @@ export default function CoachDashboardPage() {
   );
 
   const paymentsPanelDesktop = (
-    <div className="hidden space-y-6 md:block">
+    <div className="hidden space-y-4 md:block">
+      <section className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-ink">付款紀錄</h2>
+        <p className="mt-1 text-xs text-ink/55">待付款及已收款項；可搜索學員或課程。</p>
+        {payments.length > 0 ? (
+          <label className="mt-3 block text-sm">
+            <span className="sr-only">搜索付款紀錄</span>
+            <input
+              type="search"
+              value={paymentSearch}
+              onChange={(e) => setPaymentSearch(e.target.value)}
+              placeholder="搜索學員姓名、電話或課程"
+              className="w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2.5 text-sm text-ink placeholder:text-ink/40"
+            />
+          </label>
+        ) : null}
+      </section>
       <section>
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink/50">待跟進</h3>
         <div className="overflow-x-auto">
@@ -1066,14 +1255,14 @@ export default function CoachDashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {unpaidPayments.length === 0 ? (
+              {filteredUnpaidPayments.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-2 py-4 text-center text-ink/50">
-                    暫無待付款／缺收據記錄。
+                    {paymentSearch ? `找不到符合「${paymentSearch}」的待付款記錄。` : "暫無待付款／缺收據記錄。"}
                   </td>
                 </tr>
               ) : (
-                unpaidPayments.map((row) => (
+                filteredUnpaidPayments.map((row) => (
                   <tr key={`unpaid-${paymentRowKey(row)}`} className="border-b border-ink/[0.06]">
                     <td className="px-2 py-2.5">
                       <div className="font-medium text-ink">{row.student_name}</div>
@@ -1106,14 +1295,14 @@ export default function CoachDashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {paidPayments.length === 0 ? (
+              {filteredPaidPayments.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-2 py-4 text-center text-ink/50">
-                    暫無付款紀錄。
+                    {paymentSearch ? `找不到符合「${paymentSearch}」的付款記錄。` : "暫無付款紀錄。"}
                   </td>
                 </tr>
               ) : (
-                paidPayments.map((row) => (
+                filteredPaidPayments.map((row) => (
                   <tr key={`paid-${paymentRowKey(row)}`} className="border-b border-ink/[0.06]">
                     <td className="px-2 py-2.5">
                       <div className="font-medium text-ink">{row.student_name}</div>
@@ -1238,6 +1427,17 @@ export default function CoachDashboardPage() {
                             <span className="text-amber-700">{p.installment_status || p.payment_status}</span>
                           ) : null}
                         </div>
+                        {(p.installment_periods?.length ?? 0) > 0 ? (
+                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-ink/55">
+                            <span className="font-medium text-ink/45">分期扣堂：</span>
+                            {p.installment_periods!.map((per) => (
+                              <span key={per.installment_no}>
+                                第{per.installment_no}期 第{per.lesson_from}–{per.lesson_to}堂
+                                {per.paid ? "（已付）" : "（未付）"}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                       </li>
                     ))}
                   </ul>
@@ -1267,6 +1467,22 @@ export default function CoachDashboardPage() {
           </div>
 
           <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-ink/50">個人資料</h4>
+            <p className="mt-2 text-xs text-ink/70">
+              出生日期：{studentRecords.date_of_birth ?? "—"}
+              <span className="mx-1.5 text-ink/30">·</span>
+              緊急聯絡：
+              {studentRecords.emergency_contact_name
+                ? `${studentRecords.emergency_contact_name}${
+                    studentRecords.emergency_contact_relationship
+                      ? `（${studentRecords.emergency_contact_relationship}）`
+                      : ""
+                  }${studentRecords.emergency_contact_phone ? ` ${studentRecords.emergency_contact_phone}` : ""}`
+                : "—"}
+            </p>
+          </div>
+
+          <div>
             <h4 className="text-xs font-semibold uppercase tracking-wide text-ink/50">課程 / 分期</h4>
             {studentRecords.enrollments.length === 0 ? (
               <p className="mt-2 text-xs text-ink/55">
@@ -1284,6 +1500,17 @@ export default function CoachDashboardPage() {
                     {" · "}
                     {enr.installment_status} ({enr.payment_status})
                   </div>
+                  {(enr.installment_periods?.length ?? 0) > 0 ? (
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-ink/55">
+                      <span className="font-medium text-ink/45">分期扣堂：</span>
+                      {enr.installment_periods!.map((per) => (
+                        <span key={per.installment_no}>
+                          第{per.installment_no}期 第{per.lesson_from}–{per.lesson_to}堂
+                          {per.paid ? "（已付）" : "（未付）"}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                   <div className="mt-2 flex flex-wrap gap-2">
                     {enr.payment_status !== "Paid" ? (
                       <button
@@ -1309,7 +1536,23 @@ export default function CoachDashboardPage() {
                     >
                       {enr.coach_time_confirmed ? "排下一堂" : "排程 0.5–2h"}
                     </button>
-                    {/* [F003][S009] Whole-course cancel is Admin/Master only — hidden for coach portal. */}
+                    {/* [F003][S009] Q4.1 — coach may delete a package from their roster. */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCancelDialog({
+                          scope: "course",
+                          enrollmentId: enr.enrollment_id,
+                          studentId: studentRecords.student_id,
+                          studentName: studentRecords.full_name,
+                          courseTitle: enr.course_title,
+                          pending: !enr.coach_time_confirmed
+                        })
+                      }
+                      className="min-h-11 rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs font-medium text-red-800 hover:bg-red-100"
+                    >
+                      刪除 package
+                    </button>
                   </div>
                   {bookingEnrollmentId === enr.enrollment_id ? (
                     <div className="mt-3 space-y-3 border-t border-ink/10 pt-3">
@@ -1354,6 +1597,31 @@ export default function CoachDashboardPage() {
                 </li>
               ))}
             </ul>
+          </div>
+
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-ink/50">收據／上傳檔案</h4>
+            {(studentRecords.receipts ?? []).length === 0 ? (
+              <p className="mt-2 text-xs text-ink/45">暫無上傳檔案。</p>
+            ) : (
+              <ul className="mt-2 grid gap-3 sm:grid-cols-2">
+                {(studentRecords.receipts ?? []).map((r) => {
+                  const abs = apiAssetUrl(r.file_url) ?? "#";
+                  return (
+                    <li key={r.id} className="rounded-lg border border-ink/10 bg-canvas p-3 text-xs">
+                      <div className="font-medium text-ink">
+                        {r.source} · {r.payment_method ?? "付款方式未填"}
+                      </div>
+                      <div className="mt-0.5 text-ink/55 tabular-nums">
+                        {r.amount != null ? `HKD ${r.amount}` : "金額 —"} · {formatHktDateTime(r.created_at)}
+                      </div>
+                      {r.note ? <p className="mt-1 text-ink/60">{r.note}</p> : null}
+                      <CoachReceiptPreview fileUrl={abs} label={`receipt-${r.id}`} />
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
 
           <div>
@@ -1440,6 +1708,7 @@ export default function CoachDashboardPage() {
         studentName={cancelDialog?.studentName ?? ""}
         courseTitle={cancelDialog?.courseTitle ?? ""}
         sessionLabel={cancelDialog?.sessionLabel}
+        pending={cancelDialog?.pending}
         busy={cancelBusy != null}
         onClose={() => setCancelDialog(null)}
         onConfirm={() => void confirmCancellation()}
