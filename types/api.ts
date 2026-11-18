@@ -187,6 +187,13 @@ export type CoachStudentRecordDto = {
     next_reminder_lesson?: number | null;
     installment_periods?: CoachInstallmentPeriodDto[];
   }[];
+  category_enrollments?: {
+    id: number;
+    category_name: string;
+    total_lessons: number;
+    lessons_already_taken: number;
+    remaining_from_paper: number;
+  }[];
   checkins: { id: number; channel: string; remarks: string | null; created_at: string }[];
   attendance: {
     id: number;
@@ -270,6 +277,8 @@ export type CategoryEnrollmentRow = {
   category_name: string;
   status: string;
   total_lessons: number;
+  lessons_already_taken?: number;
+  remaining_from_paper?: number;
   started_at: string;
   installment_plans?: InstallmentPlanRow[];
 };

@@ -78,6 +78,28 @@ test("login page has no credential help panel", async ({ page }) => {
   await expect(page.getByRole("button", { name: "如何登入？" })).toHaveCount(0);
 });
 
+/** [F002][S003] Paper imports are labelled separately from the student's current overall balance. */
+test("admin sees imported category package progress", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("zomate_auth_session", JSON.stringify({
+    token: "offline-category-fixture", username: "fixture-admin", role: "ADMIN"
+  })));
+  await page.route("**/api/**", route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/auth/me") return route.fulfill({ json: { username: "fixture-admin", role: "ADMIN" } });
+    if (path === "/api/members/by-id/404/full") return route.fulfill({ json: {
+      profile: { id: 404, full_name: "Category QA Fixture", hkid: "QA404", phone: "90000000", lesson_balance: 20 },
+      packages: [], course_checkin_pins: [], receipts: [], activity_log: [],
+      category_enrollments: [{ id: 501, category_name: "Paper Package", status: "active", total_lessons: 30,
+        lessons_already_taken: 17, remaining_from_paper: 13, started_at: "2026-10-23", installment_plans: [] }]
+    } });
+    return route.fulfill({ json: [] });
+  });
+  await page.goto("/admin/students/404");
+  await page.getByRole("button", { name: "課程記錄" }).click();
+  await expect(page.getByText("已上（紙本）17 堂 · 剩（按紙本）13 堂")).toBeVisible();
+  await expect(page.getByText("未包括其他簽到或扣堂", { exact: false })).toBeVisible();
+});
+
 /** [F008][S005] Collapsing the agenda never hides the calendar or changes lesson actions. */
 test("coach sees expandable sessions before calendar", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-10-23T00:00:00Z"));
@@ -112,4 +134,134 @@ test("coach sees expandable sessions before calendar", async ({ page }) => {
   await summary.focus();
   await summary.press("Enter");
   await expect(agenda.getByRole("button", { name: "取消今堂", exact: true })).toBeVisible();
+});
+
+/** [F003][S005] The long roster opens isolated, race-safe student details in the viewport. */
+test("coach student details stay accessible with a long roster", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-10-23T00:00:00Z"));
+  await page.addInitScript(() => localStorage.setItem("zomate_auth_session", JSON.stringify({
+    token: "offline-student-fixture", username: "fixture-coach", role: "COACH"
+  })));
+  const students = Array.from({ length: 100 }, (_, index) => {
+    const id = index + 1;
+    return {
+      student_id: id, full_name: `Student ${String(id).padStart(3, "0")}`, phone: `90000${String(id).padStart(3, "0")}`,
+      lesson_balance: 7, enrollment_count: 1, pending_schedule: false,
+      packages: [{ enrollment_id: id + 1000, course_title: `Package ${id}`, branch_name: "QA Branch", branch_code: "QA",
+        total_lessons: 10, used_lessons: 3, remaining_lessons: 7, coach_time_confirmed: true, payment_status: "Paid" }]
+    };
+  });
+  let releaseSlow!: () => void;
+  const slowResponse = new Promise<void>(resolve => { releaseSlow = resolve; });
+  let slowStarted!: () => void;
+  const slowRequest = new Promise<void>(resolve => { slowStarted = resolve; });
+  let slowFinished!: () => void;
+  const slowFinishedRequest = new Promise<void>(resolve => { slowFinished = resolve; });
+  let firstSlow = true;
+  let failures = 0;
+  let bookings = 0;
+  let bookingConflicts = 0;
+  let reschedules = 0;
+  await page.route("**/*", async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname;
+    if (!path.startsWith("/api/")) {
+      if (url.hostname === "127.0.0.1" || url.hostname === "localhost") return route.continue();
+      return route.abort();
+    }
+    if (path === "/api/coach/me") return route.fulfill({ json: { id: 7, full_name: "Coach Fixture", phone: "90000000", branch_name: null } });
+    if (path === "/api/auth/me") return route.fulfill({ json: { username: "fixture-coach", role: "COACH" } });
+    if (path === "/api/coach/students") return route.fulfill({ json: students });
+    if (path === "/api/coach/sessions") return route.fulfill({ json: [{
+      enrollment_id: 1001, student_id: 1, student_name: "Student 001", student_phone: "90000001",
+      category_id: 1, category_name: "Yoga", session_date: "2026-10-23", start_time: "09:00", end_time: "10:00",
+      branch_name: "QA", checkin_pin: "00000", coach_time_confirmed: true, attendance_status: "未簽到", course_title: "Package 1"
+    }] });
+    if (path === "/api/coach/bookings" && request.method() === "POST") {
+      if (bookingConflicts++ < 3) return route.fulfill({ status: 409, json: { detail: "conflict" } });
+      bookings++;
+      return route.fulfill({ json: { ok: true } });
+    }
+    if (path.includes("/reschedule") && request.method() === "PATCH") {
+      reschedules++;
+      return route.fulfill({ json: { ok: true } });
+    }
+    const match = path.match(/^\/api\/coach\/students\/(\d+)$/);
+    if (match) {
+      const id = Number(match[1]);
+      if (id === 1 && firstSlow) {
+        firstSlow = false;
+        slowStarted();
+        await slowResponse;
+      }
+      if (id === 3 && failures++ < 3) return route.fulfill({ status: 400, json: { detail: "Offline fixture failure" } });
+      await route.fulfill({ json: {
+        student_id: id, full_name: students[id - 1].full_name, phone: students[id - 1].phone, lesson_balance: 7,
+        date_of_birth: "2000-01-01", emergency_contact_name: `Contact ${id}`,
+        enrollments: [{ enrollment_id: id + 1000, course_title: `Package ${id}`, scheduled_start: "2026-10-23T09:00:00",
+          scheduled_end: "2026-10-23T10:00:00", total_lessons: 10, coach_time_confirmed: true, payment_status: "Paid", installment_status: "Paid" }],
+        category_enrollments: [{ id: 501, category_name: "Paper Package", total_lessons: 30, lessons_already_taken: 17, remaining_from_paper: 13 }],
+        receipts: [], attendance: [], checkins: []
+      } });
+      if (id === 1) slowFinished();
+      return;
+    }
+    if (request.method() !== "GET") return route.fulfill({ status: 400, json: { detail: "Unexpected fixture write" } });
+    return route.fulfill({ json: [] });
+  });
+  await page.goto("/coach-portal?tab=students");
+  const first = page.getByRole("button", { name: /Student 001/ });
+  const second = page.getByRole("button", { name: /Student 002/ });
+  await expect(page.getByRole("button", { name: /Student 100/ })).toBeAttached();
+  const scrollBefore = await page.evaluate(() => window.scrollY);
+  await first.click();
+  await slowRequest;
+  expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
+  const dialog = page.getByRole("dialog", { name: "學員詳情 · Student 001" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("status")).toHaveText("載入學員記錄…");
+  await expect(dialog.getByLabel("Package 進度")).toContainText("已上 3 堂");
+  await expect(dialog.getByLabel("Package 進度")).toContainText("剩 7 堂");
+  const closeButton = dialog.getByRole("button", { name: "關閉學員詳情" });
+  await expect(closeButton).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(closeButton).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(first).toBeFocused();
+  await second.click();
+  const secondDialog = page.getByRole("dialog", { name: "學員詳情 · Student 002" });
+  await expect(secondDialog.getByText("Contact 2", { exact: false })).toBeVisible();
+  releaseSlow();
+  await slowFinishedRequest;
+  await expect(secondDialog).toContainText("Contact 2");
+  await expect(secondDialog).not.toContainText("Contact 1");
+  await secondDialog.getByRole("button", { name: "關閉學員詳情" }).click();
+  await first.click();
+  const firstDialog = page.getByRole("dialog", { name: "學員詳情 · Student 001" });
+  await expect(firstDialog.getByText("Contact 1", { exact: false })).toBeVisible();
+  await expect(firstDialog.getByText("Paper Package · 總 30 堂")).toBeVisible();
+  await expect(firstDialog.getByText("已上（紙本）17 堂 · 剩（按紙本）13 堂")).toBeVisible();
+  await expect(firstDialog.getByText("未包括其他簽到或扣堂", { exact: false })).toBeVisible();
+  await expect(firstDialog.getByText("舊帳面暫未支援直接排程，請勿重複報 Course。", { exact: true })).toBeVisible();
+  await firstDialog.getByRole("button", { name: "排下一堂" }).click();
+  await firstDialog.getByRole("button", { name: "確認", exact: true }).click();
+  await expect(firstDialog.getByRole("alert")).toHaveText("此時段已被佔用，請另選時間。");
+  await firstDialog.getByRole("button", { name: "確認", exact: true }).click();
+  await expect(firstDialog).toBeHidden();
+  await expect(page).toHaveURL(/tab=schedule/);
+  expect(bookings).toBe(1);
+  await page.locator("details").getByRole("button", { name: "改期", exact: true }).click();
+  await expect(firstDialog.getByText("Contact 1", { exact: false })).toBeVisible();
+  await expect(firstDialog.getByRole("button", { name: "確認", exact: true })).toBeVisible();
+  await firstDialog.getByRole("button", { name: "確認", exact: true }).click();
+  await expect(firstDialog).toBeHidden();
+  expect(reschedules).toBe(1);
+  await page.goto("/coach-portal?tab=students");
+  await page.getByRole("button", { name: /Student 003/ }).click();
+  const thirdDialog = page.getByRole("dialog", { name: "學員詳情 · Student 003" });
+  await expect(thirdDialog.getByRole("alert")).toContainText("未能載入學員記錄");
+  await thirdDialog.getByRole("button", { name: "重試" }).click();
+  await expect(thirdDialog.getByText("Contact 3", { exact: false })).toBeVisible();
 });

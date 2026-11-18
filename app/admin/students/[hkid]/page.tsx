@@ -1546,6 +1546,15 @@ function CategoryEnrollmentCard({
       <p className="mt-1 text-xs text-ink/60">
         總堂 {row.total_lessons} · 開始 {row.started_at}
       </p>
+      {/* [F002][S003] Category imports do not include unallocated check-ins. */}
+      {row.lessons_already_taken != null && row.remaining_from_paper != null ? (
+        <>
+          <p className="mt-1 text-xs font-medium text-ink/75">
+            已上（紙本）{row.lessons_already_taken} 堂 · 剩（按紙本）{row.remaining_from_paper} 堂
+          </p>
+          <p className="mt-1 text-xs text-ink/55">未包括其他簽到或扣堂；最新可扣堂餘額見上方。</p>
+        </>
+      ) : null}
       {plans.length === 0 ? (
         <p className="mt-2 text-xs text-ink/50">未有分期計劃</p>
       ) : (

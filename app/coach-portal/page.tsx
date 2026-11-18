@@ -9,7 +9,8 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import CoachBottomSheet from "../../components/coach-bottom-sheet";
 import CoachScheduleCalendarNav, { type CalendarMode } from "../../components/coach-schedule-calendar-nav";
 import CoachScheduleBottomSheet from "../../components/coach-schedule-bottom-sheet";
 import CoachScheduleDayAgenda from "../../components/coach-schedule-day-agenda";
@@ -205,6 +206,12 @@ export default function CoachDashboardPage() {
   const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
   const [studentRecords, setStudentRecords] = useState<CoachStudentRecordDto | null>(null);
   const [recordsLoading, setRecordsLoading] = useState(false);
+  const [recordsError, setRecordsError] = useState("");
+  const selectedStudentRef = useRef<number | null>(null);
+  const studentSelectionRef = useRef(0);
+  const recordsRequestRef = useRef(0);
+  const studentSheetRef = useRef<HTMLDivElement>(null);
+  const studentTriggerRef = useRef<HTMLElement | null>(null);
   const [receiptUploadBusyKey, setReceiptUploadBusyKey] = useState<string | null>(null);
   const [bookingEnrollmentId, setBookingEnrollmentId] = useState<number | null>(null);
   const [bookingOriginalDate, setBookingOriginalDate] = useState<string | null>(null);
@@ -712,31 +719,79 @@ export default function CoachDashboardPage() {
     }
   }
 
-  async function loadStudentRecords(studentId: number) {
-    if (!coach) return;
-    // [F003][S005] Click name again to collapse packages / detail.
-    if (selectedStudentId === studentId) {
-      setSelectedStudentId(null);
+  /** [F003][S005] Open immediately; ignore responses from closed or superseded requests. */
+  async function loadStudentRecords(studentId: number, refresh = false) {
+    if (!coach || (refresh && selectedStudentRef.current !== studentId)) return;
+    const requestId = ++recordsRequestRef.current;
+    if (!refresh) {
+      studentSelectionRef.current++;
+      if (selectedStudentRef.current === null && document.activeElement instanceof HTMLElement) {
+        studentTriggerRef.current = document.activeElement;
+      }
+      selectedStudentRef.current = studentId;
+      setSelectedStudentId(studentId);
       setStudentRecords(null);
       setBookingEnrollmentId(null);
       setBookingOriginalDate(null);
-      return;
     }
-    setSelectedStudentId(studentId);
     setRecordsLoading(true);
-    setStudentRecords(null);
-    setBookingEnrollmentId(null);
-    setBookingOriginalDate(null);
+    setRecordsError("");
     try {
       const rec = (await api.coachStudentRecords(studentId, coach.id)) as CoachStudentRecordDto;
-      setStudentRecords(rec);
+      if (recordsRequestRef.current === requestId) setStudentRecords(rec);
     } catch (e) {
-      alertApiError(e);
-      setStatus(String(e));
+      if (recordsRequestRef.current === requestId) setRecordsError(formatApiError(e, { context: "general" }));
     } finally {
-      setRecordsLoading(false);
+      if (recordsRequestRef.current === requestId) setRecordsLoading(false);
     }
   }
+
+  /** [F003][S005] Closing invalidates in-flight loads and restores the invoking control. */
+  function closeStudentRecords() {
+    recordsRequestRef.current++;
+    studentSelectionRef.current++;
+    selectedStudentRef.current = null;
+    setSelectedStudentId(null);
+    setStudentRecords(null);
+    setRecordsLoading(false);
+    setRecordsError("");
+    setBookingEnrollmentId(null);
+    setBookingOriginalDate(null);
+    const trigger = studentTriggerRef.current;
+    studentTriggerRef.current = null;
+    requestAnimationFrame(() => {
+      if (selectedStudentRef.current === null) trigger?.focus();
+    });
+  }
+
+  /** [F003][S005] Keep keyboard focus within the sheet, unless a confirmation dialog is above it. */
+  useEffect(() => {
+    if (selectedStudentId === null || tab !== "students" || cancelDialog) return;
+    const sheet = studentSheetRef.current;
+    sheet?.querySelector<HTMLButtonElement>("button")?.focus();
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeStudentRecords();
+      } else if (event.key === "Tab" && sheet) {
+        const controls = Array.from(sheet.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ));
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (!first || !last) return;
+        if (event.shiftKey && (document.activeElement === first || !sheet.contains(document.activeElement))) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && (document.activeElement === last || !sheet.contains(document.activeElement))) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [selectedStudentId, tab, cancelDialog]);
 
   /** [F004][S002] Coach uploads a specific installment receipt (第2／第3期…) from payments tab. */
   async function uploadInstallmentReceipt(row: PaymentRow, installmentNo: number, file: File) {
@@ -766,8 +821,9 @@ export default function CoachDashboardPage() {
   }
 
   async function openStudentReschedule(session: CoachSessionRow) {
+    setStatus("");
     router.push("/coach-portal?tab=students");
-    await loadStudentRecords(session.student_id);
+    void loadStudentRecords(session.student_id);
     setBookingEnrollmentId(session.enrollment_id);
     setBookingOriginalDate(session.original_session_date ?? session.session_date);
     setBookDay(session.session_date);
@@ -785,6 +841,7 @@ export default function CoachDashboardPage() {
       setStatus("不能排期到過去日期，請選今日或未來。");
       return;
     }
+    const selectionId = studentSelectionRef.current;
     setBookBusy(true);
     setStatus("");
     if (slotWouldConflict([], startSlotDecimal(bookStartHour, bookStartMinute), bookDuration)) {
@@ -816,7 +873,8 @@ export default function CoachDashboardPage() {
         });
       }
       await reloadAll(coach.id);
-      if (selectedStudentId) await loadStudentRecords(selectedStudentId);
+      if (studentSelectionRef.current !== selectionId || selectedStudentRef.current !== selectedStudentId || selectedStudentId === null) return;
+      closeStudentRecords();
       setBookingEnrollmentId(null);
       setBookingOriginalDate(null);
       setStatus(confirmed ? "已改這一堂；其餘課堂不變。" : "已排程。");
@@ -855,7 +913,7 @@ export default function CoachDashboardPage() {
         setBookingOriginalDate(null);
       }
       await reloadAll(coach.id);
-      if (selectedStudentId === cancelDialog.studentId) await loadStudentRecords(cancelDialog.studentId);
+      if (selectedStudentRef.current === cancelDialog.studentId) await loadStudentRecords(cancelDialog.studentId, true);
       setStatus(
         cancelDialog.scope === "session"
           ? "已取消這一堂；其餘課堂不變。"
@@ -1290,6 +1348,8 @@ export default function CoachDashboardPage() {
     </div>
   );
 
+  const selectedStudent = students.find((student) => student.student_id === selectedStudentId);
+
   const studentsPanel = (
     <div className="space-y-4">
       <section className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
@@ -1346,66 +1406,61 @@ export default function CoachDashboardPage() {
                     {s.pending_schedule ? " · 待排程" : ""}
                   </div>
                 </button>
-                {selectedStudentId === s.student_id && s.packages && s.packages.length > 0 ? (
-                  <ul className="divide-y divide-ink/[0.06] border-t border-ink/[0.08] bg-surface/70">
-                    {s.packages.map((p) => (
-                      <li key={p.enrollment_id} className="px-3 py-2 text-xs">
-                        <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-                          <span className="font-medium text-ink">
-                            {p.branch_code ? (
-                              <span className="mr-1.5 rounded bg-ink/8 px-1 py-0.5 text-[10px] font-semibold uppercase text-ink/70">
-                                {p.branch_code}
-                              </span>
-                            ) : null}
-                            {p.course_title}
-                          </span>
-                          <span className="text-ink/60">{p.branch_name ?? "—"}</span>
-                        </div>
-                        <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 tabular-nums text-ink/60">
-                          <span>總 {p.total_lessons} 堂</span>
-                          <span>已上 {p.used_lessons} 堂</span>
-                          <span
-                            className={
-                              p.remaining_lessons > 0
-                                ? "font-medium text-emerald-700"
-                                : "text-ink/45"
-                            }
-                          >
-                            剩 {p.remaining_lessons} 堂
-                          </span>
-                          {!p.coach_time_confirmed ? (
-                            <span className="font-medium text-amber-700">待排程</span>
-                          ) : null}
-                          {p.payment_status && p.payment_status !== "Paid" ? (
-                            <span className="text-amber-700">{p.installment_status || p.payment_status}</span>
-                          ) : null}
-                        </div>
-                        {(p.installment_periods?.length ?? 0) > 0 ? (
-                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-ink/55">
-                            <span className="font-medium text-ink/45">分期扣堂：</span>
-                            {p.installment_periods!.map((per) => (
-                              <span key={per.installment_no}>
-                                第{per.installment_no}期 第{per.lesson_from}–{per.lesson_to}堂
-                                {per.paid ? "（已付）" : "（未付）"}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
               </li>
             ))}
           </ul>
         )}
       </section>
 
-      {recordsLoading ? (
-        <p className="text-sm text-ink/50">載入學員記錄…</p>
-      ) : null}
-
-      {studentRecords ? (
+      {/* [F003][S005] Student details remain at the current viewport position on long rosters. */}
+      <CoachBottomSheet open={selectedStudentId !== null} onClose={closeStudentRecords} ariaLabelledBy="coach-student-details-title" heightClass="h-[85dvh] max-h-[85dvh]">
+        <div ref={studentSheetRef} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-ink/10 px-4 pb-3">
+            <h2 id="coach-student-details-title" className="text-sm font-semibold text-ink">
+              學員詳情{selectedStudent ? ` · ${selectedStudent.full_name}` : studentRecords ? ` · ${studentRecords.full_name}` : ""}
+            </h2>
+            <button type="button" onClick={closeStudentRecords} aria-label="關閉學員詳情" className="rounded-lg border border-ink/15 px-3 py-2 text-xs font-medium text-ink hover:bg-ink/5">關閉</button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            {selectedStudent?.packages?.length ? (
+              <section className="mb-4" aria-label="Package 進度">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/50">Package 進度</h3>
+                <ul className="mt-2 divide-y divide-ink/[0.06] rounded-lg border border-ink/10 bg-canvas">
+                  {selectedStudent.packages.map((p) => (
+                    <li key={p.enrollment_id} className="px-3 py-2 text-xs">
+                      <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+                        <span className="font-medium text-ink">
+                          {p.branch_code ? <span className="mr-1.5 rounded bg-ink/8 px-1 py-0.5 text-[10px] font-semibold uppercase text-ink/70">{p.branch_code}</span> : null}
+                          {p.course_title}
+                        </span>
+                        <span className="text-ink/60">{p.branch_name ?? "—"}</span>
+                      </div>
+                      <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 tabular-nums text-ink/60">
+                        <span>總 {p.total_lessons} 堂</span>
+                        <span>已上 {p.used_lessons} 堂</span>
+                        <span className={p.remaining_lessons > 0 ? "font-medium text-emerald-700" : "text-ink/45"}>剩 {p.remaining_lessons} 堂</span>
+                        {!p.coach_time_confirmed ? <span className="font-medium text-amber-700">待排程</span> : null}
+                        {p.payment_status && p.payment_status !== "Paid" ? <span className="text-amber-700">{p.installment_status || p.payment_status}</span> : null}
+                      </div>
+                      {(p.installment_periods?.length ?? 0) > 0 ? (
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-ink/55">
+                          <span className="font-medium text-ink/45">分期扣堂：</span>
+                          {p.installment_periods!.map((per) => <span key={per.installment_no}>第{per.installment_no}期 第{per.lesson_from}–{per.lesson_to}堂{per.paid ? "（已付）" : "（未付）"}</span>)}
+                        </div>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            {recordsLoading ? <p role="status" className="mb-4 text-sm text-ink/50">載入學員記錄…</p> : null}
+            {recordsError ? (
+              <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                <p>未能載入學員記錄：{recordsError}</p>
+                <button type="button" onClick={() => selectedStudentId !== null && void loadStudentRecords(selectedStudentId, true)} className="mt-2 underline">重試</button>
+              </div>
+            ) : null}
+            {studentRecords ? (
         <section className="space-y-4 rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <h3 className="text-sm font-semibold text-ink">
@@ -1435,11 +1490,30 @@ export default function CoachDashboardPage() {
             </p>
           </div>
 
+          {/* [F003][S005] Category ledger imports are separate from scheduled courses. */}
+          {(studentRecords.category_enrollments?.length ?? 0) > 0 ? (
+            <div>
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-ink/50">種類帳面</h4>
+              <ul className="mt-2 space-y-2">
+                {studentRecords.category_enrollments!.map((row) => (
+                  <li key={row.id} className="rounded-lg border border-ink/10 bg-canvas p-3 text-xs text-ink/70">
+                    <p className="font-medium text-ink">{row.category_name} · 總 {row.total_lessons} 堂</p>
+                    <p className="mt-1">已上（紙本）{row.lessons_already_taken} 堂 · 剩（按紙本）{row.remaining_from_paper} 堂</p>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-xs text-ink/55">未包括其他簽到或扣堂；最新可扣堂餘額見上方。</p>
+              <p className="mt-1 text-xs text-amber-800">舊帳面暫未支援直接排程，請勿重複報 Course。</p>
+            </div>
+          ) : null}
+
           <div>
             <h4 className="text-xs font-semibold uppercase tracking-wide text-ink/50">課程 / 分期</h4>
             {studentRecords.enrollments.length === 0 ? (
               <p className="mt-2 text-xs text-ink/55">
-                尚未報 Course。按上方「報 Course · 填堂數／付款」選擇 package、堂數與付款方式。
+                {(studentRecords.category_enrollments?.length ?? 0) > 0
+                  ? "暫無可排程的 Course。"
+                  : "尚未報 Course。按上方「報 Course · 填堂數／付款」選擇 package、堂數與付款方式。"}
               </p>
             ) : null}
             <ul className="mt-2 space-y-3">
@@ -1478,6 +1552,7 @@ export default function CoachDashboardPage() {
                     <button
                       type="button"
                       onClick={() => {
+                        setStatus("");
                         setBookingEnrollmentId(enr.enrollment_id);
                         setBookingOriginalDate(null);
                         setBookDay(bookingMinDateKey());
@@ -1534,6 +1609,7 @@ export default function CoachDashboardPage() {
                         occupiedRanges={[]}
                         onChange={setBookDuration}
                       />
+                      {status ? <p role="alert" className="text-xs text-red-700">{status}</p> : null}
                       <button
                         type="button"
                         disabled={
@@ -1599,7 +1675,10 @@ export default function CoachDashboardPage() {
             )}
           </div>
         </section>
-      ) : null}
+            ) : null}
+          </div>
+        </div>
+      </CoachBottomSheet>
     </div>
   );
 
