@@ -34,7 +34,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("12345678");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showLoginHelp, setShowLoginHelp] = useState(false);
 
   async function onSubmit(ev: FormEvent<HTMLFormElement>) {
     ev.preventDefault();
@@ -71,13 +70,6 @@ export default function LoginPage() {
       <div className="flex flex-1 items-center justify-center p-6">
       <form onSubmit={onSubmit} className="w-full max-w-md space-y-4 rounded-lg border border-slate-200 bg-white p-6 shadow">
         <h1 className="text-2xl font-bold text-black">後台登入</h1>
-        <button
-          type="button"
-          onClick={() => setShowLoginHelp(true)}
-          className="btn-primary text-sm font-medium text-black underline-offset-2 hover:underline"
-        >
-          如何登入？
-        </button>
         <div className="space-y-2">
           <label className="text-sm text-black">
             帳號
@@ -106,68 +98,6 @@ export default function LoginPage() {
           {loading ? "登入中..." : "登入"}
         </button>
       </form>
-      {showLoginHelp ? (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 p-4"
-          role="presentation"
-          onClick={() => setShowLoginHelp(false)}
-        >
-          <div
-            className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 shadow-lg"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="login-help-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <h2 id="login-help-title" className="text-lg font-semibold text-black">
-                如何登入？
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowLoginHelp(false)}
-                className="rounded px-2 py-1 text-slate-500 hover:bg-slate-100 hover:text-black"
-                aria-label="關閉"
-              >
-                ✕
-              </button>
-            </div>
-            <ul className="mt-4 space-y-2 text-sm text-black">
-              <li>
-                <strong>masterzoe</strong> / 12345678（Master admin）
-              </li>
-              <li>
-                <strong>masterfung</strong> / 12345678（Master admin）
-              </li>
-              <li>
-                <strong>worker</strong> / 12347890（CLERK · 櫃台）
-              </li>
-              {/* [F006][S002] User-requested Fung coach demo login help. */}
-              <li>
-                <strong>funglo</strong> / 60552936（COACH · Fung 教練）
-              </li>
-              {/* [F006][S002] Alice coach demo credentials supplied explicitly by the owner. */}
-              <li>
-                <strong>alice001</strong> / alice001（COACH · Alice 教練）
-              </li>
-              <li>
-                <strong>coachdemo</strong> / 12347890（COACH · 教練日程）
-              </li>
-            </ul>
-            <p className="mt-3 text-xs text-slate-600">
-              Master admin 可於「系統帳號 · Access Rights」新增帳號、重設密碼、停用帳號。
-            </p>
-            <p className="mt-4 text-xs font-medium text-amber-800">（切勿公開，只限 DEMO）</p>
-            <button
-              type="button"
-              onClick={() => setShowLoginHelp(false)}
-              className="mt-4 w-full rounded-lg border border-slate-300 bg-slate-50 py-2 text-sm font-medium text-black hover:bg-slate-100"
-            >
-              關閉
-            </button>
-          </div>
-        </div>
-      ) : null}
       </div>
       <BuildFooter className="pb-4" />
     </main>

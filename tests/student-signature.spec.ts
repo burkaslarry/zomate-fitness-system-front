@@ -70,13 +70,12 @@ test("student can clear, retry a failed save and reload a persisted signature", 
   await expect(canvas).toHaveCount(0);
 });
 
-/** [F006][S002] User-requested coach account is discoverable in login help. */
-test("login help includes Fung and Alice coaches", async ({ page }) => {
+/** [F006][S002] Login page no longer exposes the demo credential panel. */
+test("login page has no credential help panel", async ({ page }) => {
   await page.route("**/api/**", route => route.fulfill({ json: { status: "ok" } }));
   await page.goto("/login");
-  await page.getByRole("button", { name: "如何登入？", exact: true }).click();
-  await expect(page.getByRole("dialog")).toContainText("funglo / 60552936（COACH · Fung 教練）");
-  await expect(page.getByRole("dialog")).toContainText("alice001 / alice001（COACH · Alice 教練）");
+  await expect(page.getByRole("heading", { name: "後台登入" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "如何登入？" })).toHaveCount(0);
 });
 
 /** [F008][S005] Collapsing the agenda never hides the calendar or changes lesson actions. */
