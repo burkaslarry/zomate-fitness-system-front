@@ -148,6 +148,8 @@ export default function AdminStudentDetailPage() {
   const [noUploadBusy, setNoUploadBusy] = useState<string | null>(null);
   /** [F004][S002] Newly confirmed period PIN surfaced right after Admin 確認付款. */
   const [confirmedPin, setConfirmedPin] = useState<{ label: string; pin: string } | null>(null);
+  /** [F004][S002] Visible Y/N — removed packages stay readable so their payment records never disappear. */
+  const [showDeletedPackages, setShowDeletedPackages] = useState(false);
   const [receiptModalOpen, setReceiptModalOpen] = useState(false);
   const [receiptUploadSuccess, setReceiptUploadSuccess] = useState<{
     isInstallment: boolean;
@@ -279,8 +281,11 @@ export default function AdminStudentDetailPage() {
   }
 
   const reload = useCallback(() => {
-    void api.memberFullById(studentId).then((row) => setData(row as MemberFull)).catch(alertApiError);
-  }, [studentId]);
+    void api
+      .memberFullById(studentId, { includeDeleted: showDeletedPackages })
+      .then((row) => setData(row as MemberFull))
+      .catch(alertApiError);
+  }, [studentId, showDeletedPackages]);
 
   useEffect(() => {
     reload();
@@ -1005,6 +1010,18 @@ export default function AdminStudentDetailPage() {
 
               <div>
                 <h3 className="mb-2 text-sm font-semibold text-ink">已開課程（有時間表）</h3>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-ink">已開課程（有時間表）</h3>
+                  <label className="inline-flex items-center gap-1.5 text-xs text-ink/60" title="已移除嘅 package 仍可查看 PIN 及付款紀錄">
+                    <input
+                      type="checkbox"
+                      className="rounded border-ink/20"
+                      checked={showDeletedPackages}
+                      onChange={(event) => setShowDeletedPackages(event.target.checked)}
+                    />
+                    顯示已移除（Visible Y／N）
+                  </label>
+                </div>
                 {pins.length === 0 ? (
                   <p className="text-sm text-ink/55">
                     尚未經「Course 套餐開課」加入任何課程。種類入帳唔會自動出現喺度。
@@ -1014,11 +1031,29 @@ export default function AdminStudentDetailPage() {
                     {pins.map((p) => (
                       <li
                         key={`${p.course_id}-${p.checkin_pin}`}
-                        className="rounded-lg border border-ink/10 bg-canvas px-4 py-3 text-sm"
+                        className={`rounded-lg border px-4 py-3 text-sm ${
+                          p.deleted
+                            ? "border-dashed border-ink/25 bg-ink/[0.03] text-ink/60"
+                            : "border-ink/10 bg-canvas"
+                        }`}
                       >
-                        <div className="font-medium text-ink">{p.course_title}</div>
+                        <div className="flex flex-wrap items-center gap-2 font-medium text-ink">
+                          {p.course_title}
+                          {p.deleted ? (
+                            <span className="rounded-full border border-ink/20 bg-ink/5 px-2 py-0.5 text-[11px] font-medium text-ink/60">
+                              已移除 · 只讀
+                            </span>
+                          ) : null}
+                        </div>
                         <div className="mt-1 text-xs text-ink/65">
                           {p.branch_name} · 教練 {p.coach_name ?? "—"}
+                        </div>
+                        {/* [F004][S002] Package card shows progress at a glance: 已上 X · 剩 Y. */}
+                        <div className="mt-1 text-xs font-medium text-ink/75">
+                          已上 {p.lessons_attended ?? 0} 堂
+                          {p.total_lessons != null
+                            ? ` · 剩 ${Math.max(0, (Number(p.total_lessons) || 0) - (p.lessons_attended ?? 0))} 堂`
+                            : ""}
                         </div>
                         <div className="mt-1 text-xs text-ink/55">
                           首課（基準）{p.scheduled_start ? fmtDateTime(p.scheduled_start) : "—"}
@@ -1038,8 +1073,17 @@ export default function AdminStudentDetailPage() {
                             const canConfirm = noUpload || segment.has_pending_payment !== false;
                             return (
                               <li key={segment.installment_no} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                                <span>第 {segment.installment_no} 期 PIN：{segment.pin || "待確認付款後發出"} · {segment.paid ? "已確認付款" : segment.installment_no === 1 ? "付款待確認（首期可先上堂）" : "付款待確認"}</span>
-                                {isAdmin && !segment.paid ? (
+                                <span>
+                                  第 {segment.installment_no} 期 PIN：{segment.pin || "待確認付款後發出"} ·{" "}
+                                  {segment.paid
+                                    ? "已確認付款"
+                                    : noUpload
+                                      ? "已上傳（唔需要文件）· 待 Admin 確認付款"
+                                      : segment.installment_no === 1
+                                        ? "付款待確認（首期可先上堂）"
+                                        : "付款待確認"}
+                                </span>
+                                {isAdmin && !p.deleted && !segment.paid ? (
                                   <>
                                     {isRealSegment ? (
                                       <label
@@ -1076,7 +1120,7 @@ export default function AdminStudentDetailPage() {
                             );
                           })}
                         </ul>
-                        {isAdmin ? (
+                        {isAdmin && !p.deleted ? (
                           <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-ink/10 pt-3">
                             <label className="text-xs text-ink/55">
                               轉教練（Admin）

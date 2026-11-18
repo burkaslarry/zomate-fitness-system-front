@@ -67,11 +67,14 @@ export type CourseCheckinPinRow = {
   scheduled_start?: string;
   series_end_date?: string | null;
   checkin_pin: string;
+  total_lessons?: number;
   installment_segments?: InstallmentSegmentPinDto[];
   /** [F004][S002] Periods ticked 「唔需要上傳文件」 by Admin. */
   no_upload_installment_nos?: number[];
   /** [F004][S002] Total check-ins — gates the no-upload tick per period (lessons attended). */
   lessons_attended?: number;
+  /** [F004][S002] Removed package (soft delete, visible N) — kept so payment records stay readable. */
+  deleted?: boolean;
 };
 
 /** Response from POST /api/trial-classes */

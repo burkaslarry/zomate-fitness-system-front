@@ -481,7 +481,12 @@ export const api = {
     }>,
   member: (hkid: string) => request(`/api/members/${encodeURIComponent(hkid)}`),
   memberFull: (hkid: string) => request(`/api/members/${encodeURIComponent(hkid)}/full`),
-  memberFullById: (studentId: number | string) => request(`/api/members/by-id/${encodeURIComponent(String(studentId))}/full`),
+  memberFullById: (studentId: number | string, opts?: { includeDeleted?: boolean }) =>
+    request(
+      `/api/members/by-id/${encodeURIComponent(String(studentId))}/full${
+        opts?.includeDeleted ? "?include_deleted=true" : ""
+      }`
+    ),
   updateMemberById: (
     studentId: number | string,
     payload: {

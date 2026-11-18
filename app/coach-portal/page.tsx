@@ -939,54 +939,7 @@ export default function CoachDashboardPage() {
 
   const schedulePanel = (
     <div className="relative flex flex-col gap-4 pb-8">
-      {pending.length > 0 ? (
-        <section className="order-2 rounded-xl border border-primary/20 bg-primary/5 p-3 shadow-sm sm:order-none">
-          <p className="text-xs font-semibold text-ink">
-            待排期 · {pending.length} 位學員
-          </p>
-          <ul className="mt-2 flex gap-2 overflow-x-auto pb-1">
-            {pending.map((p) => (
-              <li
-                key={p.enrollment_id}
-                className={`flex shrink-0 items-center overflow-hidden rounded-full border transition ${
-                  selectedPending?.enrollment_id === p.enrollment_id
-                    ? "border-primary bg-primary/20"
-                    : "border-ink/15 bg-surface hover:border-primary/35"
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => handlePickerPending(p)}
-                  className={`px-3 py-1.5 text-xs font-medium ${
-                    selectedPending?.enrollment_id === p.enrollment_id ? "text-black" : "text-ink"
-                  }`}
-                >
-                  {p.student_name}
-                </button>
-                {/* [F003][S009] Q4 — coach may drop a 待排期 package before it is ever scheduled. */}
-                <button
-                  type="button"
-                  aria-label={`刪除 ${p.student_name} 的待排期 package`}
-                  onClick={() =>
-                    setCancelDialog({
-                      scope: "course",
-                      enrollmentId: p.enrollment_id,
-                      studentId: p.student_id,
-                      studentName: p.student_name,
-                      courseTitle: p.course_title,
-                      pending: true
-                    })
-                  }
-                  className="border-l border-ink/15 px-2 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50"
-                >
-                  ✕
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
+      {/* Pending students stay reachable through the student picker (＋ → 待排期). */}
       <section className="order-1 flex flex-col bg-white p-1 sm:bg-surface sm:order-none sm:rounded-xl sm:border sm:border-ink/10 sm:p-4 sm:shadow-sm">
         <div className="order-2 mt-4 sm:order-none sm:mt-0">
         {/* [F008][S005] Selected-day sessions precede the calendar; changing day expands its agenda. */}
