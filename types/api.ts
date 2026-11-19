@@ -71,8 +71,10 @@ export type CourseCheckinPinRow = {
   installment_segments?: InstallmentSegmentPinDto[];
   /** [F004][S002] Periods ticked 「唔需要上傳文件」 by Admin. */
   no_upload_installment_nos?: number[];
-  /** [F004][S002] Total check-ins — gates the no-upload tick per period (lessons attended). */
+  /** [F004][S002] Attendance on this course only — concurrent packages each keep their own count. */
   lessons_attended?: number;
+  /** [F003][S007] Imported paper ledger lessons already taken (converted legacy package). */
+  legacy_prior_lessons?: number;
   /** [F004][S002] Removed package (soft delete, visible N) — kept so payment records stay readable. */
   deleted?: boolean;
 };

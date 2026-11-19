@@ -1048,9 +1048,10 @@ export default function AdminStudentDetailPage() {
                         <div className="mt-1 text-xs text-ink/65">
                           {p.branch_name} · 教練 {p.coach_name ?? "—"}
                         </div>
-                        {/* [F004][S002] Package card shows progress at a glance: 已上 X · 剩 Y. */}
+                        {/* [F004][S002] Per-course progress: concurrent packages keep separate 已上／剩. */}
                         <div className="mt-1 text-xs font-medium text-ink/75">
-                          已上 {p.lessons_attended ?? 0} 堂
+                          已上 {(p.lessons_attended ?? 0) + (p.legacy_prior_lessons ?? 0)} 堂
+                          {p.legacy_prior_lessons ? `（紙本 ${p.legacy_prior_lessons}）` : ""}
                           {p.total_lessons != null
                             ? ` · 剩 ${Math.max(0, (Number(p.total_lessons) || 0) - (p.lessons_attended ?? 0))} 堂`
                             : ""}
@@ -1088,7 +1089,7 @@ export default function AdminStudentDetailPage() {
                                     {isRealSegment ? (
                                       <label
                                         className="flex items-center gap-1 text-ink/70"
-                                        title={tickable ? undefined : `學生現時上咗 ${p.lessons_attended ?? 0} 堂；上咗第 ${segment.lesson_from ?? 1} 堂後可剔`}
+                                        title={tickable ? undefined : `此課程已上 ${p.lessons_attended ?? 0} 堂；上咗第 ${segment.lesson_from ?? 1} 堂後可剔`}
                                       >
                                         <input
                                           type="checkbox"

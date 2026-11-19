@@ -100,6 +100,32 @@ test("admin sees imported category package progress", async ({ page }) => {
   await expect(page.getByText("未包括其他簽到或扣堂", { exact: false })).toBeVisible();
 });
 
+/** [F004][S002] Concurrent packages show their own 已上／剩 on the admin student page. */
+test("admin sees per-course progress for concurrent packages", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("zomate_auth_session", JSON.stringify({
+    token: "offline-course-counts-fixture", username: "fixture-admin", role: "ADMIN"
+  })));
+  await page.route("**/api/**", route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/auth/me") return route.fulfill({ json: { username: "fixture-admin", role: "ADMIN" } });
+    if (path === "/api/members/by-id/405/full") return route.fulfill({ json: {
+      profile: { id: 405, full_name: "Concurrent QA Fixture", hkid: "QA405", phone: "90000005", lesson_balance: 30 },
+      packages: [], category_enrollments: [], receipts: [], activity_log: [],
+      course_checkin_pins: [
+        { course_id: 71, course_title: "1:1 Training", branch_name: "QA", coach_name: "Coach A",
+          checkin_pin: "71000", total_lessons: 20, lessons_attended: 6, installment_segments: [] },
+        { course_id: 72, course_title: "Yoga", branch_name: "QA", coach_name: "Coach B",
+          checkin_pin: "72000", total_lessons: 10, lessons_attended: 2, installment_segments: [] }
+      ]
+    } });
+    return route.fulfill({ json: [] });
+  });
+  await page.goto("/admin/students/405");
+  await page.getByRole("button", { name: "課程記錄" }).click();
+  await expect(page.getByText("已上 6 堂 · 剩 14 堂")).toBeVisible();
+  await expect(page.getByText("已上 2 堂 · 剩 8 堂")).toBeVisible();
+});
+
 /** [F008][S005] Collapsing the agenda never hides the calendar or changes lesson actions. */
 test("coach sees expandable sessions before calendar", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-10-23T00:00:00Z"));
