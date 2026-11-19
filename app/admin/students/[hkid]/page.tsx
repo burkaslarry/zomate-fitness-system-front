@@ -1053,11 +1053,6 @@ export default function AdminStudentDetailPage() {
                           {p.total_lessons != null
                             ? `，剩 ${Math.max(0, (Number(p.total_lessons) || 0) - (p.lessons_attended ?? 0))} 堂`
                             : ""}
-                          {p.legacy_prior_lessons ? (
-                            <span className="ml-1 text-xs font-normal text-ink/55">
-                              （其中舊系統紀錄 {p.legacy_prior_lessons} 堂）
-                            </span>
-                          ) : null}
                         </div>
                         <div className="mt-1 text-xs text-ink/55">
                           首課（基準）{p.scheduled_start ? fmtDateTime(p.scheduled_start) : "—"}
@@ -1166,7 +1161,7 @@ export default function AdminStudentDetailPage() {
                 <h3 className="mb-3 text-sm font-semibold text-ink">從課程種類入帳堂數（Admin）</h3>
                 <p className="mb-3 text-xs text-ink/60">
                   選擇種類及總堂數；如該種類已存在會調整堂數差額。會建立分期計劃（期數可自由填寫，不可多於總堂數）。
-                  匯入舊系統紀錄 package 時，請填「以上堂數」，系統會從餘堂扣減。
+                  匯入舊 package 時，請填「以上堂數」，系統會從餘堂扣減。
                 </p>
                 <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
                   <label className="block text-xs text-ink/55">
@@ -1199,7 +1194,7 @@ export default function AdminStudentDetailPage() {
                     />
                   </label>
                   <label className="block text-xs text-ink/55">
-                    以上堂數（舊系統紀錄已上）
+                    堂數（已上）
                     <input
                       type="number"
                       min={0}
@@ -1554,7 +1549,7 @@ function CategoryEnrollmentCard({
       {row.lessons_already_taken != null && row.remaining_from_paper != null ? (
         <>
           <p className="mt-1 text-xs font-medium text-ink/75">
-            已上（舊系統紀錄）{row.lessons_already_taken} 堂 · 剩（按舊系統紀錄）{row.remaining_from_paper} 堂
+            已上 {row.lessons_already_taken} 堂 · 剩 {row.remaining_from_paper} 堂
           </p>
           <p className="mt-1 text-xs text-ink/55">未包括其他簽到或扣堂；最新可扣堂餘額見上方。</p>
         </>

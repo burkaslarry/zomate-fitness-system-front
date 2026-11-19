@@ -501,12 +501,12 @@ export default function CoachDashboardPage() {
                 enrollment_id: 0,
                 kind: "ledger" as const,
                 category_enrollment_id: row.id,
-                course_title: `${row.category_name}（舊 package · 舊系統紀錄）`,
+                course_title: `${row.category_name}（舊 package）`,
                 branch_name: null,
                 total_lessons: row.total_lessons,
                 remaining_lessons: row.remaining_from_paper,
                 coach_time_confirmed: false,
-                installment_status: `舊系統紀錄已上 ${row.lessons_already_taken} 堂 · 剩 ${row.remaining_from_paper} 堂`,
+                installment_status: `已上 ${row.lessons_already_taken} 堂 · 剩 ${row.remaining_from_paper} 堂`,
                 periods: []
               }))
             ]
@@ -523,7 +523,7 @@ export default function CoachDashboardPage() {
             student_id: studentId,
             student_name: rec.full_name,
             student_phone: rec.phone,
-            course_title: `${only.category_name}（舊 package · 舊系統紀錄 剩 ${only.remaining_from_paper} 堂）`,
+            course_title: `${only.category_name}（舊 package 剩 ${only.remaining_from_paper} 堂）`,
             branch_name: "",
             total_lessons: only.total_lessons,
             placeholder_start: ""
@@ -1523,7 +1523,7 @@ export default function CoachDashboardPage() {
                     <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-ink/55">
                       {s.category_packages!.map((c) => (
                         <span key={c.id}>
-                          {c.category_name}（舊系統紀錄）：已上 {c.lessons_already_taken} · 剩 {c.remaining_from_paper}
+                          {c.category_name}（舊 package）：已上 {c.lessons_already_taken} · 剩 {c.remaining_from_paper}
                         </span>
                       ))}
                     </div>
@@ -1556,7 +1556,6 @@ export default function CoachDashboardPage() {
                       <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
                         <span className="font-medium text-ink">
                           {p.branch_code ? <span className="mr-1.5 rounded bg-ink/8 px-1 py-0.5 text-[10px] font-semibold uppercase text-ink/70">{p.branch_code}</span> : null}
-                          {paper > 0 ? <span className="mr-1.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold text-amber-900">舊系統紀錄</span> : null}
                           {p.course_title}
                         </span>
                         <span className="text-ink/60">{p.branch_name ?? "—"}</span>
@@ -1625,7 +1624,7 @@ export default function CoachDashboardPage() {
                 {studentRecords.category_enrollments!.map((row) => (
                   <li key={row.id} className="rounded-lg border border-ink/10 bg-canvas p-3 text-xs text-ink/70">
                     <p className="font-medium text-ink">{row.category_name} · 總 {row.total_lessons} 堂</p>
-                    <p className="mt-1">已上（舊系統紀錄）{row.lessons_already_taken} 堂 · 剩（按舊系統紀錄）{row.remaining_from_paper} 堂</p>
+                    <p className="mt-1">已上 {row.lessons_already_taken} 堂 · 剩 {row.remaining_from_paper} 堂</p>
                     {row.scheduled_enrollment_id != null ? (
                       <p className="mt-2 text-emerald-800">已排程為 Course（見下方課程）；請在課程按「排下一堂」。</p>
                     ) : row.scheduled_once ? (
@@ -1692,7 +1691,7 @@ export default function CoachDashboardPage() {
                 ))}
               </ul>
               <p className="mt-1 text-xs text-ink/55">未包括其他簽到或扣堂；最新可扣堂餘額見上方。</p>
-              <p className="mt-1 text-xs text-ink/55">排程只建立剩餘舊系統紀錄堂數的 Course；已上／剩會與舊系統紀錄帳面同步。</p>
+              <p className="mt-1 text-xs text-ink/55">排程只建立剩餘 package 堂數的 Course；已上／剩會與帳面同步。</p>
             </div>
           ) : null}
 
@@ -1711,9 +1710,7 @@ export default function CoachDashboardPage() {
                   <div className="font-medium text-ink">{enr.course_title}</div>
                   <div className="mt-1 text-xs text-ink/60">
                     {enr.coach_time_confirmed
-                      ? `${new Date(enr.scheduled_start).toLocaleString("zh-HK")} · ${enr.total_lessons} 堂可排${
-                          (enr.legacy_prior_lessons ?? 0) > 0 ? `（另舊系統紀錄已上 ${enr.legacy_prior_lessons}）` : ""
-                        }`
+                      ? `${new Date(enr.scheduled_start).toLocaleString("zh-HK")} · ${enr.total_lessons} 堂可排`
                       : "待排程"}
                     {" · "}
                     {enr.installment_status} ({enr.payment_status})
