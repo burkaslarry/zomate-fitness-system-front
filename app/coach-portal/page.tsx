@@ -235,6 +235,8 @@ export default function CoachDashboardPage() {
   } | null>(null);
   const [remindBusy, setRemindBusy] = useState<number | null>(null);
   const [scheduleStudentId, setScheduleStudentId] = useState<number | null>(null);
+  /** [F003][S007] FAB flow booking a legacy paper ledger instead of an existing Course. */
+  const [scheduleCategoryId, setScheduleCategoryId] = useState<number | null>(null);
   /** [F003][S003] FAB「其他事項」— private calendar block, no student enrollment. */
   const [personalBlockMode, setPersonalBlockMode] = useState(false);
   /** [F003][S003] FAB「新增學生試堂」— new student name + phone + optional note. */
@@ -461,12 +463,17 @@ export default function CoachDashboardPage() {
       setStatus("");
       try {
         const rec = (await api.coachStudentRecords(studentId, coach.id)) as CoachStudentRecordDto;
-        if (rec.enrollments.length === 0) {
+        // [F003][S007] Legacy paper ledgers are schedulable too — never dead-end at 「暫無可排程課程」.
+        const ledgers = (rec.category_enrollments ?? []).filter(
+          (row) => row.scheduled_enrollment_id == null && !row.scheduled_once && row.remaining_from_paper > 0
+        );
+        const totalOptions = rec.enrollments.length + ledgers.length;
+        if (totalOptions === 0) {
           setScheduleStudentId(null);
           setStatus("此學員暫無可排程課程。");
           return null;
         }
-        if (rec.enrollments.length > 1) {
+        if (totalOptions > 1) {
           // [F003][S003] One student can hold several packages — coach picks which one first.
           const brief = students.find((s) => s.student_id === studentId);
           const byId = new Map((brief?.packages ?? []).map((p) => [p.enrollment_id, p]));
@@ -475,23 +482,61 @@ export default function CoachDashboardPage() {
             studentId,
             studentName: rec.full_name,
             studentPhone: rec.phone,
-            packages: rec.enrollments.map((e) => {
-              const p = byId.get(e.enrollment_id);
-              return {
-                enrollment_id: e.enrollment_id,
-                course_title: e.course_title,
-                branch_name: e.branch_name ?? null,
-                total_lessons: e.total_lessons,
-                remaining_lessons: p ? p.remaining_lessons : e.total_lessons,
-                coach_time_confirmed: e.coach_time_confirmed,
-                installment_status: e.installment_status,
-                periods: e.installment_periods ?? p?.installment_periods ?? []
-              };
-            })
+            packages: [
+              ...rec.enrollments.map((e) => {
+                const p = byId.get(e.enrollment_id);
+                return {
+                  enrollment_id: e.enrollment_id,
+                  kind: "enrollment" as const,
+                  course_title: e.course_title,
+                  branch_name: e.branch_name ?? null,
+                  total_lessons: e.total_lessons,
+                  remaining_lessons: p ? p.remaining_lessons : e.total_lessons,
+                  coach_time_confirmed: e.coach_time_confirmed,
+                  installment_status: e.installment_status,
+                  periods: e.installment_periods ?? p?.installment_periods ?? []
+                };
+              }),
+              ...ledgers.map((row) => ({
+                enrollment_id: 0,
+                kind: "ledger" as const,
+                category_enrollment_id: row.id,
+                course_title: `${row.category_name}（舊 package · 舊系統紀錄）`,
+                branch_name: null,
+                total_lessons: row.total_lessons,
+                remaining_lessons: row.remaining_from_paper,
+                coach_time_confirmed: false,
+                installment_status: `舊系統紀錄已上 ${row.lessons_already_taken} 堂 · 剩 ${row.remaining_from_paper} 堂`,
+                periods: []
+              }))
+            ]
           });
           return "packages";
         }
+        if (ledgers.length === 1 && rec.enrollments.length === 0) {
+          // [F003][S007] Only a legacy ledger left — book it straight from the time sheet.
+          const only = ledgers[0];
+          setScheduleCategoryId(only.id);
+          setSelectedPending({
+            enrollment_id: 0,
+            course_id: 0,
+            student_id: studentId,
+            student_name: rec.full_name,
+            student_phone: rec.phone,
+            course_title: `${only.category_name}（舊 package · 舊系統紀錄 剩 ${only.remaining_from_paper} 堂）`,
+            branch_name: "",
+            total_lessons: only.total_lessons,
+            placeholder_start: ""
+          });
+          setSelectedDay(isPastDay(selectedDay) ? todayKey() : selectedDay);
+          setStartHour(9);
+          setStartMinute(0);
+          setDurationHours(1);
+          setScheduleSheetOpen(false);
+          return "sheet";
+        }
         const target = rec.enrollments.find((e) => !e.coach_time_confirmed) ?? rec.enrollments[0];
+        setScheduleCategoryId(null);
         setSelectedPending(
           pendingFromEnrollment(studentId, rec.full_name, rec.phone, {
             enrollment_id: target.enrollment_id,
@@ -525,6 +570,9 @@ export default function CoachDashboardPage() {
       setPackagePick(null);
       setPersonalBlockMode(false);
       setTrialDraft(null);
+      // [F003][S007] Paper-ledger rows book via category-bookings, not an existing enrollment.
+      const isLedger = row.kind === "ledger" && row.category_enrollment_id != null;
+      setScheduleCategoryId(isLedger ? row.category_enrollment_id! : null);
       setSelectedPending({
         enrollment_id: row.enrollment_id,
         course_id: row.enrollment_id,
@@ -561,6 +609,7 @@ export default function CoachDashboardPage() {
 
   const handleSelectPendingRow = useCallback((row: PendingRow) => {
     setPersonalBlockMode(false);
+    setScheduleCategoryId(null);
     setSelectedPending(row);
     setScheduleStudentId(row.student_id);
     setScheduleSheetOpen(false);
@@ -589,6 +638,7 @@ export default function CoachDashboardPage() {
     setPersonalBlockMode(true);
     setTrialDraft(null);
     setSelectedPending(null);
+    setScheduleCategoryId(null);
     setScheduleStudentId(null);
     setStudentPickerOpen(false);
     if (selectedDay < bookingMinDateKey()) setSelectedDay(bookingMinDateKey());
@@ -603,6 +653,7 @@ export default function CoachDashboardPage() {
       setTrialDraft(trial);
       setPersonalBlockMode(false);
       setSelectedPending(null);
+      setScheduleCategoryId(null);
       setScheduleStudentId(null);
       setStudentPickerOpen(false);
       if (selectedDay < bookingMinDateKey()) setSelectedDay(bookingMinDateKey());
@@ -694,6 +745,24 @@ export default function CoachDashboardPage() {
         startMinute,
         durationHours
       };
+      // [F003][S007] Legacy paper ledger chosen from + — convert the remaining paper lessons once.
+      if (scheduleCategoryId !== null) {
+        await api.coachBookCategory({
+          category_enrollment_id: scheduleCategoryId,
+          day: selectedDay,
+          start_hour: startHour,
+          start_minute: startMinute,
+          duration_hours: durationHours,
+          coach_id: coach.id
+        });
+        setScheduleCategoryId(null);
+        setSelectedPending(null);
+        setScheduleStudentId(null);
+        setScheduleSheetOpen(false);
+        await reloadAll(coach.id);
+        setScheduleSuccess(booked);
+        return;
+      }
       await api.coachBookSession({
         enrollment_id: selectedPending.enrollment_id,
         day: selectedDay,
@@ -1105,6 +1174,7 @@ export default function CoachDashboardPage() {
             setScheduleSheetOpen(false);
             setPersonalBlockMode(false);
             setTrialDraft(null);
+            setScheduleCategoryId(null);
           }}
           onDayChange={setSelectedDay}
           onStartTimeChange={(h, m) => {
@@ -1453,7 +1523,7 @@ export default function CoachDashboardPage() {
                     <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-ink/55">
                       {s.category_packages!.map((c) => (
                         <span key={c.id}>
-                          {c.category_name}（紙本）：已上 {c.lessons_already_taken} · 剩 {c.remaining_from_paper}
+                          {c.category_name}（舊系統紀錄）：已上 {c.lessons_already_taken} · 剩 {c.remaining_from_paper}
                         </span>
                       ))}
                     </div>
@@ -1486,7 +1556,7 @@ export default function CoachDashboardPage() {
                       <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
                         <span className="font-medium text-ink">
                           {p.branch_code ? <span className="mr-1.5 rounded bg-ink/8 px-1 py-0.5 text-[10px] font-semibold uppercase text-ink/70">{p.branch_code}</span> : null}
-                          {paper > 0 ? <span className="mr-1.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold text-amber-900">紙本舊帳</span> : null}
+                          {paper > 0 ? <span className="mr-1.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold text-amber-900">舊系統紀錄</span> : null}
                           {p.course_title}
                         </span>
                         <span className="text-ink/60">{p.branch_name ?? "—"}</span>
@@ -1555,7 +1625,7 @@ export default function CoachDashboardPage() {
                 {studentRecords.category_enrollments!.map((row) => (
                   <li key={row.id} className="rounded-lg border border-ink/10 bg-canvas p-3 text-xs text-ink/70">
                     <p className="font-medium text-ink">{row.category_name} · 總 {row.total_lessons} 堂</p>
-                    <p className="mt-1">已上（紙本）{row.lessons_already_taken} 堂 · 剩（按紙本）{row.remaining_from_paper} 堂</p>
+                    <p className="mt-1">已上（舊系統紀錄）{row.lessons_already_taken} 堂 · 剩（按舊系統紀錄）{row.remaining_from_paper} 堂</p>
                     {row.scheduled_enrollment_id != null ? (
                       <p className="mt-2 text-emerald-800">已排程為 Course（見下方課程）；請在課程按「排下一堂」。</p>
                     ) : row.scheduled_once ? (
@@ -1622,7 +1692,7 @@ export default function CoachDashboardPage() {
                 ))}
               </ul>
               <p className="mt-1 text-xs text-ink/55">未包括其他簽到或扣堂；最新可扣堂餘額見上方。</p>
-              <p className="mt-1 text-xs text-ink/55">排程只建立剩餘紙本堂數的 Course；已上／剩會與紙本帳面同步。</p>
+              <p className="mt-1 text-xs text-ink/55">排程只建立剩餘舊系統紀錄堂數的 Course；已上／剩會與舊系統紀錄帳面同步。</p>
             </div>
           ) : null}
 
@@ -1642,7 +1712,7 @@ export default function CoachDashboardPage() {
                   <div className="mt-1 text-xs text-ink/60">
                     {enr.coach_time_confirmed
                       ? `${new Date(enr.scheduled_start).toLocaleString("zh-HK")} · ${enr.total_lessons} 堂可排${
-                          (enr.legacy_prior_lessons ?? 0) > 0 ? `（另紙本已上 ${enr.legacy_prior_lessons}）` : ""
+                          (enr.legacy_prior_lessons ?? 0) > 0 ? `（另舊系統紀錄已上 ${enr.legacy_prior_lessons}）` : ""
                         }`
                       : "待排程"}
                     {" · "}

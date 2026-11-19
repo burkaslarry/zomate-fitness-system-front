@@ -664,7 +664,7 @@ export default function RegCourseWizard({
             />
           </label>
           <label className="block text-sm">
-            <span className="text-ink/70">以上堂數（紙本已上、尚未入系統）</span>
+            <span className="text-ink/70">以上堂數（舊系統紀錄已上、尚未入系統）</span>
             <input
               inputMode="numeric"
               pattern="[0-9]*"

@@ -1009,9 +1009,8 @@ export default function AdminStudentDetailPage() {
               </div>
 
               <div>
-                <h3 className="mb-2 text-sm font-semibold text-ink">已開課程（有時間表）</h3>
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-ink">已開課程（有時間表）</h3>
+                  <h3 className="text-sm font-semibold text-ink">Package 進度（已開課程）</h3>
                   <label className="inline-flex items-center gap-1.5 text-xs text-ink/60" title="已移除嘅 package 仍可查看 PIN 及付款紀錄">
                     <input
                       type="checkbox"
@@ -1027,7 +1026,7 @@ export default function AdminStudentDetailPage() {
                     尚未經「Course 套餐開課」加入任何課程。種類入帳唔會自動出現喺度。
                   </p>
                 ) : (
-                  <ul className="space-y-3">
+                  <ul className="grid gap-3 lg:grid-cols-2">
                     {pins.map((p) => (
                       <li
                         key={`${p.course_id}-${p.checkin_pin}`}
@@ -1037,7 +1036,7 @@ export default function AdminStudentDetailPage() {
                             : "border-ink/10 bg-canvas"
                         }`}
                       >
-                        <div className="flex flex-wrap items-center gap-2 font-medium text-ink">
+                        <div className="flex flex-wrap items-center gap-2 text-base font-semibold text-ink">
                           {p.course_title}
                           {p.deleted ? (
                             <span className="rounded-full border border-ink/20 bg-ink/5 px-2 py-0.5 text-[11px] font-medium text-ink/60">
@@ -1045,16 +1044,20 @@ export default function AdminStudentDetailPage() {
                             </span>
                           ) : null}
                         </div>
-                        <div className="mt-1 text-xs text-ink/65">
+                        <div className="mt-0.5 text-xs text-ink/65">
                           {p.branch_name} · 教練 {p.coach_name ?? "—"}
                         </div>
                         {/* [F004][S002] Per-course progress: concurrent packages keep separate 已上／剩. */}
-                        <div className="mt-1 text-xs font-medium text-ink/75">
+                        <div className="mt-1 text-sm font-medium text-ink/80">
                           已上 {(p.lessons_attended ?? 0) + (p.legacy_prior_lessons ?? 0)} 堂
-                          {p.legacy_prior_lessons ? `（紙本 ${p.legacy_prior_lessons}）` : ""}
                           {p.total_lessons != null
-                            ? ` · 剩 ${Math.max(0, (Number(p.total_lessons) || 0) - (p.lessons_attended ?? 0))} 堂`
+                            ? `，剩 ${Math.max(0, (Number(p.total_lessons) || 0) - (p.lessons_attended ?? 0))} 堂`
                             : ""}
+                          {p.legacy_prior_lessons ? (
+                            <span className="ml-1 text-xs font-normal text-ink/55">
+                              （其中舊系統紀錄 {p.legacy_prior_lessons} 堂）
+                            </span>
+                          ) : null}
                         </div>
                         <div className="mt-1 text-xs text-ink/55">
                           首課（基準）{p.scheduled_start ? fmtDateTime(p.scheduled_start) : "—"}
@@ -1163,7 +1166,7 @@ export default function AdminStudentDetailPage() {
                 <h3 className="mb-3 text-sm font-semibold text-ink">從課程種類入帳堂數（Admin）</h3>
                 <p className="mb-3 text-xs text-ink/60">
                   選擇種類及總堂數；如該種類已存在會調整堂數差額。會建立分期計劃（期數可自由填寫，不可多於總堂數）。
-                  匯入紙本舊 package 時，請填「以上堂數」，系統會從餘堂扣減。
+                  匯入舊系統紀錄 package 時，請填「以上堂數」，系統會從餘堂扣減。
                 </p>
                 <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
                   <label className="block text-xs text-ink/55">
@@ -1196,7 +1199,7 @@ export default function AdminStudentDetailPage() {
                     />
                   </label>
                   <label className="block text-xs text-ink/55">
-                    以上堂數（紙本已上）
+                    以上堂數（舊系統紀錄已上）
                     <input
                       type="number"
                       min={0}
@@ -1551,7 +1554,7 @@ function CategoryEnrollmentCard({
       {row.lessons_already_taken != null && row.remaining_from_paper != null ? (
         <>
           <p className="mt-1 text-xs font-medium text-ink/75">
-            已上（紙本）{row.lessons_already_taken} 堂 · 剩（按紙本）{row.remaining_from_paper} 堂
+            已上（舊系統紀錄）{row.lessons_already_taken} 堂 · 剩（按舊系統紀錄）{row.remaining_from_paper} 堂
           </p>
           <p className="mt-1 text-xs text-ink/55">未包括其他簽到或扣堂；最新可扣堂餘額見上方。</p>
         </>

@@ -96,7 +96,7 @@ test("admin sees imported category package progress", async ({ page }) => {
   });
   await page.goto("/admin/students/404");
   await page.getByRole("button", { name: "課程記錄" }).click();
-  await expect(page.getByText("已上（紙本）17 堂 · 剩（按紙本）13 堂")).toBeVisible();
+  await expect(page.getByText("已上（舊系統紀錄）17 堂 · 剩（按舊系統紀錄）13 堂")).toBeVisible();
   await expect(page.getByText("未包括其他簽到或扣堂", { exact: false })).toBeVisible();
 });
 
@@ -122,8 +122,8 @@ test("admin sees per-course progress for concurrent packages", async ({ page }) 
   });
   await page.goto("/admin/students/405");
   await page.getByRole("button", { name: "課程記錄" }).click();
-  await expect(page.getByText("已上 6 堂 · 剩 14 堂")).toBeVisible();
-  await expect(page.getByText("已上 2 堂 · 剩 8 堂")).toBeVisible();
+  await expect(page.getByText("已上 6 堂，剩 14 堂")).toBeVisible();
+  await expect(page.getByText("已上 2 堂，剩 8 堂")).toBeVisible();
 });
 
 /** [F008][S005] Collapsing the agenda never hides the calendar or changes lesson actions. */
@@ -247,7 +247,7 @@ test("coach student details stay accessible with a long roster", async ({ page }
   await page.goto("/coach-portal?tab=students");
   const first = page.getByRole("button", { name: /Student 001/ });
   const second = page.getByRole("button", { name: /Student 002/ });
-  await expect(first).toContainText("Paper Package（紙本）：已上 17 · 剩 13");
+  await expect(first).toContainText("Paper Package（舊系統紀錄）：已上 17 · 剩 13");
   await expect(page.getByRole("button", { name: /Student 100/ })).toBeAttached();
   const scrollBefore = await page.evaluate(() => window.scrollY);
   await first.click();
@@ -277,7 +277,7 @@ test("coach student details stay accessible with a long roster", async ({ page }
   const firstDialog = page.getByRole("dialog", { name: "學員詳情 · Student 001" });
   await expect(firstDialog.getByText("Contact 1", { exact: false })).toBeVisible();
   await expect(firstDialog.getByText("Paper Package · 總 30 堂")).toBeVisible();
-  await expect(firstDialog.getByText("已上（紙本）17 堂 · 剩（按紙本）13 堂")).toBeVisible();
+  await expect(firstDialog.getByText("已上（舊系統紀錄）17 堂 · 剩（按舊系統紀錄）13 堂")).toBeVisible();
   await expect(firstDialog.getByText("未包括其他簽到或扣堂", { exact: false })).toBeVisible();
   await expect(firstDialog.getByRole("button", { name: "排這個舊 package（13 堂）" })).toBeVisible();
   await firstDialog.getByRole("button", { name: "排下一堂" }).click();
@@ -303,7 +303,7 @@ test("coach student details stay accessible with a long roster", async ({ page }
   await page.getByRole("button", { name: /Student 001/ }).click();
   const scheduleDialog = page.getByRole("dialog", { name: "學員詳情 · Student 001" });
   await scheduleDialog.getByRole("button", { name: "排這個舊 package（13 堂）" }).click();
-  await expect(scheduleDialog.getByText("排程只建立剩餘紙本堂數的 Course", { exact: false })).toBeVisible();
+  await expect(scheduleDialog.getByText("排程只建立剩餘舊系統紀錄堂數的 Course", { exact: false })).toBeVisible();
   await scheduleDialog.getByRole("button", { name: "確認排程" }).click();
   await expect(page).toHaveURL(/tab=schedule/);
   expect(categoryBookings).toHaveLength(1);

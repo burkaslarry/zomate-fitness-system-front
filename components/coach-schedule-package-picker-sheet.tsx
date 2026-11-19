@@ -10,6 +10,9 @@ import CoachBottomSheet from "./coach-bottom-sheet";
 
 export type PackagePickRow = {
   enrollment_id: number;
+  /** [F003][S007] Legacy paper ledger row — books via category-bookings, not an enrollment. */
+  kind?: "enrollment" | "ledger";
+  category_enrollment_id?: number;
   course_title: string;
   branch_name?: string | null;
   total_lessons: number;
@@ -53,7 +56,7 @@ export default function CoachSchedulePackagePickerSheet({
         ) : (
           <ul className="space-y-2">
             {packages.map((p) => (
-              <li key={p.enrollment_id}>
+              <li key={p.kind === "ledger" ? `ledger-${p.category_enrollment_id}` : p.enrollment_id}>
                 <button
                   type="button"
                   disabled={busy}
