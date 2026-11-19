@@ -148,7 +148,9 @@ test("coach student details stay accessible with a long roster", async ({ page }
       student_id: id, full_name: `Student ${String(id).padStart(3, "0")}`, phone: `90000${String(id).padStart(3, "0")}`,
       lesson_balance: 7, enrollment_count: 1, pending_schedule: false,
       packages: [{ enrollment_id: id + 1000, course_title: `Package ${id}`, branch_name: "QA Branch", branch_code: "QA",
-        total_lessons: 10, used_lessons: 3, remaining_lessons: 7, coach_time_confirmed: true, payment_status: "Paid" }]
+        total_lessons: 10, used_lessons: 3, remaining_lessons: 7, coach_time_confirmed: true, payment_status: "Paid" }],
+      category_packages: id === 1 ? [{ id: 501, category_name: "Paper Package", total_lessons: 30,
+        lessons_already_taken: 17, remaining_from_paper: 13 }] : []
     };
   });
   let releaseSlow!: () => void;
@@ -162,6 +164,7 @@ test("coach student details stay accessible with a long roster", async ({ page }
   let bookings = 0;
   let bookingConflicts = 0;
   let reschedules = 0;
+  const categoryBookings: Array<{ category_enrollment_id: number; day: string }> = [];
   await page.route("**/*", async route => {
     const request = route.request();
     const url = new URL(request.url());
@@ -186,6 +189,11 @@ test("coach student details stay accessible with a long roster", async ({ page }
     if (path.includes("/reschedule") && request.method() === "PATCH") {
       reschedules++;
       return route.fulfill({ json: { ok: true } });
+    }
+    if (path === "/api/coach/category-bookings" && request.method() === "POST") {
+      const body = request.postDataJSON();
+      categoryBookings.push({ category_enrollment_id: body.category_enrollment_id, day: body.day });
+      return route.fulfill({ json: { id: 9001 } });
     }
     const match = path.match(/^\/api\/coach\/students\/(\d+)$/);
     if (match) {
@@ -213,6 +221,7 @@ test("coach student details stay accessible with a long roster", async ({ page }
   await page.goto("/coach-portal?tab=students");
   const first = page.getByRole("button", { name: /Student 001/ });
   const second = page.getByRole("button", { name: /Student 002/ });
+  await expect(first).toContainText("Paper Package（紙本）：已上 17 · 剩 13");
   await expect(page.getByRole("button", { name: /Student 100/ })).toBeAttached();
   const scrollBefore = await page.evaluate(() => window.scrollY);
   await first.click();
@@ -244,7 +253,7 @@ test("coach student details stay accessible with a long roster", async ({ page }
   await expect(firstDialog.getByText("Paper Package · 總 30 堂")).toBeVisible();
   await expect(firstDialog.getByText("已上（紙本）17 堂 · 剩（按紙本）13 堂")).toBeVisible();
   await expect(firstDialog.getByText("未包括其他簽到或扣堂", { exact: false })).toBeVisible();
-  await expect(firstDialog.getByText("舊帳面暫未支援直接排程，請勿重複報 Course。", { exact: true })).toBeVisible();
+  await expect(firstDialog.getByRole("button", { name: "排這個舊 package（13 堂）" })).toBeVisible();
   await firstDialog.getByRole("button", { name: "排下一堂" }).click();
   await firstDialog.getByRole("button", { name: "確認", exact: true }).click();
   await expect(firstDialog.getByRole("alert")).toHaveText("此時段已被佔用，請另選時間。");
@@ -264,4 +273,13 @@ test("coach student details stay accessible with a long roster", async ({ page }
   await expect(thirdDialog.getByRole("alert")).toContainText("未能載入學員記錄");
   await thirdDialog.getByRole("button", { name: "重試" }).click();
   await expect(thirdDialog.getByText("Contact 3", { exact: false })).toBeVisible();
+  await page.goto("/coach-portal?tab=students");
+  await page.getByRole("button", { name: /Student 001/ }).click();
+  const scheduleDialog = page.getByRole("dialog", { name: "學員詳情 · Student 001" });
+  await scheduleDialog.getByRole("button", { name: "排這個舊 package（13 堂）" }).click();
+  await expect(scheduleDialog.getByText("排程只建立剩餘紙本堂數的 Course", { exact: false })).toBeVisible();
+  await scheduleDialog.getByRole("button", { name: "確認排程" }).click();
+  await expect(page).toHaveURL(/tab=schedule/);
+  expect(categoryBookings).toHaveLength(1);
+  expect(categoryBookings[0].category_enrollment_id).toBe(501);
 });

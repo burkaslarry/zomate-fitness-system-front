@@ -150,6 +150,17 @@ export type CoachStudentPackageDto = {
   installment_periods?: CoachInstallmentPeriodDto[];
   next_installment_no?: number | null;
   next_reminder_lesson?: number | null;
+  legacy_prior_lessons?: number;
+};
+
+export type CoachStudentCategoryDto = {
+  id: number;
+  category_name: string;
+  total_lessons: number;
+  lessons_already_taken: number;
+  remaining_from_paper: number;
+  scheduled_enrollment_id?: number | null;
+  scheduled_once?: boolean;
 };
 
 export type CoachStudentBriefDto = {
@@ -160,6 +171,7 @@ export type CoachStudentBriefDto = {
   enrollment_count: number;
   pending_schedule: boolean;
   packages?: CoachStudentPackageDto[];
+  category_packages?: CoachStudentCategoryDto[];
 };
 
 export type CoachStudentRecordDto = {
@@ -186,14 +198,9 @@ export type CoachStudentRecordDto = {
     next_installment_no?: number | null;
     next_reminder_lesson?: number | null;
     installment_periods?: CoachInstallmentPeriodDto[];
+    legacy_prior_lessons?: number;
   }[];
-  category_enrollments?: {
-    id: number;
-    category_name: string;
-    total_lessons: number;
-    lessons_already_taken: number;
-    remaining_from_paper: number;
-  }[];
+  category_enrollments?: CoachStudentCategoryDto[];
   checkins: { id: number; channel: string; remarks: string | null; created_at: string }[];
   attendance: {
     id: number;

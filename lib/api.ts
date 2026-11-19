@@ -988,6 +988,19 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload)
     }),
+  /** [F003][S007] Schedule the remaining paper lessons of one imported category ledger. */
+  coachBookCategory: (payload: {
+    category_enrollment_id: number;
+    day: string;
+    start_hour: number;
+    start_minute?: number;
+    duration_hours: number;
+    coach_id?: number;
+  }) =>
+    request("/api/coach/category-bookings", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
   /** [F003][S003] Coach private calendar marks（其他事項）. */
   coachListPersonalBlocks: (params?: {
     coach_id?: number;

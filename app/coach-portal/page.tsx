@@ -214,6 +214,7 @@ export default function CoachDashboardPage() {
   const studentTriggerRef = useRef<HTMLElement | null>(null);
   const [receiptUploadBusyKey, setReceiptUploadBusyKey] = useState<string | null>(null);
   const [bookingEnrollmentId, setBookingEnrollmentId] = useState<number | null>(null);
+  const [bookingCategoryId, setBookingCategoryId] = useState<number | null>(null);
   const [bookingOriginalDate, setBookingOriginalDate] = useState<string | null>(null);
   const [bookDay, setBookDay] = useState(todayKey);
   const [bookStartHour, setBookStartHour] = useState(9);
@@ -732,6 +733,7 @@ export default function CoachDashboardPage() {
       setSelectedStudentId(studentId);
       setStudentRecords(null);
       setBookingEnrollmentId(null);
+      setBookingCategoryId(null);
       setBookingOriginalDate(null);
     }
     setRecordsLoading(true);
@@ -756,6 +758,7 @@ export default function CoachDashboardPage() {
     setRecordsLoading(false);
     setRecordsError("");
     setBookingEnrollmentId(null);
+    setBookingCategoryId(null);
     setBookingOriginalDate(null);
     const trigger = studentTriggerRef.current;
     studentTriggerRef.current = null;
@@ -886,6 +889,47 @@ export default function CoachDashboardPage() {
         setStatus("此時段已被佔用，請另選時間。");
       } else {
         alertApiError(e);
+        setStatus(msg);
+      }
+    } finally {
+      setBookBusy(false);
+    }
+  }
+
+  /** [F003][S007] Convert the remaining paper lessons into a schedulable course, once. */
+  async function bookCategory(categoryEnrollmentId: number) {
+    if (!coach) return;
+    if (isPastDay(bookDay)) {
+      setStatus("不能排期到過去日期，請選今日或未來。");
+      return;
+    }
+    const selectionId = studentSelectionRef.current;
+    setBookBusy(true);
+    setStatus("");
+    if (slotWouldConflict([], startSlotDecimal(bookStartHour, bookStartMinute), bookDuration)) {
+      setBookBusy(false);
+      setStatus("排程不可超過當日 24:00，請另選。");
+      return;
+    }
+    try {
+      await api.coachBookCategory({
+        category_enrollment_id: categoryEnrollmentId,
+        day: bookDay,
+        start_hour: bookStartHour,
+        start_minute: bookStartMinute,
+        duration_hours: bookDuration,
+        coach_id: coach.id
+      });
+      await reloadAll(coach.id);
+      if (studentSelectionRef.current !== selectionId) return;
+      closeStudentRecords();
+      setStatus("已為舊 package 排程；之後可在課程列表排下一堂。");
+      router.push("/coach-portal?tab=schedule");
+    } catch (e) {
+      const msg = formatApiError(e, { context: "general" });
+      if (/conflict|409|佔用/i.test(msg)) {
+        setStatus("此時段已被佔用，請另選時間。");
+      } else {
         setStatus(msg);
       }
     } finally {
@@ -1405,6 +1449,15 @@ export default function CoachDashboardPage() {
                     餘 {s.lesson_balance} 堂 · {s.enrollment_count} 個 package
                     {s.pending_schedule ? " · 待排程" : ""}
                   </div>
+                  {(s.category_packages?.length ?? 0) > 0 ? (
+                    <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-ink/55">
+                      {s.category_packages!.map((c) => (
+                        <span key={c.id}>
+                          {c.category_name}（紙本）：已上 {c.lessons_already_taken} · 剩 {c.remaining_from_paper}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                 </button>
               </li>
             ))}
@@ -1426,18 +1479,21 @@ export default function CoachDashboardPage() {
               <section className="mb-4" aria-label="Package 進度">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/50">Package 進度</h3>
                 <ul className="mt-2 divide-y divide-ink/[0.06] rounded-lg border border-ink/10 bg-canvas">
-                  {selectedStudent.packages.map((p) => (
+                  {selectedStudent.packages.map((p) => {
+                    const paper = p.legacy_prior_lessons ?? 0;
+                    return (
                     <li key={p.enrollment_id} className="px-3 py-2 text-xs">
                       <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
                         <span className="font-medium text-ink">
                           {p.branch_code ? <span className="mr-1.5 rounded bg-ink/8 px-1 py-0.5 text-[10px] font-semibold uppercase text-ink/70">{p.branch_code}</span> : null}
+                          {paper > 0 ? <span className="mr-1.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold text-amber-900">紙本舊帳</span> : null}
                           {p.course_title}
                         </span>
                         <span className="text-ink/60">{p.branch_name ?? "—"}</span>
                       </div>
                       <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 tabular-nums text-ink/60">
-                        <span>總 {p.total_lessons} 堂</span>
-                        <span>已上 {p.used_lessons} 堂</span>
+                        <span>總 {p.total_lessons + paper} 堂</span>
+                        <span>已上 {p.used_lessons + paper} 堂</span>
                         <span className={p.remaining_lessons > 0 ? "font-medium text-emerald-700" : "text-ink/45"}>剩 {p.remaining_lessons} 堂</span>
                         {!p.coach_time_confirmed ? <span className="font-medium text-amber-700">待排程</span> : null}
                         {p.payment_status && p.payment_status !== "Paid" ? <span className="text-amber-700">{p.installment_status || p.payment_status}</span> : null}
@@ -1449,7 +1505,8 @@ export default function CoachDashboardPage() {
                         </div>
                       ) : null}
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               </section>
             ) : null}
@@ -1499,11 +1556,73 @@ export default function CoachDashboardPage() {
                   <li key={row.id} className="rounded-lg border border-ink/10 bg-canvas p-3 text-xs text-ink/70">
                     <p className="font-medium text-ink">{row.category_name} · 總 {row.total_lessons} 堂</p>
                     <p className="mt-1">已上（紙本）{row.lessons_already_taken} 堂 · 剩（按紙本）{row.remaining_from_paper} 堂</p>
+                    {row.scheduled_enrollment_id != null ? (
+                      <p className="mt-2 text-emerald-800">已排程為 Course（見下方課程）；請在課程按「排下一堂」。</p>
+                    ) : row.scheduled_once ? (
+                      <p className="mt-2 text-ink/55">已排程過而課程已刪除；如需重排，請聯絡 Admin。</p>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStatus("");
+                          setBookingEnrollmentId(null);
+                          setBookingCategoryId(row.id);
+                          setBookDay(bookingMinDateKey());
+                          setBookStartHour(9);
+                          setBookStartMinute(0);
+                          setBookDuration(1);
+                        }}
+                        className="mt-2 min-h-11 rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-xs font-medium text-black"
+                      >
+                        排這個舊 package（{row.remaining_from_paper} 堂）
+                      </button>
+                    )}
+                    {bookingCategoryId === row.id ? (
+                      <div className="mt-3 space-y-3 border-t border-ink/10 pt-3">
+                        <div>
+                          <p className="mb-1 text-xs text-ink/70">日期</p>
+                          <CoachDateStepper value={bookDay} onChange={setBookDay} minDate={bookingMinDateKey()} />
+                        </div>
+                        <CoachStartTimeSelect
+                          startHour={bookStartHour}
+                          startMinute={bookStartMinute}
+                          durationHours={bookDuration}
+                          occupiedRanges={[]}
+                          onChange={(h, m) => {
+                            setBookStartHour(h);
+                            setBookStartMinute(m);
+                          }}
+                        />
+                        <CoachStartEndSummary
+                          startHour={startSlotDecimal(bookStartHour, bookStartMinute)}
+                          durationHours={bookDuration}
+                        />
+                        <CoachSlotDurationChips
+                          name={`book-category-duration-${row.id}`}
+                          startHour={startSlotDecimal(bookStartHour, bookStartMinute)}
+                          durationHours={bookDuration}
+                          occupiedRanges={[]}
+                          onChange={setBookDuration}
+                        />
+                        {status ? <p role="alert" className="text-xs text-red-700">{status}</p> : null}
+                        <button
+                          type="button"
+                          disabled={
+                            bookBusy ||
+                            slotWouldConflict([], startSlotDecimal(bookStartHour, bookStartMinute), bookDuration)
+                          }
+                          onClick={() => void bookCategory(row.id)}
+                          className="w-full rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-black disabled:opacity-50 sm:w-auto"
+                        >
+                          {bookBusy ? "…" : "確認排程"}
+                        </button>
+                      </div>
+                    ) : null}
                   </li>
                 ))}
               </ul>
               <p className="mt-1 text-xs text-ink/55">未包括其他簽到或扣堂；最新可扣堂餘額見上方。</p>
-              <p className="mt-1 text-xs text-amber-800">舊帳面暫未支援直接排程，請勿重複報 Course。</p>
+              <p className="mt-1 text-xs text-ink/55">排程只建立剩餘紙本堂數的 Course；已上／剩會與紙本帳面同步。</p>
             </div>
           ) : null}
 
@@ -1522,7 +1641,9 @@ export default function CoachDashboardPage() {
                   <div className="font-medium text-ink">{enr.course_title}</div>
                   <div className="mt-1 text-xs text-ink/60">
                     {enr.coach_time_confirmed
-                      ? `${new Date(enr.scheduled_start).toLocaleString("zh-HK")} · ${enr.total_lessons} 堂`
+                      ? `${new Date(enr.scheduled_start).toLocaleString("zh-HK")} · ${enr.total_lessons} 堂可排${
+                          (enr.legacy_prior_lessons ?? 0) > 0 ? `（另紙本已上 ${enr.legacy_prior_lessons}）` : ""
+                        }`
                       : "待排程"}
                     {" · "}
                     {enr.installment_status} ({enr.payment_status})
@@ -1553,6 +1674,7 @@ export default function CoachDashboardPage() {
                       type="button"
                       onClick={() => {
                         setStatus("");
+                        setBookingCategoryId(null);
                         setBookingEnrollmentId(enr.enrollment_id);
                         setBookingOriginalDate(null);
                         setBookDay(bookingMinDateKey());
