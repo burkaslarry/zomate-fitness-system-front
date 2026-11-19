@@ -15,8 +15,10 @@ export type PackagePickRow = {
   category_enrollment_id?: number;
   course_title: string;
   branch_name?: string | null;
+  /** [F003][S007] Converted legacy package — total already includes the paper 已上 count. */
   total_lessons: number;
   remaining_lessons: number;
+  prior_lessons?: number;
   coach_time_confirmed: boolean;
   installment_status: string;
   /** [F003][S005] Lesson range per installment period — when each tranche is due. */
@@ -69,6 +71,9 @@ export default function CoachSchedulePackagePickerSheet({
                   </div>
                   <div className="mt-0.5 text-xs tabular-nums text-ink/60">
                     總 {p.total_lessons} 堂 · 剩 {p.remaining_lessons} 堂
+                    {(p.prior_lessons ?? 0) > 0
+                      ? `（已上 ${Math.max(0, p.total_lessons - p.remaining_lessons)} 堂）`
+                      : ""}
                     {p.coach_time_confirmed ? "" : " · 待排程"}
                   </div>
                   {p.periods && p.periods.length > 0 ? (

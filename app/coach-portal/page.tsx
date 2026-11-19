@@ -485,13 +485,17 @@ export default function CoachDashboardPage() {
             packages: [
               ...rec.enrollments.map((e) => {
                 const p = byId.get(e.enrollment_id);
+                const paper = e.legacy_prior_lessons ?? 0;
+                // [F003][S007] A converted paper package only holds its remaining lessons;
+                // add the paper 已上 count back so 總 matches the imported ledger (e.g. 13 + 17 = 30).
                 return {
                   enrollment_id: e.enrollment_id,
                   kind: "enrollment" as const,
                   course_title: e.course_title,
                   branch_name: e.branch_name ?? null,
-                  total_lessons: e.total_lessons,
+                  total_lessons: e.total_lessons + paper,
                   remaining_lessons: p ? p.remaining_lessons : e.total_lessons,
+                  prior_lessons: paper,
                   coach_time_confirmed: e.coach_time_confirmed,
                   installment_status: e.installment_status,
                   periods: e.installment_periods ?? p?.installment_periods ?? []
