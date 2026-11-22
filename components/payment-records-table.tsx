@@ -17,6 +17,7 @@ import { formatHktDateTime } from "../lib/format-hkt";
 import { memberBranchLabel, memberHomeBranches, type BranchLike } from "../lib/branches";
 import WhatsAppButton from "./whatsapp-button";
 import { getAuthSession } from "../lib/auth";
+import { openWhatsAppLink } from "../lib/whatsapp-utils";
 
 function paymentBranchLabel(row: PaymentRecordRow): string {
   if (!row.branch_id && !row.branch_name && !row.branch_code) return "—";
@@ -65,6 +66,31 @@ function statusBadge(status: PaymentRecordRow["status"]) {
     return <span className="inline-flex rounded-lg bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">缺收據</span>;
   }
   return <span className="inline-flex rounded-lg bg-rose-100 px-2 py-0.5 text-xs font-medium text-rose-800">待付</span>;
+}
+
+/** Outstanding category/course installments need upload too — not only renewal missing_receipt. */
+function canUploadPaymentProof(row: PaymentRecordRow): boolean {
+  if (row.receipt_id || row.status === "paid" || row.status === "pending_confirmation") return false;
+  if (row.status === "missing_receipt" || row.record_type === "renewal") return true;
+  return (
+    row.record_type === "installment" &&
+    row.status === "outstanding" &&
+    Boolean(row.installment_plan_id || row.course_enrollment_id)
+  );
+}
+
+function canConfirmPaymentRow(
+  row: PaymentRecordRow,
+  noDocumentOverride = false
+): boolean {
+  const hasTarget = Boolean(
+    row.course_enrollment_id ||
+      (row.record_type === "installment" && row.installment_plan_id)
+  );
+  if (!hasTarget || row.status === "paid") return false;
+  if (row.status === "pending_confirmation") return true;
+  // [F004][S002] 「唔需要上傳文件」override — confirm without proof.
+  return row.status === "outstanding" && noDocumentOverride;
 }
 
 function recordTypeLabel(type: PaymentRecordRow["record_type"]): string {
@@ -215,6 +241,9 @@ export default function PaymentRecordsTable({
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [receiptPdfBusyId, setReceiptPdfBusyId] = useState<string | null>(null);
+  /** [F004][S002] Local 「唔需要上傳文件」ticks keyed by payment record id. */
+  const [noDocumentById, setNoDocumentById] = useState<Record<string, boolean>>({});
+  const [noDocumentBusyId, setNoDocumentBusyId] = useState<string | null>(null);
   /** [F005][S003] After receipt upload, surface wa.me confirmation (Meta auto-send skipped to avoid multi-course 400). */
   const [postUploadWhatsapp, setPostUploadWhatsapp] = useState<{
     studentWaUrl?: string;
@@ -236,6 +265,27 @@ export default function PaymentRecordsTable({
     setPostUploadWhatsapp(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [detailRow?.id]);
+
+  async function toggleNoDocumentRequired(row: PaymentRecordRow, value: boolean) {
+    if (row.record_type !== "installment" || !row.installment_plan_id || !row.installment_no) return;
+    setNoDocumentBusyId(row.id);
+    try {
+      await api.setCategoryInstallmentNoDocument(row.installment_plan_id, row.installment_no, {
+        no_document_required: value
+      });
+      setNoDocumentById((prev) => ({ ...prev, [row.id]: value }));
+      setUploadStatus(
+        value
+          ? "已剔「唔需要上傳文件」— 可直接 Admin 確認付款（確認後發 PIN／WhatsApp）。"
+          : "已取消 override，請上傳收據後再確認。"
+      );
+      if (onReceiptUploaded) await onReceiptUploaded();
+    } catch (e) {
+      alertApiError(e);
+    } finally {
+      setNoDocumentBusyId(null);
+    }
+  }
 
   /** Keep open 詳情 in sync after list reload (e.g. post-upload / confirm). */
   useEffect(() => {
@@ -275,25 +325,48 @@ export default function PaymentRecordsTable({
     setConfirmBusy(true);
     setUploadStatus("");
     try {
+      type ConfirmWhatsapp = {
+        pin_unlocked?: string;
+        student?: { wa_me_url?: string; message?: string };
+        coach?: { wa_me_url?: string };
+      };
+      let whatsapp: ConfirmWhatsapp | null = null;
       if (isCategoryInstallment) {
         // [F004][S002] Category installment proof uploaded by coach — Admin confirms here.
-        await api.confirmCategoryInstallment(detailRow.installment_plan_id as number, installmentNo, {
-          amount: detailRow.amount ?? undefined
-        });
+        const res = (await api.confirmCategoryInstallment(
+          detailRow.installment_plan_id as number,
+          installmentNo,
+          { amount: detailRow.amount ?? undefined }
+        )) as { whatsapp?: ConfirmWhatsapp };
+        whatsapp = res.whatsapp ?? null;
       } else {
-        await api.markCourseInstallmentPaid(detailRow.course_enrollment_id as number, {
+        const res = (await api.markCourseInstallmentPaid(detailRow.course_enrollment_id as number, {
           student_id: detailRow.student_id,
           installment_no: installmentNo
-        });
+        })) as { whatsapp?: ConfirmWhatsapp };
+        whatsapp = res.whatsapp ?? null;
       }
       console.log("[F004][S002] Success: Admin confirmed payment from payment record", {
         courseId: detailRow.course_enrollment_id,
         installmentPlanId: detailRow.installment_plan_id,
         installmentNo,
-        recordId: detailRow.id
+        recordId: detailRow.id,
+        pinUnlocked: whatsapp?.pin_unlocked
       });
       setDetailRow({ ...detailRow, status: "paid" });
-      setUploadStatus("付款已確認；已通知學生／教練。");
+      const pinNote =
+        whatsapp?.pin_unlocked && whatsapp.pin_unlocked !== "—"
+          ? ` PIN：${whatsapp.pin_unlocked}`
+          : "";
+      setUploadStatus(`付款已確認；已通知學生／教練。${pinNote}`);
+      if (whatsapp?.student?.wa_me_url) {
+        setPostUploadWhatsapp({
+          studentMessage: whatsapp.student.message,
+          studentWaUrl: whatsapp.student.wa_me_url,
+          coachWaUrl: whatsapp.coach?.wa_me_url
+        });
+        openWhatsAppLink(whatsapp.student.wa_me_url);
+      }
       if (onPaymentConfirmed) await onPaymentConfirmed();
       else if (onReceiptUploaded) await onReceiptUploaded();
     } catch (e) {
@@ -387,9 +460,13 @@ export default function PaymentRecordsTable({
       if (onReceiptUploaded) await onReceiptUploaded();
       // Optimistically update modal — upload is evidence only; Admin confirm still required.
       if (res.id) {
+        const awaitsConfirm = Boolean(
+          detailRow.course_enrollment_id ||
+            (detailRow.record_type === "installment" && detailRow.installment_plan_id)
+        );
         setDetailRow({
           ...detailRow,
-          status: detailRow.course_enrollment_id ? "pending_confirmation" : "paid",
+          status: awaitsConfirm ? "pending_confirmation" : "paid",
           receipt_id: res.id,
           receipt_url: res.file_url ?? detailRow.receipt_url,
           download_url: res.download_url ?? `/api/receipts/${res.id}/download`
@@ -565,15 +642,34 @@ export default function PaymentRecordsTable({
                     />
                   ) : null}
                 </DetailRow>
-                {!detailRow.receipt_id &&
-                (detailRow.status === "missing_receipt" || detailRow.record_type === "renewal") ? (
+                {detailRow.record_type === "installment" &&
+                detailRow.installment_plan_id &&
+                detailRow.status === "outstanding" &&
+                !detailRow.receipt_id ? (
+                  <DetailRow label="唔使收據">
+                    <label className="inline-flex items-center gap-2 text-sm text-ink/80">
+                      <input
+                        type="checkbox"
+                        className="rounded border-ink/20"
+                        checked={Boolean(noDocumentById[detailRow.id])}
+                        disabled={noDocumentBusyId === detailRow.id || confirmBusy}
+                        onChange={(e) => void toggleNoDocumentRequired(detailRow, e.target.checked)}
+                      />
+                      唔需要上傳文件（已付 package override）
+                    </label>
+                    <p className="mt-1 text-[11px] text-ink/50">
+                      匯入已付舊 package 可剔呢格，唔使上傳收據，直接 Admin 確認後發 PIN。
+                    </p>
+                  </DetailRow>
+                ) : null}
+                {canUploadPaymentProof(detailRow) ? (
                   <DetailRow label="上傳文件">
                     <div className="space-y-2">
                       <input
                         ref={fileInputRef}
                         type="file"
                         accept="image/*,.pdf,application/pdf"
-                        disabled={uploading}
+                        disabled={uploading || Boolean(noDocumentById[detailRow.id])}
                         className="block w-full text-xs text-ink file:mr-2 file:rounded-md file:border-0 file:bg-primary/20 file:px-2 file:py-1 file:text-xs file:font-medium file:text-black"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
@@ -581,7 +677,7 @@ export default function PaymentRecordsTable({
                         }}
                       />
                       <p className="text-[11px] text-ink/50">
-                        支援 PDF / JPG / PNG / WEBP（最大 5MB）。上傳後會寫入收據紀錄並連結此續會。
+                        支援 PDF / JPG / PNG / WEBP（最大 5MB）。上傳後狀態轉「待確認」，再按 Admin 確認付款。
                       </p>
                       {uploading ? (
                         <p className="inline-flex items-center gap-1 text-xs text-ink/60">
@@ -605,11 +701,7 @@ export default function PaymentRecordsTable({
                 ) : null}
               </dl>
 
-              {uploadStatus &&
-              !(
-                !detailRow.receipt_id &&
-                (detailRow.status === "missing_receipt" || detailRow.record_type === "renewal")
-              ) ? (
+              {uploadStatus && !canUploadPaymentProof(detailRow) ? (
                 <p className="mt-3 text-xs text-emerald-800">{uploadStatus}</p>
               ) : null}
 
@@ -620,7 +712,9 @@ export default function PaymentRecordsTable({
                 {postUploadWhatsapp?.coachWaUrl ? (
                   <WhatsAppButton href={postUploadWhatsapp.coachWaUrl} label="再發 WhatsApp（教練）" />
                 ) : null}
-                {detailRow.status === "missing_receipt" && onRequestReceiptUpload ? (
+                {(detailRow.status === "missing_receipt" ||
+                  (detailRow.record_type === "installment" && detailRow.status === "outstanding")) &&
+                onRequestReceiptUpload ? (
                   <WhatsAppButton
                     label={receiptUploadBusyId === detailRow.id ? "產生中…" : "WhatsApp 請上傳收據"}
                     disabled={receiptUploadBusyId === detailRow.id}
@@ -628,12 +722,10 @@ export default function PaymentRecordsTable({
                   />
                 ) : null}
                 {canConfirmPayment &&
-                (detailRow.course_enrollment_id ||
-                  (detailRow.record_type === "installment" && detailRow.installment_plan_id)) &&
-                detailRow.status === "pending_confirmation" ? (
+                canConfirmPaymentRow(detailRow, Boolean(noDocumentById[detailRow.id])) ? (
                   <button
                     type="button"
-                    disabled={confirmBusy}
+                    disabled={confirmBusy || noDocumentBusyId === detailRow.id}
                     onClick={() => void handleConfirmPayment()}
                     className="rounded-lg border border-emerald-600/40 bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
                   >
@@ -725,7 +817,9 @@ export default function PaymentRecordsTable({
                 <ReceiptLinks row={row} />
               </div>
             ) : null}
-            {showReceipt && row.status === "missing_receipt" && onRequestReceiptUpload ? (
+            {(row.status === "missing_receipt" ||
+              (row.record_type === "installment" && row.status === "outstanding")) &&
+            onRequestReceiptUpload ? (
               <div className="mt-2">
                 <WhatsAppButton
                   label={receiptUploadBusyId === row.id ? "產生中…" : "WhatsApp 請上傳收據"}
@@ -741,7 +835,12 @@ export default function PaymentRecordsTable({
                 className="inline-flex items-center gap-1 text-xs font-medium text-primary underline"
               >
                 <Eye className="h-3.5 w-3.5" aria-hidden />
-                詳情
+                {canUploadPaymentProof(row) ||
+                (row.record_type === "installment" && row.status === "outstanding")
+                  ? "詳情 · 上傳／確認"
+                  : canConfirmPayment && canConfirmPaymentRow(row, Boolean(noDocumentById[row.id]))
+                    ? "詳情 · Admin 確認付款"
+                    : "詳情"}
               </button>
               {onDelete && (row.record_type === "renewal" || row.record_type === "receipt") ? (
                 <button
@@ -801,7 +900,9 @@ export default function PaymentRecordsTable({
                   <td className="px-3 py-2">
                     {row.receipt_id || row.receipt_url ? (
                       <ReceiptLinks row={row} />
-                    ) : row.status === "missing_receipt" && onRequestReceiptUpload ? (
+                    ) : (row.status === "missing_receipt" ||
+                        (row.record_type === "installment" && row.status === "outstanding")) &&
+                      onRequestReceiptUpload ? (
                       <WhatsAppButton
                         label={receiptUploadBusyId === row.id ? "…" : "請上傳收據"}
                         disabled={receiptUploadBusyId === row.id}
@@ -822,7 +923,12 @@ export default function PaymentRecordsTable({
                       className="inline-flex items-center gap-1 text-xs font-medium text-primary underline"
                     >
                       <Eye className="h-3.5 w-3.5" aria-hidden />
-                      詳情
+                      {canUploadPaymentProof(row) ||
+                      (row.record_type === "installment" && row.status === "outstanding")
+                        ? "詳情 · 上傳／確認"
+                        : canConfirmPayment && canConfirmPaymentRow(row, Boolean(noDocumentById[row.id]))
+                          ? "詳情 · 確認"
+                          : "詳情"}
                     </button>
                     {onDelete && (row.record_type === "renewal" || row.record_type === "receipt") ? (
                       <button
