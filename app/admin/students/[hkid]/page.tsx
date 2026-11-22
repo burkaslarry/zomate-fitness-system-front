@@ -211,14 +211,55 @@ export default function AdminStudentDetailPage() {
         installment_no: installmentNo
       })) as {
         enrollments?: Array<{ installment_segments?: InstallmentSegmentPinDto[] }>;
+        whatsapp?: { student?: { wa_me_url?: string }; pin_unlocked?: string };
       };
-      const pin = res?.enrollments?.[0]?.installment_segments?.find(
-        (segment) => segment.installment_no === installmentNo
-      )?.pin;
+      const pin =
+        res?.enrollments?.[0]?.installment_segments?.find(
+          (segment) => segment.installment_no === installmentNo
+        )?.pin || res?.whatsapp?.pin_unlocked;
       setConfirmedPin({
         label: `「${courseTitle}」第 ${installmentNo} 期`,
         pin: pin || "—（請刷新後查看）"
       });
+      const waUrl = res?.whatsapp?.student?.wa_me_url;
+      if (waUrl) openWhatsAppLink(waUrl);
+      reload();
+    } catch (error) {
+      alertApiError(error);
+    } finally {
+      setPaymentConfirmBusy(null);
+    }
+  }
+
+  /** [F004][S002] Admin confirms category / 舊 package installment; same WhatsApp notify path as 分期付款學生. */
+  async function confirmCategoryPayment(
+    planId: number,
+    installmentNo: number,
+    categoryName: string,
+    amount?: number | null
+  ) {
+    if (
+      !window.confirm(
+        `已核對「${categoryName}」第 ${installmentNo} 期付款？確認後會發出 WhatsApp（付款已確認）。`
+      )
+    ) {
+      return;
+    }
+    setPaymentConfirmBusy(`cat:${planId}:${installmentNo}`);
+    try {
+      const res = (await api.confirmCategoryInstallment(planId, installmentNo, {
+        amount: amount ?? undefined
+      })) as {
+        whatsapp?: { student?: { wa_me_url?: string }; pin_unlocked?: string };
+      };
+      const pin = res?.whatsapp?.pin_unlocked;
+      setConfirmedPin({
+        label: `「${categoryName}」第 ${installmentNo} 期`,
+        pin: pin && pin !== "—" ? pin : "—（舊 package 確認後未必有課程 PIN；教練排堂後先有簽到 PIN）"
+      });
+      const waUrl = res?.whatsapp?.student?.wa_me_url;
+      if (waUrl) openWhatsAppLink(waUrl);
+      else setToast("已確認付款；如未開 WhatsApp，請到 WhatsApp 日誌核對是否已發送。");
       reload();
     } catch (error) {
       alertApiError(error);
@@ -1267,8 +1308,11 @@ export default function AdminStudentDetailPage() {
                       <CategoryEnrollmentCard
                         key={c.id}
                         row={c}
+                        canConfirm={isAdmin}
+                        paymentConfirmBusy={paymentConfirmBusy}
                         onReceiptForInstallment={focusReceiptForInstallment}
                         onToggleNoDocument={toggleCategoryNoDocument}
+                        onConfirmPayment={confirmCategoryPayment}
                         noUploadBusy={noUploadBusy}
                       />
                     ))}
@@ -1540,11 +1584,16 @@ export default function AdminStudentDetailPage() {
 
 function CategoryEnrollmentCard({
   row,
+  canConfirm,
+  paymentConfirmBusy,
   onReceiptForInstallment,
   onToggleNoDocument,
+  onConfirmPayment,
   noUploadBusy
 }: {
   row: CategoryEnrollmentRow;
+  canConfirm: boolean;
+  paymentConfirmBusy: string | null;
   onReceiptForInstallment: (payload: {
     installmentNo: number;
     categoryName: string;
@@ -1552,6 +1601,12 @@ function CategoryEnrollmentCard({
   }) => void;
   /** [F004][S002] Admin 「唔需要上傳文件」 tick per unpaid period. */
   onToggleNoDocument: (planId: number, installmentNo: number, value: boolean) => void;
+  onConfirmPayment: (
+    planId: number,
+    installmentNo: number,
+    categoryName: string,
+    amount?: number | null
+  ) => void;
   noUploadBusy: string | null;
 }) {
   const plans = row.installment_plans ?? [];
@@ -1584,57 +1639,95 @@ function CategoryEnrollmentCard({
                 分期方案 · 共 {pl.total_installments} 期 · {pl.status}
               </div>
               <ul className="mt-2 space-y-1 pl-2">
-                {pl.payments.map((pay) => (
-                  <li key={pay.id} className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 text-ink/70">
-                    <span>
-                      第 {pay.installment_no} 期 · {installmentAmountLabel(pay.amount)} · 到期 {pay.due_date}
-                    </span>
-                    <span
-                      className={
-                        pay.paid_at
-                          ? "text-emerald-700"
-                          : pay.proof_receipt_id
-                            ? "text-sky-800"
-                            : "text-amber-800"
-                      }
+                {pl.payments.map((pay) => {
+                  const busyKey = `cat:${pl.id}:${pay.installment_no}`;
+                  const canConfirmThis =
+                    canConfirm &&
+                    !pay.paid_at &&
+                    (Boolean(pay.proof_receipt_id) || pay.no_document_required === true);
+                  return (
+                    <li
+                      key={pay.id}
+                      className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 text-ink/70"
                     >
-                      {pay.paid_at ? (
-                        paymentStatusLabel(pay.status, pay.paid_at)
-                      ) : (
-                        <>
-                          {pay.proof_receipt_id
-                            ? "待 Admin 確認（已上載收據）"
-                            : pay.no_document_required
-                              ? "唔需要上傳文件"
-                              : paymentStatusLabel(pay.status, pay.paid_at)}{" "}
-                          <label className="inline-flex items-center gap-1 text-ink/60" title="剔咗之後，Admin 確認付款唔使再上傳收據">
-                            <input
-                              type="checkbox"
-                              className="rounded border-ink/20"
-                              checked={pay.no_document_required === true}
-                              disabled={noUploadBusy !== null}
-                              onChange={(event) => onToggleNoDocument(pl.id, pay.installment_no, event.target.checked)}
-                            />
-                            唔需要上傳文件
-                          </label>{" "}
-                          <button
-                            type="button"
-                            className="text-primary underline decoration-primary/40 underline-offset-2 hover:opacity-90"
-                            onClick={() =>
-                              onReceiptForInstallment({
-                                installmentNo: pay.installment_no,
-                                categoryName,
-                                installmentPlanId: pl.id
-                              })
-                            }
-                          >
-                            （上傳收據）
-                          </button>
-                        </>
-                      )}
-                    </span>
-                  </li>
-                ))}
+                      <span>
+                        第 {pay.installment_no} 期 · {installmentAmountLabel(pay.amount)} · 到期{" "}
+                        {pay.due_date}
+                      </span>
+                      <span
+                        className={
+                          pay.paid_at
+                            ? "text-emerald-700"
+                            : pay.proof_receipt_id
+                              ? "text-sky-800"
+                              : "text-amber-800"
+                        }
+                      >
+                        {pay.paid_at ? (
+                          paymentStatusLabel(pay.status, pay.paid_at)
+                        ) : (
+                          <>
+                            {pay.proof_receipt_id
+                              ? "待 Admin 確認（已上載收據）"
+                              : pay.no_document_required
+                                ? "唔需要上傳文件 · 待 Admin 確認付款"
+                                : paymentStatusLabel(pay.status, pay.paid_at)}{" "}
+                            <label
+                              className="inline-flex items-center gap-1 text-ink/60"
+                              title="剔咗之後，Admin 確認付款唔使再上傳收據"
+                            >
+                              <input
+                                type="checkbox"
+                                className="rounded border-ink/20"
+                                checked={pay.no_document_required === true}
+                                disabled={noUploadBusy !== null}
+                                onChange={(event) =>
+                                  onToggleNoDocument(pl.id, pay.installment_no, event.target.checked)
+                                }
+                              />
+                              唔需要上傳文件
+                            </label>{" "}
+                            <button
+                              type="button"
+                              className="text-primary underline decoration-primary/40 underline-offset-2 hover:opacity-90"
+                              onClick={() =>
+                                onReceiptForInstallment({
+                                  installmentNo: pay.installment_no,
+                                  categoryName,
+                                  installmentPlanId: pl.id
+                                })
+                              }
+                            >
+                              （上傳收據）
+                            </button>{" "}
+                            {canConfirm ? (
+                              <button
+                                type="button"
+                                disabled={paymentConfirmBusy !== null || !canConfirmThis}
+                                className="font-semibold text-emerald-800 underline decoration-emerald-600/40 underline-offset-2 disabled:opacity-40"
+                                title={
+                                  canConfirmThis
+                                    ? undefined
+                                    : "請先上傳收據，或剔「唔需要上傳文件」"
+                                }
+                                onClick={() =>
+                                  onConfirmPayment(
+                                    pl.id,
+                                    pay.installment_no,
+                                    categoryName,
+                                    pay.amount
+                                  )
+                                }
+                              >
+                                {paymentConfirmBusy === busyKey ? "確認中…" : "Admin 確認付款"}
+                              </button>
+                            ) : null}
+                          </>
+                        )}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             </li>
           ))}
