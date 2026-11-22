@@ -79,10 +79,18 @@ function canUploadPaymentProof(row: PaymentRecordRow): boolean {
   );
 }
 
-function canConfirmPaymentRow(row: PaymentRecordRow): boolean {
-  if (row.status !== "pending_confirmation") return false;
-  if (row.course_enrollment_id) return true;
-  return row.record_type === "installment" && Boolean(row.installment_plan_id);
+function canConfirmPaymentRow(
+  row: PaymentRecordRow,
+  noDocumentOverride = false
+): boolean {
+  const hasTarget = Boolean(
+    row.course_enrollment_id ||
+      (row.record_type === "installment" && row.installment_plan_id)
+  );
+  if (!hasTarget || row.status === "paid") return false;
+  if (row.status === "pending_confirmation") return true;
+  // [F004][S002] 「唔需要上傳文件」override — confirm without proof.
+  return row.status === "outstanding" && noDocumentOverride;
 }
 
 function recordTypeLabel(type: PaymentRecordRow["record_type"]): string {
@@ -233,6 +241,9 @@ export default function PaymentRecordsTable({
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [receiptPdfBusyId, setReceiptPdfBusyId] = useState<string | null>(null);
+  /** [F004][S002] Local 「唔需要上傳文件」ticks keyed by payment record id. */
+  const [noDocumentById, setNoDocumentById] = useState<Record<string, boolean>>({});
+  const [noDocumentBusyId, setNoDocumentBusyId] = useState<string | null>(null);
   /** [F005][S003] After receipt upload, surface wa.me confirmation (Meta auto-send skipped to avoid multi-course 400). */
   const [postUploadWhatsapp, setPostUploadWhatsapp] = useState<{
     studentWaUrl?: string;
@@ -254,6 +265,27 @@ export default function PaymentRecordsTable({
     setPostUploadWhatsapp(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, [detailRow?.id]);
+
+  async function toggleNoDocumentRequired(row: PaymentRecordRow, value: boolean) {
+    if (row.record_type !== "installment" || !row.installment_plan_id || !row.installment_no) return;
+    setNoDocumentBusyId(row.id);
+    try {
+      await api.setCategoryInstallmentNoDocument(row.installment_plan_id, row.installment_no, {
+        no_document_required: value
+      });
+      setNoDocumentById((prev) => ({ ...prev, [row.id]: value }));
+      setUploadStatus(
+        value
+          ? "已剔「唔需要上傳文件」— 可直接 Admin 確認付款（確認後發 PIN／WhatsApp）。"
+          : "已取消 override，請上傳收據後再確認。"
+      );
+      if (onReceiptUploaded) await onReceiptUploaded();
+    } catch (e) {
+      alertApiError(e);
+    } finally {
+      setNoDocumentBusyId(null);
+    }
+  }
 
   /** Keep open 詳情 in sync after list reload (e.g. post-upload / confirm). */
   useEffect(() => {
@@ -610,6 +642,26 @@ export default function PaymentRecordsTable({
                     />
                   ) : null}
                 </DetailRow>
+                {detailRow.record_type === "installment" &&
+                detailRow.installment_plan_id &&
+                detailRow.status === "outstanding" &&
+                !detailRow.receipt_id ? (
+                  <DetailRow label="唔使收據">
+                    <label className="inline-flex items-center gap-2 text-sm text-ink/80">
+                      <input
+                        type="checkbox"
+                        className="rounded border-ink/20"
+                        checked={Boolean(noDocumentById[detailRow.id])}
+                        disabled={noDocumentBusyId === detailRow.id || confirmBusy}
+                        onChange={(e) => void toggleNoDocumentRequired(detailRow, e.target.checked)}
+                      />
+                      唔需要上傳文件（已付 package override）
+                    </label>
+                    <p className="mt-1 text-[11px] text-ink/50">
+                      匯入已付舊 package 可剔呢格，唔使上傳收據，直接 Admin 確認後發 PIN。
+                    </p>
+                  </DetailRow>
+                ) : null}
                 {canUploadPaymentProof(detailRow) ? (
                   <DetailRow label="上傳文件">
                     <div className="space-y-2">
@@ -617,7 +669,7 @@ export default function PaymentRecordsTable({
                         ref={fileInputRef}
                         type="file"
                         accept="image/*,.pdf,application/pdf"
-                        disabled={uploading}
+                        disabled={uploading || Boolean(noDocumentById[detailRow.id])}
                         className="block w-full text-xs text-ink file:mr-2 file:rounded-md file:border-0 file:bg-primary/20 file:px-2 file:py-1 file:text-xs file:font-medium file:text-black"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
@@ -669,10 +721,11 @@ export default function PaymentRecordsTable({
                     onClick={() => void onRequestReceiptUpload(detailRow)}
                   />
                 ) : null}
-                {canConfirmPayment && canConfirmPaymentRow(detailRow) ? (
+                {canConfirmPayment &&
+                canConfirmPaymentRow(detailRow, Boolean(noDocumentById[detailRow.id])) ? (
                   <button
                     type="button"
-                    disabled={confirmBusy}
+                    disabled={confirmBusy || noDocumentBusyId === detailRow.id}
                     onClick={() => void handleConfirmPayment()}
                     className="rounded-lg border border-emerald-600/40 bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
                   >
@@ -782,9 +835,10 @@ export default function PaymentRecordsTable({
                 className="inline-flex items-center gap-1 text-xs font-medium text-primary underline"
               >
                 <Eye className="h-3.5 w-3.5" aria-hidden />
-                {canUploadPaymentProof(row)
-                  ? "詳情 · 上傳收據"
-                  : canConfirmPayment && canConfirmPaymentRow(row)
+                {canUploadPaymentProof(row) ||
+                (row.record_type === "installment" && row.status === "outstanding")
+                  ? "詳情 · 上傳／確認"
+                  : canConfirmPayment && canConfirmPaymentRow(row, Boolean(noDocumentById[row.id]))
                     ? "詳情 · Admin 確認付款"
                     : "詳情"}
               </button>
@@ -869,9 +923,10 @@ export default function PaymentRecordsTable({
                       className="inline-flex items-center gap-1 text-xs font-medium text-primary underline"
                     >
                       <Eye className="h-3.5 w-3.5" aria-hidden />
-                      {canUploadPaymentProof(row)
-                        ? "詳情 · 上傳"
-                        : canConfirmPayment && canConfirmPaymentRow(row)
+                      {canUploadPaymentProof(row) ||
+                      (row.record_type === "installment" && row.status === "outstanding")
+                        ? "詳情 · 上傳／確認"
+                        : canConfirmPayment && canConfirmPaymentRow(row, Boolean(noDocumentById[row.id]))
                           ? "詳情 · 確認"
                           : "詳情"}
                     </button>

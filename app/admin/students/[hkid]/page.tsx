@@ -420,12 +420,22 @@ export default function AdminStudentDetailPage() {
         total_lessons: lessons,
         total_installments: installments,
         lessons_already_taken: priorLessons
-      })) as { lesson_balance?: number };
-      setToast(
-        typeof res?.lesson_balance === "number"
-          ? `已更新課程／堂數（餘堂 ${res.lesson_balance}）`
-          : "已更新課程／堂數"
-      );
+      })) as { lesson_balance?: number; checkin_pin?: string };
+      const pin = String(res?.checkin_pin || "").trim();
+      if (pin && pin !== "—") {
+        setConfirmedPin({ label: "匯入／更新 package", pin });
+        setToast(
+          typeof res?.lesson_balance === "number"
+            ? `已更新課程／堂數（餘堂 ${res.lesson_balance}）· PIN ${pin}`
+            : `已更新課程／堂數 · PIN ${pin}`
+        );
+      } else {
+        setToast(
+          typeof res?.lesson_balance === "number"
+            ? `已更新課程／堂數（餘堂 ${res.lesson_balance}）。請到分期剔「唔需要上傳文件」或上傳收據後 Admin 確認，以發出 PIN。`
+            : "已更新課程／堂數。請到分期確認付款以發出 PIN。"
+        );
+      }
       reload();
     } catch (e) {
       alertApiError(e);
