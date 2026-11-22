@@ -120,8 +120,9 @@ export default function AdminStudentDetailPage() {
   const [toast, setToast] = useState("");
   const [categories, setCategories] = useState<CatRow[]>([]);
   const [catId, setCatId] = useState<number | "">("");
-  const [lessons, setLessons] = useState(10);
-  const [priorLessons, setPriorLessons] = useState(0);
+  /** String while editing so mobile can clear digits (e.g. delete "1" then type "30"). */
+  const [lessonsText, setLessonsText] = useState("10");
+  const [priorLessonsText, setPriorLessonsText] = useState("0");
   const [installmentsText, setInstallmentsText] = useState("3");
   const [saving, setSaving] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -352,6 +353,16 @@ export default function AdminStudentDetailPage() {
       alertApiError(new Error("請選擇課程種類"));
       return;
     }
+    const lessons = Number(lessonsText);
+    if (!Number.isInteger(lessons) || lessons < 1) {
+      alertApiError(new Error("總堂數必須至少為 1"));
+      return;
+    }
+    const priorLessons = Number(priorLessonsText || "0");
+    if (!Number.isInteger(priorLessons) || priorLessons < 0 || priorLessons > lessons) {
+      alertApiError(new Error("以上堂數須為 0 至總堂數之間"));
+      return;
+    }
     const installments = Number(installmentsText);
     if (installments > 12) {
       alertApiError(new Error("最多分12期"));
@@ -367,7 +378,7 @@ export default function AdminStudentDetailPage() {
         course_category_id: Number(catId),
         total_lessons: lessons,
         total_installments: installments,
-        lessons_already_taken: Math.min(priorLessons, lessons)
+        lessons_already_taken: priorLessons
       })) as { lesson_balance?: number };
       setToast(
         typeof res?.lesson_balance === "number"
@@ -1182,27 +1193,36 @@ export default function AdminStudentDetailPage() {
                   <label className="block text-xs text-ink/55">
                     總堂數
                     <input
-                      type="number"
-                      min={1}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="例如 30"
                       className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-2 py-2 text-sm"
-                      value={lessons}
+                      value={lessonsText}
                       onChange={(e) => {
-                        const next = Number(e.target.value) || 1;
-                        setLessons(next);
-                        setPriorLessons((p) => Math.min(p, next));
+                        const next = e.target.value.replace(/\D/g, "").slice(0, 3);
+                        setLessonsText(next);
+                        const nextLessons = Number(next);
+                        if (Number.isInteger(nextLessons) && nextLessons >= 1) {
+                          setPriorLessonsText((p) => {
+                            const prior = Number(p || "0");
+                            return prior > nextLessons ? String(nextLessons) : p;
+                          });
+                        }
                       }}
                     />
                   </label>
                   <label className="block text-xs text-ink/55">
                     堂數（已上）
                     <input
-                      type="number"
-                      min={0}
-                      max={lessons}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="0"
                       className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-2 py-2 text-sm"
-                      value={priorLessons}
+                      value={priorLessonsText}
                       onChange={(e) =>
-                        setPriorLessons(Math.min(lessons, Math.max(0, Number(e.target.value) || 0)))
+                        setPriorLessonsText(e.target.value.replace(/\D/g, "").slice(0, 3))
                       }
                     />
                     <span className="mt-1 block text-[11px] text-ink/45">
