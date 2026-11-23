@@ -830,6 +830,12 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload)
     }),
+  /** [F004][S002] Undo a mistaken Admin 確認付款 on one category / old-package period. */
+  unconfirmCategoryInstallment: (planId: number, installmentNo: number) =>
+    request(`/api/admin/installment-plans/${planId}/payments/${installmentNo}/unconfirm`, {
+      method: "PATCH",
+      body: JSON.stringify({})
+    }),
   updateCourseInstallmentReminder: (
     courseId: number,
     payload: { student_id: number; installment_no: number; reminder_lesson: number }
