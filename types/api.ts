@@ -75,6 +75,10 @@ export type CourseCheckinPinRow = {
   lessons_attended?: number;
   /** [F003][S007] Imported paper ledger lessons already taken (converted legacy package). */
   legacy_prior_lessons?: number;
+  /** [F004][S002] Linked category ledger for imported old packages. */
+  legacy_category_enrollment_id?: number | null;
+  /** [F004][S002] Active category installment plan mirrored onto the old-package course card. */
+  legacy_installment_plan_id?: number | null;
   /** [F004][S002] Removed package (soft delete, visible N) — kept so payment records stay readable. */
   deleted?: boolean;
 };

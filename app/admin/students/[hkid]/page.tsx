@@ -202,16 +202,30 @@ export default function AdminStudentDetailPage() {
   }
 
   /** [F004][S002] Admin confirms actual payment; the server issues later PINs and notifies once. */
-  async function confirmCoursePayment(courseId: number, courseTitle: string, installmentNo: number) {
-    if (!data || !window.confirm(`已核對「${courseTitle}」第 ${installmentNo} 期付款？確認後會發出 WhatsApp 通知及相應 PIN。`)) return;
+  async function confirmCoursePayment(
+    courseId: number,
+    courseTitle: string,
+    installmentNo: number,
+    legacyPlanId?: number | null
+  ) {
+    if (!data || !window.confirm(`已核對「${courseTitle}」第 ${installmentNo} 期付款？確認後會發出 WhatsApp 通知學生（含 PIN），並通知教練（不含學生 PIN）。`)) return;
     setPaymentConfirmBusy(`${courseId}:${installmentNo}`);
     try {
-      const res = (await api.markCourseInstallmentPaid(courseId, {
-        student_id: data.profile.id,
-        installment_no: installmentNo
-      })) as {
+      // [F004][S002] Old package course card confirms via the linked category plan when present.
+      const res = (
+        legacyPlanId
+          ? await api.confirmCategoryInstallment(legacyPlanId, installmentNo, {})
+          : await api.markCourseInstallmentPaid(courseId, {
+              student_id: data.profile.id,
+              installment_no: installmentNo
+            })
+      ) as {
         enrollments?: Array<{ installment_segments?: InstallmentSegmentPinDto[] }>;
-        whatsapp?: { student?: { wa_me_url?: string }; pin_unlocked?: string };
+        whatsapp?: {
+          student?: { wa_me_url?: string };
+          coach?: { wa_me_url?: string };
+          pin_unlocked?: string;
+        };
       };
       const pin =
         res?.enrollments?.[0]?.installment_segments?.find(
@@ -221,8 +235,19 @@ export default function AdminStudentDetailPage() {
         label: `「${courseTitle}」第 ${installmentNo} 期`,
         pin: pin || "—（請刷新後查看）"
       });
-      const waUrl = res?.whatsapp?.student?.wa_me_url;
-      if (waUrl) openWhatsAppLink(waUrl);
+      const studentWa = res?.whatsapp?.student?.wa_me_url;
+      const coachWa = res?.whatsapp?.coach?.wa_me_url;
+      if (studentWa) openWhatsAppLink(studentWa);
+      else if (coachWa) openWhatsAppLink(coachWa);
+      else setToast("已確認付款；如未開 WhatsApp，請到 WhatsApp 日誌核對是否已發送。");
+      if (studentWa && coachWa) {
+        setReceiptUploadSuccess({
+          isInstallment: true,
+          pinUnlocked: pin,
+          studentWaUrl: studentWa,
+          coachWaUrl: coachWa
+        });
+      }
       reload();
     } catch (error) {
       alertApiError(error);
@@ -240,7 +265,7 @@ export default function AdminStudentDetailPage() {
   ) {
     if (
       !window.confirm(
-        `已核對「${categoryName}」第 ${installmentNo} 期付款？確認後會發出 WhatsApp（付款已確認）。`
+        `已核對「${categoryName}」第 ${installmentNo} 期付款？確認後會發出 WhatsApp 通知學生（含 PIN），並通知教練（不含學生 PIN）。`
       )
     ) {
       return;
@@ -250,16 +275,51 @@ export default function AdminStudentDetailPage() {
       const res = (await api.confirmCategoryInstallment(planId, installmentNo, {
         amount: amount ?? undefined
       })) as {
-        whatsapp?: { student?: { wa_me_url?: string }; pin_unlocked?: string };
+        whatsapp?: {
+          student?: { wa_me_url?: string };
+          coach?: { wa_me_url?: string };
+          pin_unlocked?: string;
+        };
       };
       const pin = res?.whatsapp?.pin_unlocked;
       setConfirmedPin({
         label: `「${categoryName}」第 ${installmentNo} 期`,
         pin: pin && pin !== "—" ? pin : "—（舊 package 確認後未必有課程 PIN；教練排堂後先有簽到 PIN）"
       });
-      const waUrl = res?.whatsapp?.student?.wa_me_url;
-      if (waUrl) openWhatsAppLink(waUrl);
+      const studentWa = res?.whatsapp?.student?.wa_me_url;
+      const coachWa = res?.whatsapp?.coach?.wa_me_url;
+      if (studentWa) openWhatsAppLink(studentWa);
+      else if (coachWa) openWhatsAppLink(coachWa);
       else setToast("已確認付款；如未開 WhatsApp，請到 WhatsApp 日誌核對是否已發送。");
+      if (studentWa && coachWa) {
+        setReceiptUploadSuccess({
+          isInstallment: true,
+          pinUnlocked: pin,
+          studentWaUrl: studentWa,
+          coachWaUrl: coachWa
+        });
+      }
+      reload();
+    } catch (error) {
+      alertApiError(error);
+    } finally {
+      setPaymentConfirmBusy(null);
+    }
+  }
+
+  /** [F004][S002] Undo a mistaken paid mark on one category / old-package period. */
+  async function unconfirmCategoryPayment(planId: number, installmentNo: number, categoryName: string) {
+    if (
+      !window.confirm(
+        `將「${categoryName}」第 ${installmentNo} 期改回未付款？只影響呢一期，唔會自動改其他期。`
+      )
+    ) {
+      return;
+    }
+    setPaymentConfirmBusy(`cat-un:${planId}:${installmentNo}`);
+    try {
+      await api.unconfirmCategoryInstallment(planId, installmentNo);
+      setToast(`第 ${installmentNo} 期已改回未付款，可再剔「唔需要上傳文件」後確認。`);
       reload();
     } catch (error) {
       alertApiError(error);
@@ -582,14 +642,29 @@ export default function AdminStudentDetailPage() {
   }
 
   /** [F004][S002] Course-period 「（上傳收據）」 — modal derives Course + period from the segment row. */
-  function focusReceiptForCoursePeriod(courseId: number, courseTitle: string, installmentNo: number) {
+  function focusReceiptForCoursePeriod(
+    courseId: number,
+    courseTitle: string,
+    installmentNo: number,
+    legacyPlanId?: number | null
+  ) {
     setTab("課程記錄");
-    setReceiptInstallmentCtx({
-      kind: "course",
-      installmentNo,
-      categoryName: courseTitle,
-      courseEnrollmentId: courseId
-    });
+    // [F004][S002] Old package proofs attach to the category plan period, not a course segment.
+    if (legacyPlanId) {
+      setReceiptInstallmentCtx({
+        kind: "category",
+        installmentNo,
+        categoryName: courseTitle,
+        installmentPlanId: legacyPlanId
+      });
+    } else {
+      setReceiptInstallmentCtx({
+        kind: "course",
+        installmentNo,
+        categoryName: courseTitle,
+        courseEnrollmentId: courseId
+      });
+    }
     setReceiptUploadSuccess(null);
     setReceiptModalOpen(true);
   }
@@ -1127,11 +1202,19 @@ export default function AdminStudentDetailPage() {
                         <ul className="mt-2 space-y-2">
                           {(p.installment_segments?.length ? p.installment_segments : ([{ installment_no: 1, pin: p.checkin_pin, paid: false }] as InstallmentSegmentPinDto[])).map((segment) => {
                             const isRealSegment = (p.installment_segments?.length ?? 0) > 0;
+                            const isLegacyPackage = Boolean(p.legacy_installment_plan_id || p.legacy_category_enrollment_id);
                             const noUpload = (p.no_upload_installment_nos ?? []).includes(segment.installment_no);
-                            /** [F004][S002] Tick only once the student has reached this period's first lesson (上咗幾多堂). */
-                            const tickable = !segment.paid && isRealSegment && (p.lessons_attended ?? 0) >= (segment.lesson_from ?? 1);
-                            /** Synthetic legacy row has no pending flag — leave enabled and let the backend validate. */
-                            const canConfirm = noUpload || segment.has_pending_payment !== false;
+                            /** [F004][S002] Paper progress counts for old packages; period 1 is always tickable. */
+                            const progressLessons =
+                              (p.lessons_attended ?? 0) + (p.legacy_prior_lessons ?? 0);
+                            const tickable =
+                              !segment.paid &&
+                              (segment.installment_no === 1 ||
+                                progressLessons >= (segment.lesson_from ?? 1) ||
+                                isLegacyPackage);
+                            /** [F004][S002] Confirm only with uploaded proof or 「唔需要上傳文件」 tick. */
+                            const canConfirm = noUpload || segment.has_pending_payment === true;
+                            const showNoUploadCheckbox = !segment.paid && (isRealSegment || isLegacyPackage || segment.installment_no === 1);
                             return (
                               <li key={segment.installment_no} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                                 <span>
@@ -1139,17 +1222,21 @@ export default function AdminStudentDetailPage() {
                                   {segment.paid
                                     ? "已確認付款"
                                     : noUpload
-                                      ? "已上傳（唔需要文件）· 待 Admin 確認付款"
+                                      ? "唔需要上傳文件 · 待 Admin 確認付款"
                                       : segment.installment_no === 1
                                         ? "付款待確認（首期可先上堂）"
                                         : "付款待確認"}
                                 </span>
                                 {isAdmin && !p.deleted && !segment.paid ? (
                                   <>
-                                    {isRealSegment ? (
+                                    {showNoUploadCheckbox ? (
                                       <label
                                         className="flex items-center gap-1 text-ink/70"
-                                        title={tickable ? undefined : `此課程已上 ${p.lessons_attended ?? 0} 堂；上咗第 ${segment.lesson_from ?? 1} 堂後可剔`}
+                                        title={
+                                          tickable
+                                            ? "剔咗之後，Admin 確認付款唔使再上傳收據；確認後發 WhatsApp 俾學生（含 PIN）及教練（不含 PIN）"
+                                            : `此課程已上 ${progressLessons} 堂；上咗第 ${segment.lesson_from ?? 1} 堂後可剔`
+                                        }
                                       >
                                         <input
                                           type="checkbox"
@@ -1164,14 +1251,33 @@ export default function AdminStudentDetailPage() {
                                     <button
                                       type="button"
                                       className="text-primary underline decoration-primary/40 underline-offset-2 hover:opacity-90"
-                                      onClick={() => focusReceiptForCoursePeriod(p.course_id, p.course_title, segment.installment_no)}
+                                      onClick={() =>
+                                        focusReceiptForCoursePeriod(
+                                          p.course_id,
+                                          p.course_title,
+                                          segment.installment_no,
+                                          p.legacy_installment_plan_id
+                                        )
+                                      }
                                     >
                                       （上傳收據）
                                     </button>
                                     <button
                                       type="button"
                                       disabled={paymentConfirmBusy !== null || !canConfirm}
-                                      onClick={() => void confirmCoursePayment(p.course_id, p.course_title, segment.installment_no)}
+                                      title={
+                                        canConfirm
+                                          ? undefined
+                                          : "請先上傳收據，或剔「唔需要上傳文件」"
+                                      }
+                                      onClick={() =>
+                                        void confirmCoursePayment(
+                                          p.course_id,
+                                          p.course_title,
+                                          segment.installment_no,
+                                          p.legacy_installment_plan_id
+                                        )
+                                      }
                                     >
                                       {paymentConfirmBusy === `${p.course_id}:${segment.installment_no}` ? "確認中…" : "Admin 確認付款"}
                                     </button>
@@ -1323,6 +1429,7 @@ export default function AdminStudentDetailPage() {
                         onReceiptForInstallment={focusReceiptForInstallment}
                         onToggleNoDocument={toggleCategoryNoDocument}
                         onConfirmPayment={confirmCategoryPayment}
+                        onUnconfirmPayment={unconfirmCategoryPayment}
                         noUploadBusy={noUploadBusy}
                       />
                     ))}
@@ -1599,6 +1706,7 @@ function CategoryEnrollmentCard({
   onReceiptForInstallment,
   onToggleNoDocument,
   onConfirmPayment,
+  onUnconfirmPayment,
   noUploadBusy
 }: {
   row: CategoryEnrollmentRow;
@@ -1617,6 +1725,8 @@ function CategoryEnrollmentCard({
     categoryName: string,
     amount?: number | null
   ) => void;
+  /** [F004][S002] Undo a mistaken paid mark on one period only. */
+  onUnconfirmPayment: (planId: number, installmentNo: number, categoryName: string) => void;
   noUploadBusy: string | null;
 }) {
   const plans = row.installment_plans ?? [];
@@ -1674,7 +1784,24 @@ function CategoryEnrollmentCard({
                         }
                       >
                         {pay.paid_at ? (
-                          paymentStatusLabel(pay.status, pay.paid_at)
+                          <>
+                            {paymentStatusLabel(pay.status, pay.paid_at)}{" "}
+                            {canConfirm ? (
+                              <button
+                                type="button"
+                                disabled={paymentConfirmBusy !== null}
+                                className="text-amber-800 underline decoration-amber-600/40 underline-offset-2 disabled:opacity-40"
+                                title="只取消呢一期已付款狀態，方便改錯"
+                                onClick={() =>
+                                  onUnconfirmPayment(pl.id, pay.installment_no, categoryName)
+                                }
+                              >
+                                {paymentConfirmBusy === `cat-un:${pl.id}:${pay.installment_no}`
+                                  ? "還原中…"
+                                  : "改回未付款"}
+                              </button>
+                            ) : null}
+                          </>
                         ) : (
                           <>
                             {pay.proof_receipt_id
@@ -1684,7 +1811,7 @@ function CategoryEnrollmentCard({
                                 : paymentStatusLabel(pay.status, pay.paid_at)}{" "}
                             <label
                               className="inline-flex items-center gap-1 text-ink/60"
-                              title="剔咗之後，Admin 確認付款唔使再上傳收據"
+                              title="剔咗之後，Admin 確認付款唔使再上傳收據；確認後發 WhatsApp 俾學生（含 PIN）及教練（不含 PIN）"
                             >
                               <input
                                 type="checkbox"
