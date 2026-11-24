@@ -791,6 +791,11 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ coach_id: coachId })
     }),
+  assignCourseBranch: (courseId: number, branchId: number) =>
+    request(`/api/admin/courses/${courseId}/assign-branch`, {
+      method: "PATCH",
+      body: JSON.stringify({ branch_id: branchId })
+    }),
   createCourse: (payload: Record<string, unknown>) =>
     request("/api/admin/courses", { method: "POST", body: JSON.stringify(payload) }),
   /** [F002][S003] Coach-scoped course registration after payment (issues PIN). */

@@ -31,7 +31,12 @@ body {
   @apply bg-canvas text-ink antialiased;
 }
 
-input,
+input[type="checkbox"],
+input[type="radio"] {
+  @apply h-4 w-4 shrink-0 cursor-pointer rounded border border-ink/20 bg-surface p-0;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
 textarea,
 select {
   @apply w-full rounded-md border border-ink/15 bg-surface px-3 py-2 text-sm text-ink placeholder:text-ink/45 focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary/40;

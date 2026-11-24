@@ -61,6 +61,7 @@ export type InstallmentSegmentPinDto = {
 export type CourseCheckinPinRow = {
   course_id: number;
   course_title: string;
+  branch_id?: number;
   branch_name: string;
   coach_name?: string;
   coach_id?: number;

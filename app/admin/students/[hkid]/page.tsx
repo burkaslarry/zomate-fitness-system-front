@@ -17,7 +17,14 @@ import WhatsAppButton from "../../../../components/whatsapp-button";
 import { alertApiError, api, apiAssetUrl } from "../../../../lib/api";
 import { getAuthSession } from "../../../../lib/auth";
 import { openWhatsAppLink } from "../../../../lib/whatsapp-utils";
-import type { CategoryEnrollmentRow, CoachDto, InstallmentSegmentPinDto, MemberFull, PaymentRecordRow } from "../../../../types/api";
+import type {
+  BranchDto,
+  CategoryEnrollmentRow,
+  CoachDto,
+  InstallmentSegmentPinDto,
+  MemberFull,
+  PaymentRecordRow
+} from "../../../../types/api";
 
 const PARQ_LABELS: Record<string, string> = {
   q1_heart_condition: "心臟問題（只宜醫生建議下運動）",
@@ -162,9 +169,12 @@ export default function AdminStudentDetailPage() {
   const [receiptPromptBusy, setReceiptPromptBusy] = useState(false);
   const [receiptUploadPromptBusyId, setReceiptUploadPromptBusyId] = useState<string | null>(null);
   const [coaches, setCoaches] = useState<CoachDto[]>([]);
+  const [branches, setBranches] = useState<BranchDto[]>([]);
   const [transferBusy, setTransferBusy] = useState<number | null>(null);
+  const [transferBranchBusy, setTransferBranchBusy] = useState<number | null>(null);
   const [paymentConfirmBusy, setPaymentConfirmBusy] = useState<string | null>(null);
   const [transferCoachPick, setTransferCoachPick] = useState<Record<number, number | "">>({});
+  const [transferBranchPick, setTransferBranchPick] = useState<Record<number, number | "">>({});
   const isAdmin = getAuthSession()?.role === "ADMIN";
   const studentId = decodeURIComponent(params.hkid);
 
@@ -449,6 +459,17 @@ export default function AdminStudentDetailPage() {
     void api.publicCoaches().then((rows) => setCoaches(Array.isArray(rows) ? (rows as CoachDto[]) : [])).catch(() => {});
   }, [isAdmin]);
 
+  useEffect(() => {
+    if (!isAdmin) return;
+    void api
+      .branches()
+      .then((rows) => {
+        const list = Array.isArray(rows) ? (rows as BranchDto[]) : [];
+        setBranches(list.filter((b) => b.active !== false));
+      })
+      .catch(() => {});
+  }, [isAdmin]);
+
   async function onTransferCoach(courseId: number) {
     const nextCoachId = transferCoachPick[courseId];
     if (!nextCoachId) {
@@ -464,6 +485,24 @@ export default function AdminStudentDetailPage() {
       alertApiError(e);
     } finally {
       setTransferBusy(null);
+    }
+  }
+
+  async function onTransferBranch(courseId: number) {
+    const nextBranchId = transferBranchPick[courseId];
+    if (!nextBranchId) {
+      alertApiError(new Error("請選擇分店"));
+      return;
+    }
+    setTransferBranchBusy(courseId);
+    try {
+      await api.assignCourseBranch(courseId, Number(nextBranchId));
+      setToast("已更新分店（僅 Admin 可操作）");
+      reload();
+    } catch (e) {
+      alertApiError(e);
+    } finally {
+      setTransferBranchBusy(null);
     }
   }
 
@@ -1199,8 +1238,44 @@ export default function AdminStudentDetailPage() {
                             </span>
                           ) : null}
                         </div>
-                        <div className="mt-0.5 text-xs text-ink/65">
-                          {p.branch_name} · 教練 {p.coach_name ?? "—"}
+                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink/65">
+                          {isAdmin && !p.deleted ? (
+                            <>
+                              <label className="inline-flex flex-wrap items-center gap-1.5">
+                                <span className="text-ink/50">分店</span>
+                                <select
+                                  value={transferBranchPick[p.course_id] ?? p.branch_id ?? ""}
+                                  onChange={(e) =>
+                                    setTransferBranchPick((prev) => ({
+                                      ...prev,
+                                      [p.course_id]: e.target.value ? Number(e.target.value) : ""
+                                    }))
+                                  }
+                                  className="!w-auto min-w-[9rem] rounded-lg border border-ink/15 bg-surface px-2 py-1 text-xs text-ink"
+                                  aria-label={`${p.course_title} 分店`}
+                                >
+                                  <option value="">選擇分店</option>
+                                  {branches.map((b) => (
+                                    <option key={b.id} value={b.id}>
+                                      {b.name}
+                                      {b.code ? ` (${b.code})` : ""}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <button
+                                type="button"
+                                disabled={transferBranchBusy === p.course_id}
+                                onClick={() => void onTransferBranch(p.course_id)}
+                                className="rounded-md border border-ink/15 bg-surface px-2 py-0.5 text-[11px] font-medium text-ink hover:bg-canvas disabled:opacity-50"
+                              >
+                                {transferBranchBusy === p.course_id ? "…" : "更新分店"}
+                              </button>
+                            </>
+                          ) : (
+                            <span>{p.branch_name}</span>
+                          )}
+                          <span>· 教練 {p.coach_name ?? "—"}</span>
                         </div>
                         {/* [F004][S002] Per-course progress: concurrent packages keep separate 已上／剩. */}
                         <div className="mt-1 text-sm font-medium text-ink/80">
