@@ -1222,14 +1222,14 @@ export default function AdminStudentDetailPage() {
                             const isRealSegment = (p.installment_segments?.length ?? 0) > 0;
                             const isLegacyPackage = Boolean(p.legacy_installment_plan_id || p.legacy_category_enrollment_id);
                             const noUpload = (p.no_upload_installment_nos ?? []).includes(segment.installment_no);
-                            /** [F004][S002] Paper progress counts for old packages; period 1 is always tickable. */
-                            const progressLessons =
-                              (p.lessons_attended ?? 0) + (p.legacy_prior_lessons ?? 0);
-                            const tickable =
-                              !segment.paid &&
-                              (segment.installment_no === 1 ||
-                                progressLessons >= (segment.lesson_from ?? 1) ||
-                                isLegacyPackage);
+                            /**
+                             * [F004][S002]
+                             * Feature: Admin Reports & Financials
+                             * Step: 「唔需要上傳文件」 tick on unpaid course periods
+                             * Logic: Admin may tick any unpaid period (new or old package) —
+                             * do not gate on lessons attended; cash can clear before that block starts.
+                             */
+                            const tickable = !segment.paid;
                             /** [F004][S002] Confirm only with uploaded proof or 「唔需要上傳文件」 tick. */
                             const canConfirm = noUpload || segment.has_pending_payment === true;
                             const showNoUploadCheckbox = !segment.paid && (isRealSegment || isLegacyPackage || segment.installment_no === 1);
@@ -1250,11 +1250,7 @@ export default function AdminStudentDetailPage() {
                                     {showNoUploadCheckbox ? (
                                       <label
                                         className="flex items-center gap-1 text-ink/70"
-                                        title={
-                                          tickable
-                                            ? "剔咗之後，Admin 確認付款唔使再上傳收據；確認後發 WhatsApp 俾學生（含 PIN）及教練（不含 PIN）"
-                                            : `此課程已上 ${progressLessons} 堂；上咗第 ${segment.lesson_from ?? 1} 堂後可剔`
-                                        }
+                                        title="剔咗之後，Admin 確認付款唔使再上傳收據；確認後發 WhatsApp 俾學生（含 PIN）及教練（不含 PIN）"
                                       >
                                         <input
                                           type="checkbox"
@@ -1605,13 +1601,13 @@ export default function AdminStudentDetailPage() {
                   />
                 </label>
               </div>
-              <label className="flex items-center gap-2 text-xs text-ink/70">
-                <input type="checkbox" name="send_whatsapp" className="rounded border-ink/20" />
-                上傳後即發 WhatsApp（預設關閉；正常請用「Admin 確認付款」只發一次）
+              <label className="flex items-start gap-2 text-xs text-ink/70">
+                <input type="checkbox" name="send_whatsapp" className="mt-0.5" />
+                <span>上傳後即發 WhatsApp（預設關閉；正常請用「Admin 確認付款」只發一次）</span>
               </label>
-              <label className="flex items-center gap-2 text-xs text-ink/70">
-                <input type="checkbox" name="notify_coach" className="rounded border-ink/20" />
-                同時通知教練（僅上項開啟時）
+              <label className="flex items-start gap-2 text-xs text-ink/70">
+                <input type="checkbox" name="notify_coach" className="mt-0.5" />
+                <span>同時通知教練（僅上項開啟時）</span>
               </label>
               <label className="block text-xs text-ink/55">
                 備註（選填）
