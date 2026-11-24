@@ -328,6 +328,24 @@ export default function AdminStudentDetailPage() {
     }
   }
 
+  /** [F004][S002] Admin fills「未設定金額」on one category / old-package period. */
+  async function setCategoryInstallmentAmount(
+    planId: number,
+    installmentNo: number,
+    amount: number
+  ) {
+    setPaymentConfirmBusy(`cat-amt:${planId}:${installmentNo}`);
+    try {
+      await api.setCategoryInstallmentAmount(planId, installmentNo, { amount });
+      setToast(`第 ${installmentNo} 期金額已更新為 HKD ${amount}`);
+      reload();
+    } catch (error) {
+      alertApiError(error);
+    } finally {
+      setPaymentConfirmBusy(null);
+    }
+  }
+
   /** [F004][S002] Tick 「唔需要上傳文件」 for one course installment period (gates Admin 確認付款). */
   async function toggleCourseNoUpload(courseId: number, installmentNo: number, noUpload: boolean) {
     if (!data?.profile.id) return;
@@ -1430,6 +1448,7 @@ export default function AdminStudentDetailPage() {
                         onToggleNoDocument={toggleCategoryNoDocument}
                         onConfirmPayment={confirmCategoryPayment}
                         onUnconfirmPayment={unconfirmCategoryPayment}
+                        onSetAmount={setCategoryInstallmentAmount}
                         noUploadBusy={noUploadBusy}
                       />
                     ))}
@@ -1707,6 +1726,7 @@ function CategoryEnrollmentCard({
   onToggleNoDocument,
   onConfirmPayment,
   onUnconfirmPayment,
+  onSetAmount,
   noUploadBusy
 }: {
   row: CategoryEnrollmentRow;
@@ -1727,10 +1747,13 @@ function CategoryEnrollmentCard({
   ) => void;
   /** [F004][S002] Undo a mistaken paid mark on one period only. */
   onUnconfirmPayment: (planId: number, installmentNo: number, categoryName: string) => void;
+  /** [F004][S002] Admin fills「未設定金額」without changing paid status. */
+  onSetAmount: (planId: number, installmentNo: number, amount: number) => void;
   noUploadBusy: string | null;
 }) {
   const plans = row.installment_plans ?? [];
   const categoryName = row.category_name;
+  const [amountDrafts, setAmountDrafts] = useState<Record<string, string>>({});
   return (
     <li className="rounded-xl border border-ink/10 bg-canvas p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -1761,6 +1784,16 @@ function CategoryEnrollmentCard({
               <ul className="mt-2 space-y-1 pl-2">
                 {pl.payments.map((pay) => {
                   const busyKey = `cat:${pl.id}:${pay.installment_no}`;
+                  const amountKey = `${pl.id}:${pay.installment_no}`;
+                  const amountUnset = !(Number(pay.amount) > 0);
+                  const draftAmount = amountDrafts[amountKey] ?? "";
+                  const parsedDraft = Number(String(draftAmount).replace(/,/g, "").trim());
+                  const canSaveAmount =
+                    canConfirm &&
+                    amountUnset &&
+                    Number.isFinite(parsedDraft) &&
+                    parsedDraft > 0;
+                  const amountBusy = paymentConfirmBusy === `cat-amt:${pl.id}:${pay.installment_no}`;
                   const canConfirmThis =
                     canConfirm &&
                     !pay.paid_at &&
@@ -1770,9 +1803,39 @@ function CategoryEnrollmentCard({
                       key={pay.id}
                       className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1 text-ink/70"
                     >
-                      <span>
-                        第 {pay.installment_no} 期 · {installmentAmountLabel(pay.amount)} · 到期{" "}
-                        {pay.due_date}
+                      <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
+                        <span>第 {pay.installment_no} 期 ·</span>
+                        {amountUnset && canConfirm ? (
+                          <>
+                            <span className="text-ink/55">HKD</span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              aria-label={`第 ${pay.installment_no} 期金額`}
+                              placeholder="輸入金額"
+                              value={draftAmount}
+                              disabled={amountBusy || paymentConfirmBusy !== null}
+                              onChange={(e) =>
+                                setAmountDrafts((prev) => ({
+                                  ...prev,
+                                  [amountKey]: e.target.value
+                                }))
+                              }
+                              className="w-24 rounded border border-ink/20 bg-surface px-2 py-0.5 text-xs text-ink"
+                            />
+                            <button
+                              type="button"
+                              disabled={!canSaveAmount || paymentConfirmBusy !== null}
+                              className="rounded border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-black disabled:opacity-40"
+                              onClick={() => onSetAmount(pl.id, pay.installment_no, parsedDraft)}
+                            >
+                              {amountBusy ? "儲存中…" : "儲存金額"}
+                            </button>
+                          </>
+                        ) : (
+                          <span>{installmentAmountLabel(pay.amount)}</span>
+                        )}
+                        <span>· 到期 {pay.due_date}</span>
                       </span>
                       <span
                         className={

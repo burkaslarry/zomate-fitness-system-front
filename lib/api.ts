@@ -811,6 +811,16 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(payload)
     }),
+  /** [F004][S002] Admin fills「未設定金額」on one category / old-package period. */
+  setCategoryInstallmentAmount: (
+    planId: number,
+    installmentNo: number,
+    payload: { amount: number }
+  ) =>
+    request(`/api/admin/installment-plans/${planId}/payments/${installmentNo}/amount`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    }),
   /** [F004][S002] Admin ticks 「唔需要上傳文件」 for one course installment period. */
   setCourseInstallmentNoUpload: (
     courseId: number,
