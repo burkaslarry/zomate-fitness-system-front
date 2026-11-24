@@ -328,7 +328,7 @@ export default function AdminStudentDetailPage() {
     }
   }
 
-  /** [F004][S002] Admin fills「未設定金額」on one category / old-package period. */
+  /** [F004][S002] Admin sets or updates amount on one unpaid category / old-package period. */
   async function setCategoryInstallmentAmount(
     planId: number,
     installmentNo: number,
@@ -1785,14 +1785,27 @@ function CategoryEnrollmentCard({
                 {pl.payments.map((pay) => {
                   const busyKey = `cat:${pl.id}:${pay.installment_no}`;
                   const amountKey = `${pl.id}:${pay.installment_no}`;
-                  const amountUnset = !(Number(pay.amount) > 0);
-                  const draftAmount = amountDrafts[amountKey] ?? "";
+                  /**
+                   * [F004][S002]
+                   * Feature: Admin Reports & Financials
+                   * Step: Editable amount while unpaid (incl. after 改回未付款)
+                   * Logic: Prefill existing amount; Admin can set or change until paid.
+                   */
+                  const currentAmount = Number(pay.amount);
+                  const amountUnset = !(currentAmount > 0);
+                  const canEditAmount = Boolean(canConfirm && !pay.paid_at);
+                  const draftAmount =
+                    amountDrafts[amountKey] ?? (currentAmount > 0 ? String(currentAmount) : "");
                   const parsedDraft = Number(String(draftAmount).replace(/,/g, "").trim());
+                  const amountChanged =
+                    !Number.isFinite(parsedDraft) ||
+                    Math.abs(parsedDraft - (Number.isFinite(currentAmount) ? currentAmount : 0)) >
+                      0.0001;
                   const canSaveAmount =
-                    canConfirm &&
-                    amountUnset &&
+                    canEditAmount &&
                     Number.isFinite(parsedDraft) &&
-                    parsedDraft > 0;
+                    parsedDraft > 0 &&
+                    (amountUnset || amountChanged);
                   const amountBusy = paymentConfirmBusy === `cat-amt:${pl.id}:${pay.installment_no}`;
                   const canConfirmThis =
                     canConfirm &&
@@ -1805,7 +1818,7 @@ function CategoryEnrollmentCard({
                     >
                       <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
                         <span>第 {pay.installment_no} 期 ·</span>
-                        {amountUnset && canConfirm ? (
+                        {canEditAmount ? (
                           <>
                             <span className="text-ink/55">HKD</span>
                             <input
