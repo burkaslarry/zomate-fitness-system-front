@@ -13,6 +13,8 @@ const nextConfig = {
   },
   typedRoutes: false,
   experimental: {
+    /** Security advisory remediation — Next.js agent upgrade (16.4.1 → 16.4.6). */
+    agentUpgrade: "security",
     /** [F001][S004] Registration multipart (signature + medical PDF) needs headroom through the /api rewrite. */
     proxyClientMaxBodySize: "100mb"
   },
