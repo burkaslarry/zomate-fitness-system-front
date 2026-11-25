@@ -206,6 +206,8 @@ export type CoachStudentRecordDto = {
     next_reminder_lesson?: number | null;
     installment_periods?: CoachInstallmentPeriodDto[];
     legacy_prior_lessons?: number;
+    /** [F003][S007] Linked paper ledger id — hide matching ledger in 揀 Package. */
+    legacy_category_enrollment_id?: number | null;
   }[];
   category_enrollments?: CoachStudentCategoryDto[];
   checkins: { id: number; channel: string; remarks: string | null; created_at: string }[];

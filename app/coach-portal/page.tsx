@@ -463,9 +463,24 @@ export default function CoachDashboardPage() {
       setStatus("");
       try {
         const rec = (await api.coachStudentRecords(studentId, coach.id)) as CoachStudentRecordDto;
-        // [F003][S007] Legacy paper ledgers are schedulable too — never dead-end at 「暫無可排程課程」.
+        /**
+         * [F003][S007]
+         * Feature: Attendance / legacy package convert
+         * Step: 揀 Package options for one student
+         * Logic: Skip paper ledgers that already have a live PIN shell enrollment —
+         * otherwise one 10-堂 import shows as two packages (shell 總 inflated + ledger).
+         */
+        const linkedLedgerIds = new Set(
+          (rec.enrollments ?? [])
+            .map((e) => e.legacy_category_enrollment_id)
+            .filter((id): id is number => typeof id === "number" && id > 0)
+        );
         const ledgers = (rec.category_enrollments ?? []).filter(
-          (row) => row.scheduled_enrollment_id == null && !row.scheduled_once && row.remaining_from_paper > 0
+          (row) =>
+            row.scheduled_enrollment_id == null &&
+            !row.scheduled_once &&
+            row.remaining_from_paper > 0 &&
+            !linkedLedgerIds.has(row.id)
         );
         const totalOptions = rec.enrollments.length + ledgers.length;
         if (totalOptions === 0) {
@@ -1625,12 +1640,20 @@ export default function CoachDashboardPage() {
             <div>
               <h4 className="text-xs font-semibold uppercase tracking-wide text-ink/50">種類帳面</h4>
               <ul className="mt-2 space-y-2">
-                {studentRecords.category_enrollments!.map((row) => (
+                {studentRecords.category_enrollments!.map((row) => {
+                  const hasPinShell = (studentRecords.enrollments ?? []).some(
+                    (e) => e.legacy_category_enrollment_id === row.id
+                  );
+                  return (
                   <li key={row.id} className="rounded-lg border border-ink/10 bg-canvas p-3 text-xs text-ink/70">
                     <p className="font-medium text-ink">{row.category_name} · 總 {row.total_lessons} 堂</p>
                     <p className="mt-1">已上 {row.lessons_already_taken} 堂 · 剩 {row.remaining_from_paper} 堂</p>
                     {row.scheduled_enrollment_id != null ? (
                       <p className="mt-2 text-emerald-800">已排程為 Course（見下方課程）；請在課程按「排下一堂」。</p>
+                    ) : hasPinShell ? (
+                      <p className="mt-2 text-ink/55">
+                        已有課堂 PIN（見上方 Package 進度）；請用該 package 排程，唔使再排舊帳面。
+                      </p>
                     ) : row.scheduled_once ? (
                       <p className="mt-2 text-ink/55">已排程過而課程已刪除；如需重排，請聯絡 Admin。</p>
                     ) : (
@@ -1692,7 +1715,8 @@ export default function CoachDashboardPage() {
                       </div>
                     ) : null}
                   </li>
-                ))}
+                  );
+                })}
               </ul>
               <p className="mt-1 text-xs text-ink/55">未包括其他簽到或扣堂；最新可扣堂餘額見上方。</p>
               <p className="mt-1 text-xs text-ink/55">排程只建立剩餘 package 堂數的 Course；已上／剩會與帳面同步。</p>
