@@ -10,6 +10,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import BackendShell from "../../../components/backend-shell";
+import { useDebouncedValue } from "../../../hooks/use-debounced-value";
 import { alertApiError, api, downloadCsv, uploadCsv } from "../../../lib/api";
 import type { MemberProfile } from "../../../types/api";
 
@@ -174,7 +175,7 @@ export default function AdminStudentsPage() {
   const [coaches, setCoaches] = useState<{ id: number; full_name: string }[]>([]);
   const [coachId, setCoachId] = useState<number | "">("");
   const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search.trim(), 300);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalAll, setTotalAll] = useState(0);
@@ -184,11 +185,6 @@ export default function AdminStudentsPage() {
   const [status, setStatus] = useState("");
   const fileRef = useRef<HTMLInputElement | null>(null);
   const requestSeq = useRef(0);
-
-  useEffect(() => {
-    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
-    return () => window.clearTimeout(t);
-  }, [search]);
 
   useEffect(() => {
     setPage(1);

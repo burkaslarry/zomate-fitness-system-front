@@ -13,10 +13,14 @@
  */
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { alertApiError, api, formatApiError, getCheckinsWebSocketUrl } from "../../../lib/api";
+import { useDebouncedValue } from "../../../hooks/use-debounced-value";
 import { usePeriodicHealthPing } from "../../../hooks/use-periodic-health-ping";
+
+/** [F003][S001] Kiosk: wait for完整電話再搜尋，避免每按一粒鍵就打 API。 */
+const SEARCH_DEBOUNCE_MS = 450;
 
 type Ack = {
   event: string;
@@ -74,7 +78,10 @@ export default function StudentCheckinPage() {
   usePeriodicHealthPing();
 
   const [searchQ, setSearchQ] = useState("");
+  const debouncedSearchQ = useDebouncedValue(searchQ, SEARCH_DEBOUNCE_MS);
   const [searching, setSearching] = useState(false);
+  const lastSearchKeyRef = useRef<string>("");
+  const searchSeqRef = useRef(0);
   const [results, setResults] = useState<SearchRow[]>([]);
   const [selected, setSelected] = useState<SearchRow | null>(null);
   const [todayLessons, setTodayLessons] = useState<TodayLesson[]>([]);
@@ -107,39 +114,45 @@ export default function StudentCheckinPage() {
     return () => ws.close();
   }, []);
 
-  const runSearch = useCallback(async (q: string) => {
+  const runSearch = useCallback(async (q: string, opts?: { force?: boolean }) => {
     const t = q.trim();
     if (t.length < 1) {
       setResults([]);
+      lastSearchKeyRef.current = "";
       return;
     }
     if (!isHongKongPhoneQuery(t)) {
       setResults([]);
       return;
     }
+    const phone = inputToLookupPhone(t);
+    const key = phone.replace(/\D/g, "").slice(-8);
+    if (!opts?.force && key === lastSearchKeyRef.current) {
+      return;
+    }
+    const seq = ++searchSeqRef.current;
     setSearching(true);
     try {
-      const phone = inputToLookupPhone(t);
-      try {
-        const row = (await api.memberLookupByPhone(phone)) as SearchRow;
-        setResults([
-          {
-            id: row.id,
-            full_name: row.full_name,
-            phone: row.phone,
-            lesson_balance: row.lesson_balance
-          }
-        ]);
-      } catch {
-        const rows = (await api.studentSearch(phone.replace(/\D/g, "").slice(-8))) as SearchRow[];
-        setResults(rows.filter((r) => r.phone.replace(/\D/g, "").endsWith(phone.replace(/\D/g, "").slice(-8))));
-      }
+      const rows = (await api.studentSearch(key)) as SearchRow[];
+      if (seq !== searchSeqRef.current) return;
+      const exact = rows.filter((r) => r.phone.replace(/\D/g, "").endsWith(key));
+      setResults(exact.length > 0 ? exact : rows.slice(0, 5));
+      lastSearchKeyRef.current = key;
     } catch {
+      if (seq !== searchSeqRef.current) return;
       setResults([]);
     } finally {
-      setSearching(false);
+      if (seq === searchSeqRef.current) setSearching(false);
     }
   }, []);
+
+  useEffect(() => {
+    const t = debouncedSearchQ.trim();
+    if (!isHongKongPhoneQuery(t)) return;
+    const digits = t.replace(/\D/g, "");
+    if (digits.length < 8) return;
+    void runSearch(t);
+  }, [debouncedSearchQ, runSearch]);
 
   useEffect(() => {
     if (!selected?.id) {
@@ -294,7 +307,7 @@ export default function StudentCheckinPage() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    void runSearch(searchQ);
+                    void runSearch(searchQ, { force: true });
                   }
                 }}
                 autoComplete="off"
@@ -304,7 +317,8 @@ export default function StudentCheckinPage() {
                 aria-label="搜尋"
                 title="搜尋"
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-slate-100 text-lg text-slate-900 hover:bg-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900"
-                onClick={() => void runSearch(searchQ)}
+                disabled={searching}
+                onClick={() => void runSearch(searchQ, { force: true })}
               >
                 🔍
               </button>

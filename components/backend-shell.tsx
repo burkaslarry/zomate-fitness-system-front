@@ -239,23 +239,12 @@ export default function BackendShell({
 
   useEffect(() => {
     let cancelled = false;
-    const probe = () => {
+    const probeLiveness = () => {
       void (async () => {
         try {
           await api.health();
           if (cancelled) return;
           setApiStatus("online");
-          if (isUsingNextMockApi()) {
-            if (!cancelled) setDbStatus("na");
-            return;
-          }
-          if (!cancelled) setDbStatus("checking");
-          try {
-            await api.healthDb();
-            if (!cancelled) setDbStatus("ok");
-          } catch {
-            if (!cancelled) setDbStatus("error");
-          }
         } catch {
           if (!cancelled) {
             setApiStatus("offline");
@@ -264,11 +253,31 @@ export default function BackendShell({
         }
       })();
     };
-    probe();
-    const id = window.setInterval(probe, PERIODIC_HEALTH_INTERVAL_MS);
+    const probeDb = () => {
+      if (isUsingNextMockApi()) {
+        setDbStatus("na");
+        return;
+      }
+      void (async () => {
+        if (cancelled) return;
+        setDbStatus("checking");
+        try {
+          await api.healthDb();
+          if (!cancelled) setDbStatus("ok");
+        } catch {
+          if (!cancelled) setDbStatus("error");
+        }
+      })();
+    };
+    probeLiveness();
+    probeDb();
+    const liveId = window.setInterval(probeLiveness, PERIODIC_HEALTH_INTERVAL_MS);
+    // [F006][S001] Readiness 每 30 分鐘一次；liveness 唔佔 DB 連線。
+    const dbId = window.setInterval(probeDb, 30 * 60 * 1000);
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      window.clearInterval(liveId);
+      window.clearInterval(dbId);
     };
   }, []);
 
