@@ -1877,6 +1877,13 @@ function CategoryEnrollmentCard({
                     Number.isFinite(parsedDraft) &&
                     parsedDraft > 0 &&
                     (amountUnset || amountChanged);
+                  /** [F004][S002] Confirm must send typed amount — not only DB row (Admin may skip 儲存金額). */
+                  const amountForConfirm =
+                    Number.isFinite(parsedDraft) && parsedDraft > 0
+                      ? parsedDraft
+                      : currentAmount > 0
+                        ? currentAmount
+                        : undefined;
                   const amountBusy = paymentConfirmBusy === `cat-amt:${pl.id}:${pay.installment_no}`;
                   const canConfirmThis =
                     canConfirm &&
@@ -1994,14 +2001,18 @@ function CategoryEnrollmentCard({
                                     ? undefined
                                     : "請先上傳收據，或剔「唔需要上傳文件」"
                                 }
-                                onClick={() =>
+                                onClick={() => {
+                                  if (amountForConfirm === undefined) {
+                                    window.alert("請先輸入本期金額（可按「儲存金額」或確認時一併送出）。");
+                                    return;
+                                  }
                                   onConfirmPayment(
                                     pl.id,
                                     pay.installment_no,
                                     categoryName,
-                                    pay.amount
-                                  )
-                                }
+                                    amountForConfirm
+                                  );
+                                }}
                               >
                                 {paymentConfirmBusy === busyKey ? "確認中…" : "Admin 確認付款"}
                               </button>
