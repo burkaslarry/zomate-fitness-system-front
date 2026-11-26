@@ -59,6 +59,23 @@ export function slotWouldConflict(
   return false;
 }
 
+/** [F007][S002] Display ledger / package credits (e.g. 9.5 堂). */
+export function formatLessonCredits(value: number): string {
+  const q = Math.round(value * 2) / 2;
+  if (Math.abs(q - Math.round(q)) < 1e-9) {
+    return String(Math.round(q));
+  }
+  return q.toFixed(1).replace(/\.0$/, "");
+}
+
+export function durationAllowedForCredits(
+  availableCredits: number,
+  duration: number
+): boolean {
+  const cap = Math.round(Math.max(0, availableCredits) * 2) / 2;
+  return duration <= cap + 1e-9;
+}
+
 export function firstFittingDuration(
   ranges: HourRange[],
   startHour: number,

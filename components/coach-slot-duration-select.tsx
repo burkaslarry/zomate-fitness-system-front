@@ -10,6 +10,7 @@ import {
   COACH_SLOT_DURATIONS,
   type CoachSlotDuration,
   type HourRange,
+  durationAllowedForCredits,
   formatDurationLabel,
   slotWouldConflict
 } from "../lib/coach-schedule-duration";
@@ -21,6 +22,7 @@ type Props = {
   onChange: (hours: CoachSlotDuration) => void;
   disabled?: boolean;
   legend?: string;
+  maxLessonCredits?: number;
 };
 
 export default function CoachSlotDurationSelect({
@@ -29,10 +31,13 @@ export default function CoachSlotDurationSelect({
   occupiedRanges,
   onChange,
   disabled = false,
-  legend = "時長"
+  legend = "時長",
+  maxLessonCredits
 }: Props) {
   const options = COACH_SLOT_DURATIONS.filter(
-    (d) => !slotWouldConflict(occupiedRanges, startHour, d)
+    (d) =>
+      !slotWouldConflict(occupiedRanges, startHour, d) &&
+      (maxLessonCredits == null || durationAllowedForCredits(maxLessonCredits, d))
   );
 
   return (
@@ -45,7 +50,9 @@ export default function CoachSlotDurationSelect({
         className="mt-1 block w-full rounded-lg border border-ink/15 bg-canvas px-3 py-2.5 text-sm font-semibold text-black"
       >
         {COACH_SLOT_DURATIONS.map((d) => {
-          const blocked = slotWouldConflict(occupiedRanges, startHour, d);
+          const blocked =
+            slotWouldConflict(occupiedRanges, startHour, d) ||
+            (maxLessonCredits != null && !durationAllowedForCredits(maxLessonCredits, d));
           return (
             <option key={d} value={d} disabled={blocked}>
               {d === 0.5 ? "0.5 hr" : d === 1.5 ? "1.5 hr" : `${d} hr`}

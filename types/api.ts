@@ -175,6 +175,8 @@ export type CoachStudentBriefDto = {
   full_name: string;
   phone: string;
   lesson_balance: number;
+  lesson_credits_available?: number;
+  allowed_duration_hours?: number[];
   enrollment_count: number;
   pending_schedule: boolean;
   packages?: CoachStudentPackageDto[];
@@ -186,6 +188,8 @@ export type CoachStudentRecordDto = {
   full_name: string;
   phone: string;
   lesson_balance: number;
+  lesson_credits_available?: number;
+  allowed_duration_hours?: number[];
   date_of_birth?: string | null;
   emergency_contact_name?: string | null;
   emergency_contact_relationship?: string | null;

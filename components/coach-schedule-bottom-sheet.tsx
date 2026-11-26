@@ -14,6 +14,7 @@ import {
   type CoachSlotDuration,
   type CoachStartMinute,
   type HourRange,
+  durationAllowedForCredits,
   formatHourMinute,
   slotWouldConflict,
   startSlotDecimal
@@ -48,6 +49,7 @@ type Props = {
   onConfirm: () => void;
   /** Re-open student / 其他事項 picker. */
   onChangeSelection?: () => void;
+  maxLessonCredits?: number;
 };
 
 function formatCourseLine(c: DayCourse): string {
@@ -81,11 +83,14 @@ export default function CoachScheduleBottomSheet({
   onStartTimeChange,
   onDurationChange,
   onConfirm,
-  onChangeSelection
+  onChangeSelection,
+  maxLessonCredits
 }: Props) {
   const startDecimal = startSlotDecimal(startHour, startMinute);
   const endDecimal = startDecimal + durationHours;
-  const conflict = slotWouldConflict(occupiedRanges, startDecimal, durationHours);
+  const conflict =
+    slotWouldConflict(occupiedRanges, startDecimal, durationHours) ||
+    (maxLessonCredits != null && !durationAllowedForCredits(maxLessonCredits, durationHours));
 
   return (
     <CoachBottomSheet
@@ -156,6 +161,7 @@ export default function CoachScheduleBottomSheet({
                   durationHours={durationHours}
                   occupiedRanges={occupiedRanges}
                   onChange={onDurationChange}
+                  maxLessonCredits={maxLessonCredits}
                 />
               </div>
             </div>

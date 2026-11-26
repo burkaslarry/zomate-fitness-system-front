@@ -10,6 +10,7 @@ import {
   COACH_SLOT_DURATIONS,
   type CoachSlotDuration,
   type HourRange,
+  durationAllowedForCredits,
   slotWouldConflict
 } from "../lib/coach-schedule-duration";
 
@@ -26,6 +27,8 @@ type Props = {
   occupiedRanges: HourRange[];
   onChange: (hours: CoachSlotDuration) => void;
   legend?: string;
+  /** [F007][S002] Max lesson credits bookable (ledger − already scheduled). */
+  maxLessonCredits?: number;
 };
 
 export default function CoachSlotDurationChips({
@@ -34,14 +37,17 @@ export default function CoachSlotDurationChips({
   durationHours,
   occupiedRanges,
   onChange,
-  legend = "時長"
+  legend = "時長",
+  maxLessonCredits
 }: Props) {
   return (
     <fieldset>
       <legend className="text-xs font-medium text-ink/70">{legend}</legend>
       <div className="mt-2 grid grid-cols-4 gap-2">
         {COACH_SLOT_DURATIONS.map((d) => {
-          const disabled = slotWouldConflict(occupiedRanges, startHour, d);
+          const disabled =
+            slotWouldConflict(occupiedRanges, startHour, d) ||
+            (maxLessonCredits != null && !durationAllowedForCredits(maxLessonCredits, d));
           const checked = durationHours === d;
           return (
             <label

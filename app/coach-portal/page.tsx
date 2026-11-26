@@ -29,6 +29,7 @@ import { monthRange, weekRange, shiftDay, isPastDay, todayDateKey } from "../../
 import {
   type CoachSlotDuration,
   type CoachStartMinute,
+  formatLessonCredits,
   slotWouldConflict,
   startSlotDecimal
 } from "../../lib/coach-schedule-duration";
@@ -1203,6 +1204,7 @@ export default function CoachDashboardPage() {
           onDurationChange={setDurationHours}
           onConfirm={() => void confirmSchedule()}
           onChangeSelection={openChangeSelection}
+          maxLessonCredits={selectedStudent?.lesson_credits_available ?? selectedStudent?.lesson_balance}
         />
       ) : null}
 
@@ -1535,7 +1537,7 @@ export default function CoachDashboardPage() {
                     <span className="text-xs tabular-nums text-ink/60">{s.phone}</span>
                   </div>
                   <div className="mt-0.5 text-xs text-ink/60">
-                    餘 {s.lesson_balance} 堂 · {s.enrollment_count} 個 package
+                    餘 {formatLessonCredits(s.lesson_balance)} 堂 · {s.enrollment_count} 個 package
                     {s.pending_schedule ? " · 待排程" : ""}
                   </div>
                   {(s.category_packages?.length ?? 0) > 0 ? (
@@ -1609,7 +1611,13 @@ export default function CoachDashboardPage() {
         <section className="space-y-4 rounded-xl border border-ink/10 bg-surface p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <h3 className="text-sm font-semibold text-ink">
-              {studentRecords.full_name} · 餘 {studentRecords.lesson_balance} 堂
+              {studentRecords.full_name} · 餘 {formatLessonCredits(studentRecords.lesson_balance)} 堂
+              {typeof studentRecords.lesson_credits_available === "number" &&
+              studentRecords.lesson_credits_available < studentRecords.lesson_balance ? (
+                <span className="text-ink/55">
+                  （可排 {formatLessonCredits(studentRecords.lesson_credits_available)} 堂）
+                </span>
+              ) : null}
             </h3>
             <Link
               href={`/coach-portal/reg-course?student=${encodeURIComponent(studentRecords.phone)}`}
@@ -1699,6 +1707,9 @@ export default function CoachDashboardPage() {
                           durationHours={bookDuration}
                           occupiedRanges={[]}
                           onChange={setBookDuration}
+                          maxLessonCredits={
+                            studentRecords.lesson_credits_available ?? studentRecords.lesson_balance
+                          }
                         />
                         {status ? <p role="alert" className="text-xs text-red-700">{status}</p> : null}
                         <button
@@ -1825,6 +1836,9 @@ export default function CoachDashboardPage() {
                         durationHours={bookDuration}
                         occupiedRanges={[]}
                         onChange={setBookDuration}
+                        maxLessonCredits={
+                          studentRecords.lesson_credits_available ?? studentRecords.lesson_balance
+                        }
                       />
                       {status ? <p role="alert" className="text-xs text-red-700">{status}</p> : null}
                       <button
