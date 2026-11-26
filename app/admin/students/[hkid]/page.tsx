@@ -46,6 +46,19 @@ const tabs = ["資料", "課程記錄", "付款紀錄", "活動紀錄"] as const
 
 type CatRow = { id: number; name: string; is_deleted?: boolean };
 
+/** [F002][S003] Strict whitelist — only 一對二課種；yoga／pilates／一對一等不變。 */
+const DUO_CATEGORY_EXACT = new Set(["新學生一對二", "續會學生一對二", "自帶學生一對二"]);
+
+function isDuoCategoryName(name: string | undefined): boolean {
+  return DUO_CATEGORY_EXACT.has((name || "").trim());
+}
+
+function adminStudentDetailHref(hkid: string | null | undefined): string | null {
+  const id = (hkid || "").trim();
+  if (!id) return null;
+  return `/admin/students/${encodeURIComponent(id)}`;
+}
+
 /** [F001][S001] Map backend activity_log.type codes to admin-facing 繁中 labels. */
 function activityTypeLabel(type: string): string {
   const map: Record<string, string> = {
@@ -131,6 +144,8 @@ export default function AdminStudentDetailPage() {
   const [lessonsText, setLessonsText] = useState("10");
   const [priorLessonsText, setPriorLessonsText] = useState("0");
   const [installmentsText, setInstallmentsText] = useState("3");
+  /** [F002][S003] Companion B — required when saving 一對二 on primary A. */
+  const [partnerPhoneText, setPartnerPhoneText] = useState("");
   const [saving, setSaving] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -216,7 +231,8 @@ export default function AdminStudentDetailPage() {
     courseId: number,
     courseTitle: string,
     installmentNo: number,
-    legacyPlanId?: number | null
+    legacyPlanId?: number | null,
+    legacyAmountHkd?: number | null
   ) {
     if (!data || !window.confirm(`已核對「${courseTitle}」第 ${installmentNo} 期付款？確認後會發出 WhatsApp 通知學生（含 PIN），並通知教練（不含學生 PIN）。`)) return;
     setPaymentConfirmBusy(`${courseId}:${installmentNo}`);
@@ -224,7 +240,10 @@ export default function AdminStudentDetailPage() {
       // [F004][S002] Old package course card confirms via the linked category plan when present.
       const res = (
         legacyPlanId
-          ? await api.confirmCategoryInstallment(legacyPlanId, installmentNo, {})
+          ? await api.confirmCategoryInstallment(legacyPlanId, installmentNo, {
+              amount:
+                legacyAmountHkd != null && legacyAmountHkd > 0 ? legacyAmountHkd : undefined
+            })
           : await api.markCourseInstallmentPaid(courseId, {
               student_id: data.profile.id,
               installment_no: installmentNo
@@ -530,13 +549,21 @@ export default function AdminStudentDetailPage() {
       alertApiError(new Error("分期數必須介乎 1 至總堂數"));
       return;
     }
+    const selectedCat = categories.find((c) => c.id === Number(catId));
+    const duoCategory = isDuoCategoryName(selectedCat?.name);
+    const partnerPhone = partnerPhoneText.replace(/\D/g, "").slice(-8);
+    if (duoCategory && partnerPhone.length !== 8) {
+      alertApiError(new Error("一對二 package 必須填寫同伴香港手機（8 位數字）。"));
+      return;
+    }
     setSaving(true);
     try {
       const res = (await api.upsertStudentCategoryEnrollment(data.profile.id, {
         course_category_id: Number(catId),
         total_lessons: lessons,
         total_installments: installments,
-        lessons_already_taken: priorLessons
+        lessons_already_taken: priorLessons,
+        ...(duoCategory ? { partner_phone: partnerPhone } : {})
       })) as { lesson_balance?: number; checkin_pin?: string };
       const pin = String(res?.checkin_pin || "").trim();
       if (pin && pin !== "—") {
@@ -784,6 +811,10 @@ export default function AdminStudentDetailPage() {
 
   const pins = data?.course_checkin_pins ?? [];
   const catEnr = data?.category_enrollments ?? [];
+  const duoPartnerReadOnly = catEnr.some((row) => row.duo?.read_only === true);
+  const duoPrimaryRows = catEnr.filter((row) => row.duo?.role === "primary");
+  const selectedCategoryName = categories.find((c) => c.id === catId)?.name;
+  const showPartnerPhoneField = isDuoCategoryName(selectedCategoryName);
   const packages = data?.packages ?? [];
   const packageLessons = packages.reduce((sum, pkg) => sum + (Number(pkg.lessons) || 0), 0);
   const categoryLessons = catEnr.reduce((sum, row) => sum + (Number(row.total_lessons) || 0), 0);
@@ -1359,14 +1390,26 @@ export default function AdminStudentDetailPage() {
                                           ? undefined
                                           : "請先上傳收據，或剔「唔需要上傳文件」"
                                       }
-                                      onClick={() =>
+                                      onClick={() => {
+                                        const hkd = Number(segment.amount_hkd);
+                                        if (
+                                          p.legacy_installment_plan_id &&
+                                          !(hkd > 0) &&
+                                          noUpload
+                                        ) {
+                                          window.alert(
+                                            "舊 package 請先在下方「種類報讀紀錄」輸入金額，或於課程卡分期已有金額後再確認。"
+                                          );
+                                          return;
+                                        }
                                         void confirmCoursePayment(
                                           p.course_id,
                                           p.course_title,
                                           segment.installment_no,
-                                          p.legacy_installment_plan_id
-                                        )
-                                      }
+                                          p.legacy_installment_plan_id,
+                                          hkd > 0 ? hkd : undefined
+                                        );
+                                      }}
                                     >
                                       {paymentConfirmBusy === `${p.course_id}:${segment.installment_no}` ? "確認中…" : "Admin 確認付款"}
                                     </button>
@@ -1475,6 +1518,25 @@ export default function AdminStudentDetailPage() {
                       剩餘 = 總堂數 − 以上堂數
                     </span>
                   </label>
+                  {showPartnerPhoneField ? (
+                    <label className="block text-xs text-ink/55 md:col-span-2">
+                      同伴電話（學生 B）· 必填
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        placeholder="8 位手機"
+                        className="mt-1 w-full rounded-lg border border-ink/15 bg-surface px-2 py-2 text-sm"
+                        value={partnerPhoneText}
+                        onChange={(e) =>
+                          setPartnerPhoneText(e.target.value.replace(/\D/g, "").slice(0, 11))
+                        }
+                      />
+                      <span className="mt-1 block text-[11px] text-ink/45">
+                        收款及分期只記在主學生（本頁學生）；B 會見唯讀鏡像。
+                      </span>
+                    </label>
+                  ) : null}
                   <label className="block text-xs text-ink/55">
                     分期數（可自由填寫）
                     <input
@@ -1505,15 +1567,38 @@ export default function AdminStudentDetailPage() {
 
               <div>
                 <h3 className="mb-3 text-sm font-semibold text-ink">種類報讀紀錄（帳面）· 分期</h3>
+                {duoPrimaryRows.length > 0 ? (
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {duoPrimaryRows.map((row) => (
+                      <button
+                        key={`duo-jump-${row.id}`}
+                        type="button"
+                        className="rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-black"
+                        onClick={() =>
+                          document
+                            .getElementById(`category-enrollment-${row.id}`)
+                            ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                        }
+                      >
+                        開啟 1 對 2 package · {row.category_name}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {duoPartnerReadOnly ? (
+                  <p className="mb-3 text-xs text-amber-900/80">
+                    此學生為 1 對 2 同伴：下方 package 唯讀；請到主學生頁面確認付款或改金額。
+                  </p>
+                ) : null}
                 {catEnr.length === 0 ? (
                   <p className="text-sm text-ink/55">暫無</p>
                 ) : (
                   <ul className="space-y-4">
                     {catEnr.map((c) => (
                       <CategoryEnrollmentCard
-                        key={c.id}
+                        key={c.duo_mirrored ? `mirror-${c.id}` : String(c.id)}
                         row={c}
-                        canConfirm={isAdmin}
+                        canConfirm={isAdmin && !c.duo?.read_only}
                         paymentConfirmBusy={paymentConfirmBusy}
                         onReceiptForInstallment={focusReceiptForInstallment}
                         onToggleNoDocument={toggleCategoryNoDocument}
@@ -1582,13 +1667,18 @@ export default function AdminStudentDetailPage() {
               <div>
                 <h3 className="text-sm font-semibold text-ink">付款紀錄 Payment Record</h3>
                 <p className="mt-1 text-xs text-ink/55">續會／報 Course、獨立收據、種類分期 — 含缺收據狀態。</p>
+                {duoPartnerReadOnly ? (
+                  <p className="mt-2 text-xs text-amber-900/85">
+                    1 對 2 同伴唯讀：資料鏡像自主學生 package，不可在此確認付款或上傳收據。
+                  </p>
+                ) : null}
               </div>
               <PaymentRecordsTable
                 rows={data.payment_records ?? []}
                 onRequestReceiptUpload={handlePaymentRowReceiptUpload}
                 onReceiptUploaded={reload}
                 onPaymentConfirmed={reload}
-                canConfirmPayment={isAdmin}
+                canConfirmPayment={isAdmin && !duoPartnerReadOnly}
                 receiptUploadBusyId={receiptUploadPromptBusyId}
               />
             </div>
@@ -1824,9 +1914,61 @@ function CategoryEnrollmentCard({
 }) {
   const plans = row.installment_plans ?? [];
   const categoryName = row.category_name;
+  const duo = row.duo;
+  const readOnly = duo?.read_only === true;
+  const canAct = canConfirm && !readOnly;
   const [amountDrafts, setAmountDrafts] = useState<Record<string, string>>({});
+  const partnerHref = adminStudentDetailHref(duo?.partner_student_hkid);
+  const primaryHref = adminStudentDetailHref(duo?.primary_student_hkid);
   return (
-    <li className="rounded-xl border border-ink/10 bg-canvas p-4">
+    <li
+      id={`category-enrollment-${row.id}`}
+      className={`rounded-xl border bg-canvas p-4 ${
+        readOnly ? "border-amber-200/80" : "border-ink/10"
+      }`}
+    >
+      {duo ? (
+        <div className="mb-2 space-y-1 text-xs">
+          <span
+            className={`inline-flex rounded-full px-2 py-0.5 font-semibold ${
+              duo.role === "primary"
+                ? "bg-primary/15 text-black"
+                : "bg-amber-100 text-amber-950"
+            }`}
+          >
+            1 對 2 · {duo.role === "primary" ? "主學生" : "同伴（唯讀）"}
+          </span>
+          {duo.role === "primary" ? (
+            <p className="text-ink/70">
+              同伴：{" "}
+              {partnerHref ? (
+                <Link href={partnerHref} className="font-medium text-primary underline">
+                  {duo.partner_student_name}
+                </Link>
+              ) : (
+                <span className="font-medium">{duo.partner_student_name}</span>
+              )}
+              {duo.partner_student_phone ? (
+                <span className="text-ink/55"> · {duo.partner_student_phone}</span>
+              ) : null}
+            </p>
+          ) : (
+            <>
+              <p className="text-ink/70">
+                主學生：{" "}
+                {primaryHref ? (
+                  <Link href={primaryHref} className="font-medium text-primary underline">
+                    {duo.primary_student_name}
+                  </Link>
+                ) : (
+                  <span className="font-medium">{duo.primary_student_name}</span>
+                )}
+              </p>
+              <p className="text-ink/50">收款及更改付款請到主學生 A 的 package。</p>
+            </>
+          )}
+        </div>
+      ) : null}
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="font-medium text-ink">{row.category_name}</span>
         <span className="text-xs text-ink/50">{row.status}</span>
@@ -1864,7 +2006,7 @@ function CategoryEnrollmentCard({
                    */
                   const currentAmount = Number(pay.amount);
                   const amountUnset = !(currentAmount > 0);
-                  const canEditAmount = Boolean(canConfirm && !pay.paid_at);
+                  const canEditAmount = Boolean(canAct && !pay.paid_at);
                   const draftAmount =
                     amountDrafts[amountKey] ?? (currentAmount > 0 ? String(currentAmount) : "");
                   const parsedDraft = Number(String(draftAmount).replace(/,/g, "").trim());
@@ -1886,7 +2028,7 @@ function CategoryEnrollmentCard({
                         : undefined;
                   const amountBusy = paymentConfirmBusy === `cat-amt:${pl.id}:${pay.installment_no}`;
                   const canConfirmThis =
-                    canConfirm &&
+                    canAct &&
                     !pay.paid_at &&
                     (Boolean(pay.proof_receipt_id) || pay.no_document_required === true);
                   return (
@@ -1940,7 +2082,7 @@ function CategoryEnrollmentCard({
                         {pay.paid_at ? (
                           <>
                             {paymentStatusLabel(pay.status, pay.paid_at)}{" "}
-                            {canConfirm ? (
+                            {canAct ? (
                               <button
                                 type="button"
                                 disabled={paymentConfirmBusy !== null}
@@ -1963,35 +2105,39 @@ function CategoryEnrollmentCard({
                               : pay.no_document_required
                                 ? "唔需要上傳文件 · 待 Admin 確認付款"
                                 : paymentStatusLabel(pay.status, pay.paid_at)}{" "}
-                            <label
-                              className="inline-flex items-center gap-1 text-ink/60"
-                              title="剔咗之後，Admin 確認付款唔使再上傳收據；確認後發 WhatsApp 俾學生（含 PIN）及教練（不含 PIN）"
-                            >
-                              <input
-                                type="checkbox"
-                                className="rounded border-ink/20"
-                                checked={pay.no_document_required === true}
-                                disabled={noUploadBusy !== null}
-                                onChange={(event) =>
-                                  onToggleNoDocument(pl.id, pay.installment_no, event.target.checked)
-                                }
-                              />
-                              唔需要上傳文件
-                            </label>{" "}
-                            <button
-                              type="button"
-                              className="text-primary underline decoration-primary/40 underline-offset-2 hover:opacity-90"
-                              onClick={() =>
-                                onReceiptForInstallment({
-                                  installmentNo: pay.installment_no,
-                                  categoryName,
-                                  installmentPlanId: pl.id
-                                })
-                              }
-                            >
-                              （上傳收據）
-                            </button>{" "}
-                            {canConfirm ? (
+                            {canAct ? (
+                              <>
+                                <label
+                                  className="inline-flex items-center gap-1 text-ink/60"
+                                  title="剔咗之後，Admin 確認付款唔使再上傳收據；確認後發 WhatsApp 俾學生（含 PIN）及教練（不含 PIN）"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="rounded border-ink/20"
+                                    checked={pay.no_document_required === true}
+                                    disabled={noUploadBusy !== null}
+                                    onChange={(event) =>
+                                      onToggleNoDocument(pl.id, pay.installment_no, event.target.checked)
+                                    }
+                                  />
+                                  唔需要上傳文件
+                                </label>{" "}
+                                <button
+                                  type="button"
+                                  className="text-primary underline decoration-primary/40 underline-offset-2 hover:opacity-90"
+                                  onClick={() =>
+                                    onReceiptForInstallment({
+                                      installmentNo: pay.installment_no,
+                                      categoryName,
+                                      installmentPlanId: pl.id
+                                    })
+                                  }
+                                >
+                                  （上傳收據）
+                                </button>{" "}
+                              </>
+                            ) : null}
+                            {canAct ? (
                               <button
                                 type="button"
                                 disabled={paymentConfirmBusy !== null || !canConfirmThis}

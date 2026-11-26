@@ -287,6 +287,21 @@ export type InstallmentPlanRow = {
   payments: InstallmentPaymentRow[];
 };
 
+/** [F002][S003] 1-on-2 shared package — payment on primary A; B read-only mirror. */
+export type CategoryDuoMeta = {
+  group_id: number;
+  role: "primary" | "partner";
+  read_only: boolean;
+  primary_student_id: number;
+  primary_student_name: string;
+  primary_student_hkid?: string | null;
+  partner_student_id: number;
+  partner_student_name: string;
+  partner_student_hkid?: string | null;
+  partner_student_phone?: string | null;
+  anchor_category_enrollment_id?: number | null;
+};
+
 export type CategoryEnrollmentRow = {
   id: number;
   course_category_id: number;
@@ -297,6 +312,9 @@ export type CategoryEnrollmentRow = {
   remaining_from_paper?: number;
   started_at: string;
   installment_plans?: InstallmentPlanRow[];
+  duo?: CategoryDuoMeta | null;
+  /** [F002][S003] Shown on student B — data from A's ledger, not a second editable row. */
+  duo_mirrored?: boolean;
 };
 
 /** [F004][S008] One due period inside a course or category installment plan. */

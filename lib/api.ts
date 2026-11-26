@@ -887,6 +887,8 @@ export const api = {
       total_lessons: number;
       total_installments?: number;
       lessons_already_taken?: number;
+      /** [F002][S003] Required when category is 新／續會 一對二. */
+      partner_phone?: string | null;
     }
   ) =>
     request(`/api/admin/students/${studentId}/category-enrollment`, {
