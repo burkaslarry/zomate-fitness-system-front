@@ -54,6 +54,13 @@ type WaAnalytics = {
 const PLACEHOLDER_HINT =
   "{{course_title}} {{student_name}} {{student_phone}} {{pin}} {{next_lesson_date}} {{lessons_attended}} {{lessons_remaining}} {{payment_status}} {{amount_paid}} {{total_amount}} {{amount_owing}} {{installment_notes}}";
 
+/** [F005][S003] Sent-log table — show Meta status tag only for accepted rows (hide wamid + body). */
+function displayWhatsappLogMessage(raw: string): string {
+  const msg = (raw || "").trim();
+  if (msg.startsWith("[api_accepted")) return "[api_accepted]";
+  return msg;
+}
+
 function StatusBadge({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span
@@ -149,7 +156,7 @@ export default function AdminSettingsWhatsappPage() {
         id: String(log.id),
         when: log.created_at,
         recipient: log.recipient,
-        message: log.message,
+        message: displayWhatsappLogMessage(msg),
         status
       };
     }) ?? [];
