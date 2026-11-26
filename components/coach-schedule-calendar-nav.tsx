@@ -37,6 +37,17 @@ function eventClass(studentId: number, attendanceStatus?: string): string {
   return ["bg-blue-700 border-blue-700 text-white", "bg-emerald-700 border-emerald-700 text-white", "bg-violet-700 border-violet-700 text-white", "bg-amber-700 border-amber-700 text-white", "bg-rose-700 border-rose-700 text-white", "bg-cyan-800 border-cyan-800 text-white"][Math.abs(studentId) % 6];
 }
 
+/**
+ * [F008][S005]
+ * Feature: Coach schedule calendar
+ * Step: Compact day / 3-day / week time grid (Google Calendar density)
+ * Logic: Shorter hour rows + denser event chips so more of the day fits on screen.
+ */
+/** px per hour on day/week grids — denser than the previous 72px row. */
+const HOUR_PX = 48;
+const PX_PER_MIN = HOUR_PX / 60;
+const TIME_GUTTER_PX = 44;
+
 /** [F008][S005] One shared appointment source powers every calendar view and detail popup. */
 export default function CoachScheduleCalendarNav({ selectedDay, mode, rangeSessions, onSelectDay, onModeChange, onNavigate, showCoach = false }: Props) {
   const [detail, setDetail] = useState<CoachSessionRow | null>(null);
@@ -49,7 +60,7 @@ export default function CoachScheduleCalendarNav({ selectedDay, mode, rangeSessi
   const firstHour = Math.min(8, ...timed.map(s => Math.floor(minutes(s.start_time) / 60)));
   const lastHour = Math.max(21, ...timed.map(s => Math.ceil(minutes(s.end_time) / 60)));
   const hours = Array.from({ length: lastHour - firstHour + 1 }, (_, i) => firstHour + i);
-  const height = (lastHour - firstHour) * 72;
+  const height = (lastHour - firstHour) * HOUR_PX;
   const firstAppointment = timed.length ? Math.min(...timed.map(s => minutes(s.start_time))) : firstHour * 60;
   // [F008][S005] Open on today's current time (one hour of context), else near the first lesson.
   useEffect(() => {
@@ -61,7 +72,7 @@ export default function CoachScheduleCalendarNav({ selectedDay, mode, rangeSessi
         : weekDaysContaining(selectedDay).includes(today);
     const now = new Date();
     const anchor = showsToday ? now.getHours() * 60 + now.getMinutes() : firstAppointment;
-    timeGridRef.current.scrollTop = Math.max(0, (anchor - firstHour * 60 - 60) * 1.2);
+    timeGridRef.current.scrollTop = Math.max(0, (anchor - firstHour * 60 - 60) * PX_PER_MIN);
   }, [mode, selectedDay, firstAppointment, firstHour, today]);
   const title = mode === "day" ? formatDateLabel(selectedDay) : mode === "three-day" ? `${parseDateKey(selectedDay).toLocaleDateString('zh-HK',{month:'numeric',day:'numeric'})} – ${parseDateKey(shiftDay(selectedDay, 2)).toLocaleDateString('zh-HK',{month:'numeric',day:'numeric'})}` : mode === "week" ? weekTitle(selectedDay) : monthTitle(selectedDay);
   /** [F008][S005] Navigation advances exactly one visible period. */
@@ -125,20 +136,64 @@ export default function CoachScheduleCalendarNav({ selectedDay, mode, rangeSessi
           <span className="shrink-0 text-xs font-semibold tabular-nums">{s.start_time}<br />{s.end_time}</span><span className="min-w-0"><strong className="block break-words text-sm">{s.student_name}</strong>{showCoach && s.coach_name ? <span className="block break-words text-xs opacity-90">{s.coach_name}</span> : null}<span className="block break-words text-xs">{s.course_title}</span><span className="text-xs">{s.attendance_status}</span></span>
         </button>)}
       </section>
-    </div> : <div ref={timeGridRef} className="max-h-[min(650px,70svh)] overflow-auto overscroll-contain rounded-xl border border-ink/15" aria-label={mode === 'day' ? '每日時間表' : mode === 'three-day' ? '三日時間表' : '每週時間表'}>
-      <div style={{ minWidth: mode === 'week' ? 900 : 0 }}>
-        <div className="sticky top-0 z-20 grid border-b border-ink/15 bg-white sm:bg-surface" style={{gridTemplateColumns:`56px repeat(${days.length}, minmax(0,1fr))`}}>
-          <div aria-label="固定時間欄標題" className="sticky left-0 z-30 bg-white p-2 sm:bg-surface text-[10px] text-ink/50">香港時間</div>{days.map(day => <button type="button" key={day} onClick={() => onSelectDay(day)} className={`rounded-none border-0 border-l border-ink/10 bg-transparent px-1 py-2 text-xs shadow-none ${day === today ? 'font-bold text-primary' : ''}`}><span className="block">{parseDateKey(day).toLocaleDateString('zh-HK',{weekday:'short'})}</span><strong className={`mx-auto mt-1 flex h-9 w-9 items-center justify-center rounded-full text-lg ${day === today ? 'bg-primary text-black' : ''}`}>{parseDateKey(day).getDate()}</strong></button>)}
+    </div> : <div ref={timeGridRef} className="max-h-[min(720px,78svh)] overflow-auto overscroll-contain rounded-xl border border-ink/15" aria-label={mode === 'day' ? '每日時間表' : mode === 'three-day' ? '三日時間表' : '每週時間表'}>
+      {/* [F008][S005] Compact hour rows (~48px) + tighter date headers; week still scrolls sideways. */}
+      <div style={{ minWidth: mode === 'week' ? 720 : 0 }}>
+        <div className="sticky top-0 z-20 grid border-b border-ink/15 bg-white sm:bg-surface" style={{gridTemplateColumns:`${TIME_GUTTER_PX}px repeat(${days.length}, minmax(0,1fr))`}}>
+          <div aria-label="固定時間欄標題" className="sticky left-0 z-30 bg-white px-1 py-1.5 text-center text-[9px] leading-tight text-ink/45 sm:bg-surface">HKT</div>
+          {days.map(day => (
+            <button
+              type="button"
+              key={day}
+              onClick={() => onSelectDay(day)}
+              className={`rounded-none border-0 border-l border-ink/10 bg-transparent px-0.5 py-1 text-[10px] shadow-none ${day === today ? 'font-bold text-primary' : 'text-ink/70'}`}
+            >
+              <span className="block leading-none">{parseDateKey(day).toLocaleDateString('zh-HK',{weekday:'narrow'})}</span>
+              <strong className={`mx-auto mt-0.5 flex h-6 w-6 items-center justify-center rounded-full text-sm ${day === today ? 'bg-primary text-black' : 'font-semibold text-ink'}`}>{parseDateKey(day).getDate()}</strong>
+            </button>
+          ))}
         </div>
-        <div className="grid" style={{gridTemplateColumns:`56px repeat(${days.length}, minmax(0,1fr))`}}>
+        <div className="grid" style={{gridTemplateColumns:`${TIME_GUTTER_PX}px repeat(${days.length}, minmax(0,1fr))`}}>
           {/* [F008][S005] Sticky opaque gutter remains visible while dates scroll horizontally. */}
-          <div aria-label="固定時間欄" className="sticky left-0 z-10 bg-white text-[10px] text-ink/55" style={{height}}>{hours.slice(0,-1).map(h => <span key={h} className="absolute right-2" style={{top:(h-firstHour)*72+2}}>{String(h).padStart(2,'0')}:00</span>)}</div>
-          {days.map(day => <div key={day} className="relative border-l border-ink/15" style={{height}}>
-            {hours.slice(0,-1).map(h => <div key={h} className="absolute w-full border-t border-ink/10" style={{top:(h-firstHour)*72,height:72}}><div className="mt-9 border-t border-dashed border-ink/5" /></div>)}
-            {eventLanes(rows.filter(s => s.session_date === day)).map(({session:s,lane,lanes}) => <button type="button" key={`${s.enrollment_id}-${s.session_date}`} onClick={() => open(s)} className={`absolute overflow-auto rounded-lg border px-1 py-1 text-left text-[11px] sm:px-2 shadow-sm ${eventClass(s.student_id, s.attendance_status)}`} style={{top:(minutes(s.start_time)-firstHour*60)*1.2, height:Math.max(32,(minutes(s.end_time)-minutes(s.start_time))*1.2), left:`${lane*100/lanes}%`,width:`calc(${100/lanes}% - 3px)`}}>
-              <strong className="block">{s.student_name}</strong>{showCoach && s.coach_name ? <span className="block opacity-90">{s.coach_name}</span> : null}<span className="block">{s.start_time}–{s.end_time}</span><span className="block break-words">{s.course_title}</span><span className="block">{s.attendance_status}</span>
-            </button>)}
-          </div>)}
+          <div aria-label="固定時間欄" className="sticky left-0 z-10 bg-white text-[9px] tabular-nums text-ink/50" style={{height}}>
+            {hours.slice(0,-1).map(h => (
+              <span key={h} className="absolute right-1 -translate-y-1/2" style={{top:(h-firstHour)*HOUR_PX}}>{String(h).padStart(2,'0')}</span>
+            ))}
+          </div>
+          {days.map(day => (
+            <div key={day} className="relative border-l border-ink/10" style={{height}}>
+              {hours.slice(0,-1).map(h => (
+                <div key={h} className="absolute w-full border-t border-ink/10" style={{top:(h-firstHour)*HOUR_PX, height:HOUR_PX}}>
+                  <div className="border-t border-dashed border-ink/5" style={{marginTop: HOUR_PX / 2}} />
+                </div>
+              ))}
+              {eventLanes(rows.filter(s => s.session_date === day)).map(({session:s,lane,lanes}) => {
+                const durMin = minutes(s.end_time) - minutes(s.start_time);
+                const blockH = Math.max(18, durMin * PX_PER_MIN);
+                const compact = blockH < 36 || mode === 'week';
+                return (
+                  <button
+                    type="button"
+                    key={`${s.enrollment_id}-${s.session_date}`}
+                    onClick={() => open(s)}
+                    title={`${s.start_time}–${s.end_time} ${s.student_name}${showCoach && s.coach_name ? ` · ${s.coach_name}` : ''} · ${s.course_title}`}
+                    className={`absolute overflow-hidden rounded border px-0.5 text-left leading-tight shadow-sm ${compact ? 'py-0 text-[9px]' : 'py-0.5 text-[10px] sm:px-1.5 sm:text-[11px]'} ${eventClass(s.student_id, s.attendance_status)}`}
+                    style={{
+                      top: (minutes(s.start_time) - firstHour * 60) * PX_PER_MIN,
+                      height: blockH,
+                      left: `${lane * 100 / lanes}%`,
+                      width: `calc(${100 / lanes}% - 2px)`
+                    }}
+                  >
+                    <strong className="block truncate">{compact ? `${s.start_time} ${s.student_name}` : s.student_name}</strong>
+                    {!compact && showCoach && s.coach_name ? <span className="block truncate opacity-90">{s.coach_name}</span> : null}
+                    {!compact ? <span className="block truncate tabular-nums">{s.start_time}–{s.end_time}</span> : null}
+                    {!compact && blockH >= 52 ? <span className="block truncate">{s.course_title}</span> : null}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </div>
       </div>
     </div>}

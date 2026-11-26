@@ -157,8 +157,8 @@ Coach-approved initial slots may be today or tomorrow. Each next lesson must be 
 教練可安排即日／翌日上堂；往後每一堂須按「排下一堂」獨立確認，系統不再以推算每週日期開放簽到。未排堂拒絕簽到；完成後隱藏及鎖定該堂，不可改期／取消或重複扣堂。保留同一課程每日一次簽到限制，舊首堂及明確改期保留，沒有刪除記錄。
 
 ### [F008][S005] Calendar / 教練日曆
-Day/week use hourly appointment blocks with overlap lanes; month shows every booked appointment. “今天” and period navigation share the same API and display full details on click.
-日／週提供時間軸與並排撞時課堂，月曆列出每一堂；可切換今天、上一段／下一段及完整課堂詳情，已簽到會顯示鎖定。
+Day/week use compact hourly appointment blocks (~48px/hour, Google Calendar density) with overlap lanes; month shows every booked appointment. “今天” and period navigation share the same API and display full details on click.
+日／週時間格縮密（約每小時 48px，接近 Google Calendar），並排顯示撞時課堂；月曆列出每一堂；可切換今天、上一段／下一段及完整課堂詳情，已簽到會顯示鎖定。
 
 ### [F004][S002] Payment edit / 付款詳情編輯
 Admin: payment record → details → edit → save. Pending amounts, payment method, Hong Kong date and notes can be corrected (installments: amount/date/due date). Confirmed amounts are locked to preserve payment/PIN gates; metadata remains editable. Changes are audited and do not auto-confirm funds or send notifications.
