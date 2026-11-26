@@ -54,11 +54,13 @@ type WaAnalytics = {
 const PLACEHOLDER_HINT =
   "{{course_title}} {{student_name}} {{student_phone}} {{pin}} {{next_lesson_date}} {{lessons_attended}} {{lessons_remaining}} {{payment_status}} {{amount_paid}} {{total_amount}} {{amount_owing}} {{installment_notes}}";
 
-/** [F005][S003] Sent-log table — show Meta status tag only for accepted rows (hide wamid + body). */
+/** [F005][S003] Strip wamid from [api_accepted:…] but keep the sent message body. */
 function displayWhatsappLogMessage(raw: string): string {
   const msg = (raw || "").trim();
-  if (msg.startsWith("[api_accepted")) return "[api_accepted]";
-  return msg;
+  const match = msg.match(/^\[api_accepted(?::[^\]]*)?\]\s*([\s\S]*)$/);
+  if (!match) return msg;
+  const body = (match[1] ?? "").trim();
+  return body ? `[api_accepted]\n${body}` : "[api_accepted]";
 }
 
 function StatusBadge({ ok, label }: { ok: boolean; label: string }) {

@@ -11,3 +11,8 @@ playwright-report
 test-results
 
 .env.vercel.production
+docs/screenshots/iphone14-funglo-3day.png
+docs/screenshots/iphone14-funglo-day-nov4.png
+docs/screenshots/iphone14-funglo-day.png
+docs/screenshots/iphone14-funglo-month.png
+docs/screenshots/iphone14-funglo-week.png
