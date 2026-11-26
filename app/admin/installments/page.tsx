@@ -201,19 +201,27 @@ export default function AdminInstallmentsPage() {
 
         <dl className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3">
           <div className="rounded-xl border border-ink/10 bg-surface p-3 shadow-sm sm:p-4">
-            <dt className="text-[11px] text-ink/55 sm:text-xs">分期學生（未付清 / 總數）</dt>
+            <dt className="text-[11px] text-ink/55 sm:text-xs">分期學生總數</dt>
             <dd className="mt-1 text-[22px] font-semibold tabular-nums leading-none text-ink sm:text-[28px]">
-              {summary.students_unpaid}
-              <span className="mx-1 font-normal text-ink/35">/</span>
               {summary.students_total}
+            </dd>
+            <dd className="mt-1 text-[12px] tabular-nums text-ink/70 sm:text-[13px]">
+              未付清 {summary.students_unpaid}
+              {summary.students_unpaid === 0 && summary.students_total > 0 ? (
+                <span className="text-emerald-700"> · 全部已付清</span>
+              ) : null}
             </dd>
           </div>
           <div className="rounded-xl border border-ink/10 bg-surface p-3 shadow-sm sm:p-4">
-            <dt className="text-[11px] text-ink/55 sm:text-xs">跟進期數（未跟進 / 總期數）</dt>
+            <dt className="text-[11px] text-ink/55 sm:text-xs">分期期數總數</dt>
             <dd className="mt-1 text-[22px] font-semibold tabular-nums leading-none text-ink sm:text-[28px]">
-              {summary.periods_unpaid}
-              <span className="mx-1 font-normal text-ink/35">/</span>
               {summary.periods_total}
+            </dd>
+            <dd className="mt-1 text-[12px] tabular-nums text-ink/70 sm:text-[13px]">
+              未付清 {summary.periods_unpaid}
+              {summary.periods_unpaid === 0 && summary.periods_total > 0 ? (
+                <span className="text-emerald-700"> · 無待跟進期數</span>
+              ) : null}
             </dd>
           </div>
           <div className="rounded-xl border border-ink/10 bg-surface p-3 shadow-sm sm:p-4">
@@ -221,6 +229,9 @@ export default function AdminInstallmentsPage() {
             <dd className="mt-1 text-[22px] font-semibold tabular-nums leading-none text-ink sm:text-[28px]">
               {money(summary.outstanding_amount)}
             </dd>
+            {summary.outstanding_amount === 0 && summary.students_total > 0 ? (
+              <dd className="mt-1 text-[12px] text-emerald-700">無待收分期款</dd>
+            ) : null}
           </div>
         </dl>
 

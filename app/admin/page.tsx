@@ -63,8 +63,8 @@ export default function AdminPage() {
     }
   }, []);
 
-  const installmentUnpaid = summaryValue(summary, ["installment_periods_unpaid", "installment_students_unpaid"]);
-  const installmentTotal = summaryValue(summary, ["installment_periods_total", "installment_students_total"]);
+  const installmentStudentsUnpaid = summaryValue(summary, ["installment_students_unpaid"]);
+  const installmentStudentsTotal = summaryValue(summary, ["installment_students_total"]);
   const medicalPending = summaryValue(summary, ["medical_clearance_pending"]);
   const missingReceipts = summaryValue(summary, ["missing_receipt_registrations"]);
   const checkinsToday = summaryValue(summary, ["checkins_today"]);
@@ -85,7 +85,9 @@ export default function AdminPage() {
     {
       kind: "number",
       label: "活躍學生",
-      value: summaryValue(summary, ["active_students", "students_active"])
+      value: summaryValue(summary, ["active_students", "students_active"]),
+      href: "/admin/students?active=1",
+      linkLabel: "查看活躍學生"
     },
     {
       kind: "number",
@@ -94,11 +96,14 @@ export default function AdminPage() {
     },
     {
       kind: "ratio",
-      label: "跟進分期付款",
+      label: "分期付款學生",
       detail: "與付款紀錄同步 · 按此查看分期付款學生",
-      unpaid: installmentUnpaid,
-      total: installmentTotal,
-      ratioHint: "左：未跟進（未付款）期數 · 右：分期總期數",
+      unpaid: installmentStudentsUnpaid,
+      total: installmentStudentsTotal,
+      ratioHint:
+        installmentStudentsUnpaid === 0 && installmentStudentsTotal > 0
+          ? "全部已付清，無需跟進"
+          : "未付清學生數 · 分期學生總數",
       href: "/admin/installments"
     },
     {
@@ -168,9 +173,13 @@ export default function AdminPage() {
                 ) : (
                   <>
                     <p className="mt-1.5 text-[22px] font-semibold tabular-nums leading-none tracking-[-0.02em] text-ink sm:mt-2 sm:text-[28px]">
-                      <span>{card.unpaid}</span>
-                      <span className="mx-1 font-normal text-ink/35">/</span>
-                      <span>{card.total}</span>
+                      {card.total}
+                    </p>
+                    <p className="mt-1 text-[12px] tabular-nums leading-5 text-ink/70 sm:text-[13px]">
+                      未付清 {card.unpaid}
+                      {card.unpaid === 0 && card.total > 0 ? (
+                        <span className="text-emerald-700"> · 全部已付清</span>
+                      ) : null}
                     </p>
                     <p className="mt-1.5 hidden text-[11px] leading-4 text-ink/55 sm:block">{card.ratioHint}</p>
                     <p className="mt-1 hidden text-[11px] leading-4 text-ink/45 sm:block">{card.detail}</p>

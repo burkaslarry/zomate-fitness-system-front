@@ -81,6 +81,8 @@ function buildAutoCoursePayload(opts: {
   totalInstallments: number;
   installmentAmounts?: number[];
   remarks?: string;
+  courseCategoryId?: number;
+  partnerPhone?: string;
 }) {
   const now = new Date();
   const start = new Date(now);
@@ -100,11 +102,20 @@ function buildAutoCoursePayload(opts: {
     lessons_already_taken: opts.lessonsAlreadyTaken ?? 0,
     total_installments: opts.totalInstallments,
     installment_amounts: opts.installmentAmounts,
-    coach_schedule_note: opts.remarks?.trim() || undefined
+    coach_schedule_note: opts.remarks?.trim() || undefined,
+    course_category_id: opts.courseCategoryId,
+    partner_phone: opts.partnerPhone
   };
 }
 
 const NEW_STUDENT_CATEGORY_PREFIX = "新學生";
+
+/** [F002][S003] Strict whitelist — only 一對二課種；yoga／pilates／一對一等不變。 */
+const DUO_CATEGORY_EXACT = new Set(["新學生一對二", "續會學生一對二", "自帶學生一對二"]);
+
+function isDuoCategoryName(name: string | undefined | null): boolean {
+  return DUO_CATEGORY_EXACT.has((name || "").trim());
+}
 
 type PurchaseSummary = {
   studentId: number;
@@ -165,6 +176,11 @@ export default function RegCourseWizard({
   const [installmentAmountsTouched, setInstallmentAmountsTouched] = useState(false);
   const [alreadyTakenText, setAlreadyTakenText] = useState("0");
   const [remarks, setRemarks] = useState("");
+  /** [F002][S003] Companion B — required when category is 一對二. */
+  const [partnerPhoneText, setPartnerPhoneText] = useState("");
+  const [partnerProfile, setPartnerProfile] = useState<MemberProfile | null>(null);
+  const [partnerLookupBusy, setPartnerLookupBusy] = useState(false);
+  const [partnerLookupHint, setPartnerLookupHint] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -272,8 +288,75 @@ export default function RegCourseWizard({
     setInstallmentAmountsTouched(false);
     setAlreadyTakenText("0");
     setRemarks("");
+    setPartnerPhoneText("");
+    setPartnerProfile(null);
+    setPartnerLookupHint("");
     setPurchaseSummary(null);
   }
+
+  const selectedCategoryName = useMemo(() => {
+    if (lockedOnboardingCategoryName) return lockedOnboardingCategoryName;
+    const cat = filteredCategories.find((c) => c.id === categoryId);
+    return cat?.name ?? "";
+  }, [categoryId, filteredCategories, lockedOnboardingCategoryName]);
+
+  const duoCategorySelected = isDuoCategoryName(selectedCategoryName);
+
+  const primaryPhoneLocal = useMemo(
+    () => (member ? displayHongKongPhone(member.phone) : ""),
+    [member]
+  );
+
+  const partnerPhoneLocal = useMemo(
+    () => partnerPhoneText.replace(/\D/g, "").slice(-8),
+    [partnerPhoneText]
+  );
+
+  const duoPartnerValid = useMemo(() => {
+    if (!duoCategorySelected) return true;
+    if (partnerPhoneLocal.length !== 8) return false;
+    if (primaryPhoneLocal && partnerPhoneLocal === primaryPhoneLocal) return false;
+    return partnerProfile != null;
+  }, [duoCategorySelected, partnerPhoneLocal, primaryPhoneLocal, partnerProfile]);
+
+  useEffect(() => {
+    if (!duoCategorySelected || !member) {
+      setPartnerProfile(null);
+      setPartnerLookupHint("");
+      return;
+    }
+    if (partnerPhoneLocal.length < 8) {
+      setPartnerProfile(null);
+      setPartnerLookupHint(partnerPhoneLocal.length > 0 ? "請輸入香港 8 位手機號碼。" : "");
+      return;
+    }
+    if (primaryPhoneLocal && partnerPhoneLocal === primaryPhoneLocal) {
+      setPartnerProfile(null);
+      setPartnerLookupHint("同伴不能與主學生相同。");
+      return;
+    }
+    let cancelled = false;
+    setPartnerLookupBusy(true);
+    setPartnerLookupHint("");
+    void api
+      .memberLookupByPhone(inputToLookupPhone(partnerPhoneLocal))
+      .then((row) => {
+        if (cancelled) return;
+        setPartnerProfile(row as MemberProfile);
+        setPartnerLookupHint("");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPartnerProfile(null);
+        setPartnerLookupHint("搵唔到該電話的學生，請先登記或檢查號碼。");
+      })
+      .finally(() => {
+        if (!cancelled) setPartnerLookupBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [duoCategorySelected, member, partnerPhoneLocal, primaryPhoneLocal]);
 
   const totalInstallments = installmentPay ? installmentCount : 1;
 
@@ -391,6 +474,16 @@ export default function RegCourseWizard({
       alertApiError(new Error("以上堂數須為 0 至總堂數之間"));
       return;
     }
+    if (isDuoCategoryName(selectedCategoryName)) {
+      if (partnerPhoneLocal.length !== 8) {
+        alertApiError(new Error("一對二 package 必須填寫同伴香港手機（8 位數字）。"));
+        return;
+      }
+      if (!partnerProfile) {
+        alertApiError(new Error(partnerLookupHint || "請輸入已登記的同伴學生電話。"));
+        return;
+      }
+    }
     setStep(3);
   }
 
@@ -439,6 +532,12 @@ export default function RegCourseWizard({
       alertApiError(new Error("以上堂數須為 0 至總堂數之間"));
       return;
     }
+    if (isDuoCategoryName(selectedKind.name)) {
+      if (partnerPhoneLocal.length !== 8 || !partnerProfile) {
+        alertApiError(new Error(partnerLookupHint || "一對二必須填寫有效同伴電話。"));
+        return;
+      }
+    }
     const receipt = form.get("receipt");
     const totalAmount = amount.trim().replace(/,/g, "");
     const firstInstallmentAmount = installmentPay ? (installmentAmounts[0]?.trim().replace(/,/g, "") || totalAmount) : totalAmount;
@@ -482,7 +581,9 @@ export default function RegCourseWizard({
         installmentAmounts: installmentPay
           ? installmentAmounts.map((raw) => parseAmount(raw) ?? 0)
           : undefined,
-        remarks
+        remarks,
+        courseCategoryId: Number(categoryId),
+        partnerPhone: isDuoCategoryName(selectedKind.name) ? partnerPhoneLocal : undefined
       });
       // [F002][S001] Send once after the new course/PIN and its checkout are linked.
       Object.assign(coursePayload, {
@@ -675,6 +776,28 @@ export default function RegCourseWizard({
             />
             <span className="mt-1 block text-xs text-ink/50">會從餘堂扣減；剩餘 = 總堂數 − 以上堂數</span>
           </label>
+          {duoCategorySelected ? (
+            <label className="block text-sm">
+              <span className="text-ink/70">同伴學生電話 · 必填</span>
+              <input
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={partnerPhoneText}
+                onChange={(e) =>
+                  setPartnerPhoneText(e.target.value.replace(/\D/g, "").slice(0, 11))
+                }
+                placeholder="香港 8 位手機"
+                className="mt-1 w-full rounded-lg border border-ink/10 bg-canvas px-3 py-2.5 text-base sm:text-sm"
+              />
+              <span className="mt-1 block text-xs text-ink/50">
+                {partnerLookupBusy
+                  ? "正在查找學生…"
+                  : partnerProfile
+                    ? `已找到：${partnerProfile.full_name}`
+                    : partnerLookupHint || "輸滿 8 位數字後自動查找"}
+              </span>
+            </label>
+          ) : null}
           <label className="block text-sm">
             <span className="text-ink/70">備註（選填）</span>
             <textarea
@@ -697,8 +820,9 @@ export default function RegCourseWizard({
             ) : null}
             <button
               type="button"
+              disabled={!duoPartnerValid}
               onClick={goCategoryNext}
-              className="flex-1 rounded-md bg-primary/90 px-4 py-3 text-sm font-semibold text-black"
+              className="flex-1 rounded-md bg-primary/90 px-4 py-3 text-sm font-semibold text-black disabled:opacity-50"
             >
               下一步
             </button>

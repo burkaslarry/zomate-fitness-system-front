@@ -815,6 +815,10 @@ export default function AdminStudentDetailPage() {
   const duoPrimaryRows = catEnr.filter((row) => row.duo?.role === "primary");
   const selectedCategoryName = categories.find((c) => c.id === catId)?.name;
   const showPartnerPhoneField = isDuoCategoryName(selectedCategoryName);
+  /** [F002][S003] Block save until companion B has a valid 8-digit HK mobile. */
+  const partnerPhoneDigits = partnerPhoneText.replace(/\D/g, "").slice(-8);
+  const categorySaveBlockedForPartnerPhone =
+    showPartnerPhoneField && partnerPhoneDigits.length !== 8;
   const packages = data?.packages ?? [];
   const packageLessons = packages.reduce((sum, pkg) => sum + (Number(pkg.lessons) || 0), 0);
   const categoryLessons = catEnr.reduce((sum, row) => sum + (Number(row.total_lessons) || 0), 0);
@@ -1555,7 +1559,7 @@ export default function AdminStudentDetailPage() {
                   <div className="flex items-end">
                     <button
                       type="button"
-                      disabled={saving}
+                      disabled={saving || categorySaveBlockedForPartnerPhone}
                       onClick={() => void onSaveCategoryEnrollment()}
                       className="w-full rounded-lg bg-primary/90 py-2 text-sm font-medium text-black disabled:opacity-50"
                     >

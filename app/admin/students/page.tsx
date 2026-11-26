@@ -171,6 +171,7 @@ function medicalStatusBadge(status: MemberProfile["medical_clearance_status"]) {
 
 export default function AdminStudentsPage() {
   const [medicalPendingOnly, setMedicalPendingOnly] = useState(false);
+  const [activeOnly, setActiveOnly] = useState(false);
   const [students, setStudents] = useState<MemberProfile[]>([]);
   const [coaches, setCoaches] = useState<{ id: number; full_name: string }[]>([]);
   const [coachId, setCoachId] = useState<number | "">("");
@@ -188,7 +189,7 @@ export default function AdminStudentsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, medicalPendingOnly]);
+  }, [debouncedSearch, medicalPendingOnly, activeOnly]);
 
   const reload = useCallback(async () => {
     const seq = ++requestSeq.current;
@@ -198,7 +199,8 @@ export default function AdminStudentsPage() {
         limit: PAGE_SIZE,
         offset: (page - 1) * PAGE_SIZE,
         q: debouncedSearch || undefined,
-        medical_pending: medicalPendingOnly || undefined
+        medical_pending: medicalPendingOnly || undefined,
+        active_only: activeOnly || undefined
       })) as StudentsListResponse;
       if (seq !== requestSeq.current) return;
       const rows = Array.isArray(data.items) ? data.items : [];
@@ -216,7 +218,7 @@ export default function AdminStudentsPage() {
     } finally {
       if (seq === requestSeq.current) setLoading(false);
     }
-  }, [page, debouncedSearch, medicalPendingOnly]);
+  }, [page, debouncedSearch, medicalPendingOnly, activeOnly]);
 
   useEffect(() => {
     void reload();
@@ -224,7 +226,9 @@ export default function AdminStudentsPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    setMedicalPendingOnly(new URLSearchParams(window.location.search).get("medical_pending") === "1");
+    const params = new URLSearchParams(window.location.search);
+    setMedicalPendingOnly(params.get("medical_pending") === "1");
+    setActiveOnly(params.get("active") === "1");
   }, []);
 
   useEffect(() => {
@@ -379,6 +383,14 @@ export default function AdminStudentsPage() {
                 </Link>
               </p>
             ) : null}
+            {activeOnly && !medicalPendingOnly ? (
+              <p className="mt-1 text-sm text-ink/70">
+                <strong className="font-medium text-emerald-900">目前只顯示活躍學生（有餘堂或近期簽到）。</strong>{" "}
+                <Link href="/admin/students" className="text-primary underline">
+                  顯示全部
+                </Link>
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
             <button
@@ -476,10 +488,20 @@ export default function AdminStudentsPage() {
             <p className="text-xs text-ink/55">總學生數</p>
             <p className="mt-2 text-3xl font-semibold text-ink">{totalAll}</p>
           </div>
-          <div className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm ring-1 ring-ink/[0.04]">
+          <Link
+            href={activeOnly ? "/admin/students" : "/admin/students?active=1"}
+            className={`rounded-xl border bg-surface p-4 shadow-sm ring-1 transition hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+              activeOnly
+                ? "border-emerald-300/70 ring-emerald-200/60"
+                : "border-ink/10 ring-ink/[0.04] hover:border-emerald-200/70"
+            }`}
+          >
             <p className="text-xs text-ink/55">活躍學生</p>
             <p className="mt-2 text-3xl font-semibold text-emerald-700">{activeCount}</p>
-          </div>
+            <p className="mt-1 text-[11px] font-medium text-primary">
+              {activeOnly ? "點擊顯示全部" : "點擊篩選活躍學生"}
+            </p>
+          </Link>
           <div className="rounded-xl border border-ink/10 bg-surface p-4 shadow-sm ring-1 ring-ink/[0.04]">
             <p className="text-xs text-ink/55">PAR-Q 候補</p>
             <p className="mt-2 text-3xl font-semibold text-amber-800">{medicalPendingCount}</p>

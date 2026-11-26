@@ -642,12 +642,14 @@ export const api = {
     offset?: number;
     q?: string;
     medical_pending?: boolean;
+    active_only?: boolean;
   }) => {
     const sp = new URLSearchParams();
     sp.set("limit", String(query?.limit ?? 100));
     sp.set("offset", String(query?.offset ?? 0));
     if (query?.q?.trim()) sp.set("q", query.q.trim());
     if (query?.medical_pending) sp.set("medical_pending", "true");
+    if (query?.active_only) sp.set("active_only", "true");
     return request(`/api/students?${sp.toString()}`);
   },
   trialPurchase: (payload: unknown) =>
