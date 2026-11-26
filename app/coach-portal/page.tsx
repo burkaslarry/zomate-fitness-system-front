@@ -1128,6 +1128,11 @@ export default function CoachDashboardPage() {
     return null;
   }
 
+  const selectedStudent = students.find((student) => student.student_id === selectedStudentId);
+  const scheduleSheetStudent = selectedPending
+    ? students.find((s) => s.student_id === selectedPending.student_id)
+    : undefined;
+
   const schedulePanel = (
     <div className="relative flex flex-col gap-4 pb-8">
       {/* Pending students stay reachable through the student picker (＋ → 待排期). */}
@@ -1204,7 +1209,9 @@ export default function CoachDashboardPage() {
           onDurationChange={setDurationHours}
           onConfirm={() => void confirmSchedule()}
           onChangeSelection={openChangeSelection}
-          maxLessonCredits={selectedStudent?.lesson_credits_available ?? selectedStudent?.lesson_balance}
+          maxLessonCredits={
+            scheduleSheetStudent?.lesson_credits_available ?? scheduleSheetStudent?.lesson_balance
+          }
         />
       ) : null}
 
@@ -1482,8 +1489,6 @@ export default function CoachDashboardPage() {
       </section>
     </div>
   );
-
-  const selectedStudent = students.find((student) => student.student_id === selectedStudentId);
 
   const studentsPanel = (
     <div className="space-y-4">
